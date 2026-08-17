@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GoodTrip 清邁店 — 預約飛行體驗</title>
+<style>
+  :root {
+    --bg: #12100e;
+    --card: #1c1a17;
+    --card-2: #24211d;
+    --line: #37322b;
+    --text: #f3efe7;
+    --muted: #a79f92;
+    --accent: #7fc04a;
+    --accent-dark: #5d9a30;
+    --warn: #e0a33c;
+    --err: #e26d5a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+    line-height: 1.7;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 620px; margin: 0 auto; padding: 24px 18px 60px; }
+  .logo { display: block; margin: 4px auto 18px; width: min(240px, 60%); }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: .5px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  .intro { font-size: 14.5px; }
+  .intro ul { list-style: none; padding: 0; margin: 10px 0; }
+  .intro li { margin: 4px 0; }
+  .notice { color: var(--warn); font-size: 13.5px; }
+  label { display: block; font-size: 14px; margin: 16px 0 6px; font-weight: 600; }
+  label .req { color: var(--accent); }
+  .hint { font-weight: 400; color: var(--muted); font-size: 12.5px; }
+  input[type=text], input[type=email], input[type=number], input[type=date], textarea {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    color: var(--text);
+    background: var(--card-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-family: inherit;
+  }
+  input:focus, textarea:focus { outline: 2px solid var(--accent-dark); outline-offset: 1px; }
+  .slots { display: grid; gap: 10px; margin-top: 6px; }
+  .slot {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px;
+    background: var(--card-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .slot.on { border-color: var(--accent); background: #23301a; }
+  .slot.off { opacity: .45; cursor: not-allowed; }
+  .slot .t { font-weight: 600; }
+  .slot .s { margin-left: auto; font-size: 13px; color: var(--muted); }
+  .slot.free .s { color: var(--accent); }
+  .slot.few .s { color: var(--warn); }
+  .slot.no .s { color: var(--err); }
+  .radios { display: flex; gap: 10px; }
+  .radios .slot { flex: 1; justify-content: center; }
+  .radios.grid2 { display: grid; grid-template-columns: 1fr 1fr; }
+  .radios.grid2 .slot { font-size: 15px; }
+  button.go {
+    width: 100%; margin-top: 24px; padding: 15px;
+    font-size: 16px; font-weight: 700; font-family: inherit;
+    color: #10240a; background: var(--accent);
+    border: 0; border-radius: 12px; cursor: pointer;
+  }
+  button.go:disabled { opacity: .5; cursor: default; }
+  .msg { margin-top: 14px; padding: 12px 14px; border-radius: 10px; font-size: 14px; display: none; }
+  .msg.show { display: block; }
+  .msg.error { background: #3a201c; border: 1px solid var(--err); color: #ffd9d1; }
+  .msg.info { background: #2d2a1c; border: 1px solid var(--warn); color: #f6e6c4; }
+  .done h2 { color: var(--accent); font-size: 20px; margin-top: 0; }
+  .done dl { display: grid; grid-template-columns: 92px 1fr; gap: 6px 12px; font-size: 14.5px; margin: 16px 0; }
+  .done dt { color: var(--muted); }
+  .done dd { margin: 0; }
+  a { color: var(--accent); }
+  .foot { color: var(--muted); font-size: 12.5px; text-align: center; margin-top: 24px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <img class="logo" src="/logo.png" alt="GoodTrip x Herb Uncle">
+  <h1>GoodTrip x Herb Uncle 清邁店</h1>
+  <p class="sub">頂級飛行體驗 · 線上預約</p>
+
+  <div class="card intro">
+    <p style="margin-top:0">Hello🙏</p>
+    <p>歡迎預約服務時段，體驗 Herb Uncle x GoodTrip 帶來的頂級草本與精品器具，感受舒適滿足的飛行！</p>
+    <ul>
+      <li>✅ 店內草本介紹</li>
+      <li>✅ 飛行基本知識</li>
+      <li>✅ 精緻飛行體驗</li>
+      <li>✅ 隨行器具租借</li>
+    </ul>
+    <p class="notice">
+      預約時間以清邁本地時間為主（GMT+7）<br>
+      每週二固定公休｜營業時間：14:00 - 23:00<br>
+      其餘公休時間另於 Google Maps 和 IG 公告
+    </p>
+  </div>
+
+  <div id="formCard" class="card">
+    <label>預約人（綽號或本名）<span class="req">*</span></label>
+    <input type="text" id="name" maxlength="60" placeholder="例如：Ken">
+
+    <label>日期<span class="req">*</span> <span class="hint">（週二公休）</span></label>
+    <input type="date" id="date">
+
+    <label>時段<span class="req">*</span></label>
+    <div class="slots" id="slots">
+      <div class="msg info show" id="slotHint">請先選擇日期，即可查看各時段空位。</div>
+    </div>
+
+    <label>人數<span class="req">*</span> <span class="hint" id="paxHint"></span></label>
+    <input type="number" id="pax" min="1" step="1" value="1">
+
+    <label>是否為第一次接觸<span class="req">*</span></label>
+    <div class="radios" id="firstTime">
+      <div class="slot" data-v="是"><span class="t">是</span></div>
+      <div class="slot" data-v="否"><span class="t">否</span></div>
+    </div>
+
+    <label>LINE 聯絡方式 <span class="hint">（選填，方便臨時聯繫）</span></label>
+    <input type="text" id="line" maxlength="80" placeholder="LINE ID 或顯示名稱">
+
+    <label>Email<span class="req">*</span></label>
+    <input type="email" id="email" placeholder="you@example.com">
+
+    <label>從哪邊知道我們的？<span class="req">*</span></label>
+    <div class="radios grid2" id="referral">
+      <div class="slot" data-v="Instagram"><span class="t">Instagram</span></div>
+      <div class="slot" data-v="Threads"><span class="t">Threads</span></div>
+      <div class="slot" data-v="GoodTrip官網"><span class="t">GoodTrip官網</span></div>
+      <div class="slot" data-v="GoodTrip門市"><span class="t">GoodTrip門市</span></div>
+      <div class="slot" data-v="親友介紹"><span class="t">親友介紹</span></div>
+      <div class="slot" data-v="網路搜尋"><span class="t">網路搜尋</span></div>
+    </div>
+
+    <button class="go" id="go">送出預約</button>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div id="doneCard" class="card done" style="display:none"></div>
+
+  <p class="foot">有任何問題歡迎透過 <a href="https://lin.ee/DcpM9f7" target="_blank">LINE</a> 與我們聯絡</p>
+</div>
+
+<script>
+  var state = { slot: '', firstTime: '', referral: '', slotMax: 60, loading: false };
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  // API helper：非 2xx 時丟出後端的 error 訊息
+  async function api(path, options) {
+    var res = await fetch(path, options);
+    var data = await res.json().catch(function () { return {}; });
+    if (!res.ok) throw new Error(data.error || '連線失敗，請稍後再試。');
+    return data;
+  }
+
+  // 今天（清邁時間）當作日期欄位下限
+  api('/api/config').then(function (cfg) {
+    $('date').min = cfg.today;
+  }).catch(function () {});
+
+  function showMsg(text, kind) {
+    var m = $('msg');
+    m.textContent = text;
+    m.className = 'msg show ' + (kind || 'error');
+  }
+  function clearMsg() { $('msg').className = 'msg'; }
+
+  // ---- 是否第一次接觸
+  Array.prototype.forEach.call($('firstTime').children, function (el) {
+    el.addEventListener('click', function () {
+      state.firstTime = el.getAttribute('data-v');
+      Array.prototype.forEach.call($('firstTime').children, function (o) {
+        o.className = 'slot' + (o === el ? ' on' : '');
+      });
+    });
+  });
+
+  // ---- 從哪邊知道我們的
+  Array.prototype.forEach.call($('referral').children, function (el) {
+    el.addEventListener('click', function () {
+      state.referral = el.getAttribute('data-v');
+      Array.prototype.forEach.call($('referral').children, function (o) {
+        o.className = 'slot' + (o === el ? ' on' : '');
+      });
+    });
+  });
+
+  // ---- 日期 → 查空位
+  $('date').addEventListener('change', function () {
+    var v = $('date').value;
+    state.slot = '';
+    if (!v) return;
+    var wd = new Date(v + 'T00:00:00Z').getUTCDay(); // 0=週日, 2=週二
+    if (wd === 2) {
+      renderSlotHint('每週二為固定公休日，請改選其他日期。', 'error');
+      return;
+    }
+    renderSlotHint('查詢空位中…', 'info');
+    api('/api/availability?date=' + encodeURIComponent(v))
+      .then(renderSlots)
+      .catch(function (err) { renderSlotHint(err.message || '查詢失敗，請重新整理。', 'error'); });
+  });
+
+  function renderSlotHint(text, kind) {
+    $('slots').innerHTML = '<div class="msg show ' + kind + '">' + text + '</div>';
+  }
+
+  function renderSlots(data) {
+    if (data.closed) { renderSlotHint(data.message, 'error'); return; }
+    var box = $('slots');
+    box.innerHTML = '';
+    data.slots.forEach(function (s) {
+      var cls = 'slot';
+      if (!s.selectable) cls += ' off';
+      if (s.status === 'OPEN') cls += ' free';
+      else if (s.status === 'PARTIAL') cls += ' few';
+      else cls += ' no';
+
+      var el = document.createElement('div');
+      el.className = cls;
+      el.innerHTML = '<span class="t">' + s.slot + '</span><span class="s">' + s.statusText + '</span>';
+      if (s.selectable) {
+        el.addEventListener('click', function () { pickSlot(el, s); });
+      }
+      box.appendChild(el);
+    });
+    updatePaxHint();
+  }
+
+  function pickSlot(el, s) {
+    state.slot = s.slot;
+    state.slotMax = s.maxPax;
+    Array.prototype.forEach.call($('slots').children, function (o) {
+      o.className = o.className.replace(' on', '');
+    });
+    el.className += ' on';
+    $('pax').max = s.maxPax;
+    if (Number($('pax').value) > s.maxPax) $('pax').value = s.maxPax;
+    updatePaxHint();
+    clearMsg();
+  }
+
+  function updatePaxHint() {
+    if (!state.slot) { $('paxHint').textContent = ''; return; }
+    $('paxHint').textContent = state.slotMax >= 60
+      ? '（此時段目前尚無其他預約，人數不限）'
+      : '（此時段已有其他客人，最多可再 ' + state.slotMax + ' 人）';
+  }
+
+  // ---- 送出
+  $('go').addEventListener('click', function () {
+    if (state.loading) return;
+    clearMsg();
+
+    var form = {
+      name: $('name').value.trim(),
+      pax: Number($('pax').value),
+      date: $('date').value,
+      slot: state.slot,
+      firstTime: state.firstTime,
+      line: $('line').value.trim(),
+      email: $('email').value.trim(),
+      referral: state.referral
+    };
+
+    if (!form.name) return showMsg('請填寫預約人（綽號或本名）。');
+    if (!form.date) return showMsg('請選擇預約日期。');
+    if (!form.slot) return showMsg('請選擇預約時段。');
+    if (!form.pax || form.pax < 1) return showMsg('請填寫人數。');
+    if (!form.firstTime) return showMsg('請選擇是否為第一次接觸。');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return showMsg('請填寫正確的 Email。');
+    if (!form.referral) return showMsg('請選擇從哪邊知道我們的。');
+
+    state.loading = true;
+    $('go').disabled = true;
+    $('go').textContent = '送出中，請稍候…';
+
+    api('/api/bookings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form)
+    })
+      .then(onDone)
+      .catch(function (err) {
+        state.loading = false;
+        $('go').disabled = false;
+        $('go').textContent = '送出預約';
+        showMsg(err.message || '送出失敗，請稍後再試或改用 LINE 聯絡我們。');
+        if ($('date').value) {
+          api('/api/availability?date=' + encodeURIComponent($('date').value))
+            .then(renderSlots).catch(function () {});
+        }
+      });
+  });
+
+  function onDone(res) {
+    var s = res.summary;
+    $('formCard').style.display = 'none';
+    var mailLine = res.mailSent
+      ? '確認信已寄至 <strong>' + s.email + '</strong>，若沒收到請檢查垃圾信件匣。'
+      : '確認信寄送遇到問題，但您的預約已成立，我們會另外透過 LINE 與您確認。';
+
+    $('doneCard').innerHTML =
+      '<h2>預約成功 🎉</h2>' +
+      '<p>感謝您的預約！我們已為您安排好專屬的飛行體驗。</p>' +
+      '<dl>' +
+        '<dt>預約人</dt><dd>' + s.name + '</dd>' +
+        '<dt>日期</dt><dd>' + s.dateLabel + '</dd>' +
+        '<dt>時段</dt><dd>' + s.slotLabel + '（GMT+7）</dd>' +
+        '<dt>人數</dt><dd>' + s.pax + ' 人</dd>' +
+      '</dl>' +
+      '<p>' + mailLine + '</p>' +
+      '<p class="notice">座位將為您保留 10 分鐘，請於 <strong>' + s.deadline +
+        ' 前</strong> 抵達；若有延誤請隨時用 ' +
+        '<a href="https://lin.ee/DcpM9f7" target="_blank">LINE</a> 告訴我們。</p>' +
+      '<p>期待在清邁與您見面！🫡</p>';
+    $('doneCard').style.display = 'block';
+    window.scrollTo(0, 0);
+  }
+</script>
+</body>
+</html>
