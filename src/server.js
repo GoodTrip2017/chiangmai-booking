@@ -10,6 +10,9 @@ const { isAdminToken } = require('./routes/admin');
 
 const app = express();
 
+// Railway 的反向代理之後才是真實客戶端 IP，頻率限制需要這個設定才抓得準
+app.set('trust proxy', 1);
+
 // 保留原始 body 供 LINE webhook 驗簽
 app.use(express.json({
   verify: (req, res, buf) => { req.rawBody = buf; },

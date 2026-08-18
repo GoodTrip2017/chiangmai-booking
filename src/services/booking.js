@@ -36,14 +36,16 @@ function validateForm(form, opts = {}) {
   }
   if (!opts.emailOptional && !email) throw new Error('請填寫 Email，確認信會寄到這個信箱。');
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Email 格式不正確。');
+  if (email.length > 120) throw new Error('Email 過長。');
+  if (line.length > 80) throw new Error('LINE 聯絡方式過長。');
   if (firstTime !== '是' && firstTime !== '否') throw new Error('請選擇是否為第一次接觸。');
   if (!opts.referralOptional && !referral) throw new Error('請選擇從哪邊知道我們的。');
   if (referral && !REFERRAL_OPTIONS.includes(referral)) throw new Error('「從哪邊知道我們的」選項不正確。');
 
-  return {
-    name, pax, date: dateStr, slot, firstTime, line, email, referral,
-    note: String(f.note || '').trim(),
-  };
+  const note = String(f.note || '').trim();
+  if (note.length > 300) throw new Error('備註過長（最多 300 字）。');
+
+  return { name, pax, date: dateStr, slot, firstTime, line, email, referral, note };
 }
 
 /** 同一個 (date, slot) 的寫入互斥；交易結束自動解鎖 */
