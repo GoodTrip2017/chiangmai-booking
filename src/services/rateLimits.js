@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 const { ipKeyGenerator } = require('express-rate-limit');
 const { pool } = require('../db');
 const { userError } = require('../util/errors');
+const { clientIp } = require('../util/clientIp');
 
 // 合併 IPv6 /56，避免同一網段切換地址繞過限制；資料庫不記錄原始 IP。
 function ipDigest(ip) {
@@ -26,7 +27,7 @@ async function consumeLimit(bucket, limit, windowMs, message, loginStore = false
 }
 async function limitBooking(req, res, next) {
   try {
-    const ip = ipDigest(req.ip);
+    const ip = ipDigest(clientIp(req));
     await consumeLimit(`booking-minute:${ip}`, 3, 60000, '操作太頻繁，請稍候一分鐘再試。');
     await consumeLimit(`booking-day:${ip}`, 20, 86400000, '今日預約次數已達上限，請改用 LINE 與我們聯絡。');
     next();

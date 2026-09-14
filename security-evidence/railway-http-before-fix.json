@@ -1,0 +1,164 @@
+{
+  "date": "2026-09-14T04:50:29.089Z",
+  "base": "https://chiangmai-booking-production.up.railway.app",
+  "createdBookings": 0,
+  "checks": [
+    {
+      "name": "HTTPS health and security headers",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "HTTP redirects to HTTPS",
+      "pass": true,
+      "status": 301
+    },
+    {
+      "name": "Capacity configuration is 12",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "Protected page /admin",
+      "pass": true,
+      "status": 303
+    },
+    {
+      "name": "Protected page /ADMIN",
+      "pass": true,
+      "status": 303
+    },
+    {
+      "name": "Legacy admin URL redirects safely",
+      "pass": true,
+      "status": 303
+    },
+    {
+      "name": "Unauthenticated data blocked /api/admin/week",
+      "pass": true,
+      "status": 401
+    },
+    {
+      "name": "Unauthenticated data blocked /api/admin/session",
+      "pass": true,
+      "status": 401
+    },
+    {
+      "name": "Unauthenticated write blocked /api/admin/bookings",
+      "pass": true,
+      "status": 401
+    },
+    {
+      "name": "Unauthenticated write blocked /api/admin/bookings/00000000-0000-4000-8000-000000000000/cancel",
+      "pass": true,
+      "status": 401
+    },
+    {
+      "name": "Unauthenticated write blocked /api/admin/bookings/00000000-0000-4000-8000-000000000000/resend-mail",
+      "pass": true,
+      "status": 401
+    },
+    {
+      "name": "Unauthenticated write blocked /api/admin/logout",
+      "pass": true,
+      "status": 401
+    },
+    {
+      "name": "Forged cookie blocked",
+      "pass": true,
+      "status": 401
+    },
+    {
+      "name": "Login cross-origin blocked",
+      "pass": true,
+      "status": 403
+    },
+    {
+      "name": "Login absent origin blocked",
+      "pass": true,
+      "status": 403
+    },
+    {
+      "name": "Login cross-site metadata blocked",
+      "pass": true,
+      "status": 403
+    },
+    {
+      "name": "Non-JSON rejected",
+      "pass": true,
+      "status": 415
+    },
+    {
+      "name": "Malformed JSON rejected",
+      "pass": true,
+      "status": 400
+    },
+    {
+      "name": "Oversized body rejected",
+      "pass": true,
+      "status": 413
+    },
+    {
+      "name": "Array body rejected",
+      "pass": true,
+      "status": 400
+    },
+    {
+      "name": "Internal file unavailable /.env",
+      "pass": true,
+      "status": 404
+    },
+    {
+      "name": "Internal file unavailable /.git/config",
+      "pass": true,
+      "status": 404
+    },
+    {
+      "name": "Internal file unavailable /views/admin.html",
+      "pass": true,
+      "status": 404
+    },
+    {
+      "name": "Internal file unavailable /src/server.js",
+      "pass": true,
+      "status": 404
+    },
+    {
+      "name": "Availability has no customer details",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "Duplicate date rejected",
+      "pass": true,
+      "status": 400
+    },
+    {
+      "name": "Email mandatory on live API",
+      "pass": true,
+      "status": 400
+    },
+    {
+      "name": "13-person contact prompt on live API",
+      "pass": true,
+      "status": 400
+    },
+    {
+      "name": "Fractional pax rejected",
+      "pass": true,
+      "status": 400
+    },
+    {
+      "name": "Railway proxy prevents IP-header rate-limit bypass 1",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n400 !== 429\n"
+    },
+    {
+      "name": "Railway proxy prevents IP-header rate-limit bypass 2",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n400 !== 429\n"
+    }
+  ],
+  "passed": 29,
+  "failed": 2
+}

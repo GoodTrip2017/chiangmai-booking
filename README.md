@@ -126,3 +126,5 @@ Migration 保留舊資料，不自動取消或縮減人數。舊時段如果超�
 - [Railway 健康檢查](https://docs.railway.com/deployments/healthchecks)
 - [Resend 寄信 API](https://resend.com/docs/api-reference/emails/send-email)
 - [Resend 網域驗證](https://resend.com/docs/dashboard/domains/introduction)
+
+Railway 正式環境會以平台提供的 `X-Real-IP` 計算預約與登入限制，不信任訪客可自行填寫的 `X-Forwarded-For`。辨識依據為 `NODE_ENV=production` 與 Railway 自動提供的 `RAILWAY_ENVIRONMENT_ID`。請勿增加可繞過 Railway HTTPS 邊緣的公開 TCP 入口。

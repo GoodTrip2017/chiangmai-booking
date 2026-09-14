@@ -3,6 +3,7 @@ const { promisify } = require('node:util');
 const { pool } = require('../db');
 const { userError } = require('../util/errors');
 const { consumeLimit, ipDigest } = require('./rateLimits');
+const { clientIp } = require('../util/clientIp');
 const scrypt = promisify(crypto.scrypt);
 const SESSION_MS = 8 * 60 * 60 * 1000;
 // OWASP 的低記憶體 scrypt 組合；明確版本化參數，拒絕舊的弱設定。
@@ -58,7 +59,7 @@ function requireSameOrigin(req, res, next) {
 }
 async function login(req, res, next) {
   try {
-    await limitLogin(req.ip);
+    await limitLogin(clientIp(req));
     if (!await checkPassword(req.body?.password)) throw userError('密碼不正確。', 401);
     const token = crypto.randomBytes(32).toString('hex');
     const csrfToken = crypto.randomBytes(32).toString('hex');

@@ -312,3 +312,20 @@ test('SEC-21: actual PostgreSQL TLS handshake rejects an untrusted certificate a
     assert.equal(trustedStartups,1);
   } finally {for(const socket of sockets)socket.destroy();await new Promise(r=>fakePg.close(r));rmSync(dir,{recursive:true,force:true});}
 });
+test('SEC-22: Railway edge IP controls booking and login quotas despite changing forwarded headers', async () => {
+  const prior = process.env.RAILWAY_ENVIRONMENT_ID;
+  process.env.RAILWAY_ENVIRONMENT_ID = 'railway-proxy-regression';
+  await restartApp(true);
+  const headers = i => ({ 'X-Real-IP': '198.51.100.42', 'X-Forwarded-For': `203.0.113.${i}`, 'CF-Connecting-IP': `192.0.2.${i}` });
+  try {
+    for (let i=1;i<=3;i++) assert.equal((await request('/api/bookings',{method:'POST',body:{...form,email:''},headers:headers(i)})).status,400);
+    assert.equal((await request('/api/bookings',{method:'POST',body:form,headers:headers(4)})).status,429);
+    for (let i=1;i<=5;i++) assert.equal((await request('/api/admin/login',{method:'POST',body:{password:'wrong'},headers:headers(i)})).status,401);
+    assert.equal((await request('/api/admin/login',{method:'POST',body:{password},headers:headers(6)})).status,429);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM bookings')).rows[0].n,0);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM admin_sessions')).rows[0].n,0);
+  } finally {
+    if (prior===undefined) delete process.env.RAILWAY_ENVIRONMENT_ID; else process.env.RAILWAY_ENVIRONMENT_ID=prior;
+    await restartApp();
+  }
+});

@@ -113,3 +113,14 @@ test('成功頁姓名與 Email 僅作文字；未送信不承諾 LINE 私訊', (
   assert.match(nodes.get('doneCard').children[2].text, /預約已成立/);
   assert.doesNotMatch(nodes.get('doneCard').children[2].text, /我們會另外透過 LINE/);
 });
+test('Railway 只信任邊緣 X-Real-IP，缺失或異常值共用受限桶', () => {
+  const { clientIp } = require('../src/util/clientIp');
+  const env = { NODE_ENV: 'production', RAILWAY_ENVIRONMENT_ID: 'test-environment' };
+  for (const value of ['198.51.100.8', '2001:db8:abcd::1']) {
+    assert.equal(clientIp({ ip: '203.0.113.9', headers: { 'x-real-ip': value } }, env), value);
+  }
+  for (const value of [undefined, '', 'unknown', '198.51.100.8, 203.0.113.9', ['198.51.100.8'], '198.51.100.8:1234']) {
+    assert.equal(clientIp({ ip: '203.0.113.9', headers: { 'x-real-ip': value } }, env), 'unknown');
+  }
+  assert.equal(clientIp({ ip: '127.0.0.1', headers: { 'x-real-ip': '203.0.113.9' } }, { NODE_ENV: 'test' }), '127.0.0.1');
+});
