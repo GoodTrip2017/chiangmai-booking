@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GoodTrip 清邁店 — 預約後台</title>
+<style>
+  :root {
+    --bg: #14120f; --card: #1d1b17; --card2: #262218; --line: #3a342c;
+    --text: #f2eee6; --muted: #a49c8e; --accent: #7fc04a; --warn: #e0a33c; --err: #e26d5a;
+    --closed: #221f1c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+    font-size: 14px;
+  }
+  header {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 18px; border-bottom: 1px solid var(--line); background: var(--card);
+    position: sticky; top: 0; z-index: 5;
+  }
+  header h1 { font-size: 16px; margin: 0; margin-right: auto; display: flex; align-items: center; gap: 10px; }
+  header h1 img { height: 30px; }
+  button {
+    font-family: inherit; font-size: 13px; padding: 7px 12px; cursor: pointer;
+    color: var(--text); background: var(--card2); border: 1px solid var(--line); border-radius: 8px;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #10240a; border-color: var(--accent); font-weight: 700; }
+  button.danger { color: #ffd9d1; border-color: var(--err); }
+  .range { color: var(--muted); font-size: 13px; width: 100%; }
+
+  .scroll { overflow-x: auto; padding: 14px; }
+  table { border-collapse: collapse; width: 100%; min-width: 1050px; }
+  th, td { border: 1px solid var(--line); vertical-align: top; padding: 6px; }
+  th { background: var(--card); font-size: 13px; font-weight: 600; }
+  th.today { color: var(--accent); }
+  th.slotcol, td.slotcol { width: 96px; background: var(--card); font-size: 12.5px; white-space: nowrap; }
+  td { width: calc((100% - 96px) / 7); background: var(--card); }
+  td.closed { background: var(--closed); color: var(--muted); text-align: center; font-size: 12px; }
+  .cellhead { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+  .cellhead .cnt { font-weight: 700; color: var(--text); }
+  .cellhead.full .cnt { color: var(--err); }
+  .cellhead .whole { color: var(--warn); }
+  .cellhead .add { margin-left: auto; padding: 1px 7px; font-size: 13px; line-height: 1.4; }
+  .chip {
+    background: var(--card2); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 6px; padding: 5px 7px; margin-bottom: 4px; cursor: pointer; font-size: 12.5px;
+  }
+  .chip:hover { border-color: var(--accent); }
+  .chip.warn { border-left-color: var(--err); }
+  .chip .nm { font-weight: 600; }
+  .chip .meta { color: var(--muted); font-size: 11.5px; }
+  .tag { display: inline-block; font-size: 10.5px; padding: 0 4px; border-radius: 4px; background: #33302a; color: var(--muted); margin-left: 4px; }
+  .tag.first { background: #2c3a1f; color: var(--accent); }
+  .tag.err { background: #3a201c; color: #ffd9d1; }
+  .empty { color: #6b655b; font-size: 12px; }
+
+  .mask { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; z-index: 10; }
+  .mask.on { display: block; }
+  .modal {
+    position: fixed; z-index: 11; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: min(460px, 94vw); max-height: 90vh; overflow: auto; display: none;
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px;
+  }
+  .modal.on { display: block; }
+  .modal h2 { font-size: 16px; margin: 0 0 12px; }
+  .modal label { display: block; font-size: 12.5px; color: var(--muted); margin: 12px 0 4px; }
+  .modal input, .modal select, .modal textarea {
+    width: 100%; padding: 9px; font-size: 15px; font-family: inherit;
+    color: var(--text); background: var(--card2); border: 1px solid var(--line); border-radius: 8px;
+  }
+  .row2 { display: flex; gap: 10px; }
+  .row2 > div { flex: 1; min-width: 0; }
+  .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; }
+  .acts button { min-height: 40px; white-space: nowrap; }
+  .mmsg { margin-top: 12px; padding: 10px; border-radius: 8px; font-size: 13px; display: none; white-space: pre-line; }
+  .mmsg.on { display: block; background: #3a201c; border: 1px solid var(--err); color: #ffd9d1; }
+  .chk { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; }
+  .chk input { width: auto; }
+  #loading { padding: 40px; text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1><img src="/logo.png" alt="">預約後台</h1>
+  <button id="prev" disabled>← 上一週</button>
+  <button id="this" disabled>本週</button>
+  <button id="next" disabled>下一週 →</button>
+  <button id="reload">重新整理</button>
+  <button class="primary" id="addNew" disabled>＋ 手動新增</button>
+  <button id="logout">登出</button>
+  <div class="range" id="range"></div>
+</header>
+
+<div id="loading">載入中…</div>
+<div class="scroll" id="scroll" style="display:none"><table id="grid"></table></div>
+
+<div class="mask" id="mask"></div>
+<div class="modal" id="modal">
+  <h2 id="mTitle">預約</h2>
+  <input type="hidden" id="fId">
+  <label>預約人（綽號或本名）</label>
+  <input type="text" id="fName" maxlength="60">
+  <div class="row2">
+    <div>
+      <label>日期</label>
+      <input type="date" id="fDate">
+    </div>
+    <div>
+      <label>人數（每個時段合計最多 12 人）</label>
+      <input type="number" id="fPax" min="1" max="12" step="1">
+    </div>
+  </div>
+  <div class="row2">
+    <div>
+      <label>時段</label>
+      <select id="fSlot"></select>
+    </div>
+    <div>
+      <label>第一次接觸</label>
+      <select id="fFirst"><option value="是">是</option><option value="否">否</option></select>
+    </div>
+  </div>
+  <div class="row2">
+    <div>
+      <label>來源</label>
+      <select id="fSource">
+        <option value="WALK_IN">現場上門</option>
+        <option value="LINE">LINE</option>
+        <option value="PHONE">電話</option>
+        <option value="WEB">網路預約</option>
+      </select>
+    </div>
+    <div>
+      <label>LINE</label>
+      <input type="text" id="fLine" maxlength="80">
+    </div>
+  </div>
+  <label for="fEmail">Email（必填）</label>
+  <input type="email" id="fEmail" required maxlength="120" autocomplete="email">
+  <label>從哪邊知道我們的（選填）</label>
+  <select id="fReferral">
+    <option value="">未填</option>
+    <option value="Instagram">Instagram</option>
+    <option value="Threads">Threads</option>
+    <option value="GoodTrip官網">GoodTrip官網</option>
+    <option value="GoodTrip門市">GoodTrip門市</option>
+    <option value="親友介紹">親友介紹</option>
+    <option value="網路搜尋">網路搜尋</option>
+  </select>
+  <label>備註</label>
+  <input type="text" id="fNote" maxlength="300">
+  <div class="chk" id="mailChk"><input type="checkbox" id="fSendMail"><label for="fSendMail" style="margin:0">新增後寄出確認信</label></div>
+  <div class="mmsg" id="mMsg"></div>
+  <div class="acts">
+    <button id="mCancelBooking" class="danger" style="display:none">取消此預約</button>
+    <button id="mResend" style="display:none">重寄確認信</button>
+    <button id="mClose">關閉</button>
+    <button id="mSave" class="primary">儲存</button>
+  </div>
+</div>
+
+<script src="/assets/admin.js" defer></script>
+</body>
+</html>

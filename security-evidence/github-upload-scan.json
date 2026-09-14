@@ -1,0 +1,9 @@
+{
+  "date": "2026-09-14T03:59:49.614751+00:00",
+  "reachableCommitsChecked": 2,
+  "historyTextFileVersionsChecked": 44,
+  "workingTextFilesChecked": 49,
+  "matches": [],
+  "method": "Targeted pattern scan of reachable Git history and proposed files; no secret values printed",
+  "limits": "Not an exhaustive entropy scan; cannot inspect deleted unreachable history or prove old credentials were revoked."
+}

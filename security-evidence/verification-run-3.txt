@@ -1,0 +1,46 @@
+Temporary PostgreSQL started; only isolated test data will be used.
+✔ 健康檢查與安全標頭；所有未登入後台入口都被保護 (229.694458ms)
+✔ 密碼登入、Cookie、CSRF、跨站拒絕與登出撤銷 (182.272542ms)
+✔ 工作階段逾時及密碼輪替使舊登入立即失效 (430.49675ms)
+✔ 登入嘗試限制持久儲存，第六次遭拒絕 (13.915167ms)
+✔ 正式模式使用 Secure 及 __Host Cookie (148.741708ms)
+✔ 前台 13 人遭拒，12 人可成立，未設定寄信不影響預約 (13.25525ms)
+✔ 後台新增、修改及 force 都不能超過 12 人 (12.100459ms)
+✔ 前台、後台新增及編輯缺少 Email 都遭拒絕 (160.402041ms)
+✔ 20 筆同時新增只接受 12 位，真實 PostgreSQL 鎖定防超額 (31.021209ms)
+✔ 相同送出鍵同時重試只建立一筆；變更內容不能重用鍵 (12.222416ms)
+✔ 兩筆同時移到剩餘兩位的時段，只容許一筆成功 (10.415792ms)
+✔ 修改跨時段釋出容量；取消保留資料並釋出座位 (12.487041ms)
+寄送確認信失敗： 23
+✔ 通知逾時保留成功預約並標記失敗，不再次新增 (9.150875ms)
+✔ 錯誤不洩漏資料庫細節，資料庫不可用健康檢查回 503 (7.340791ms)
+✔ SEC-01: every admin endpoint rejects anonymous/forged credentials and never returns customer data (215.625875ms)
+✔ SEC-02: origin, content type, absent/mismatched/session-swapped CSRF cannot change bookings (356.106959ms)
+✔ SEC-03: successful login rotates sessions; raw cookies are never stored; logout invalidates replay (332.552083ms)
+✔ SEC-04: route case variants, errors and authenticated HTML all prohibit caching and embedding (177.76125ms)
+✔ SEC-05: backup/source/config files and encoded traversal cannot expose private assets (12.642458ms)
+✔ SEC-06: typed validation rejects arrays, booleans, objects, controls, malformed UUID and recipient injection (8.416542ms)
+✔ SEC-07: SQL injection and mass assignment remain inert; public queries contain no PII (12.713ms)
+✔ SEC-08: reusing a public request key after staff edits/cancels reveals no edited PII or false success (11.800708ms)
+✔ SEC-09: all stored customer fields including legacy source render as escaped text (7.328458ms)
+✔ SEC-10: malformed/oversized/compressed JSON cannot crash the server or expose parsing contents (12.64075ms)
+✔ SEC-11: LINE signature rejects mutations; even correctly signed malformed events cannot terminate process (160.967417ms)
+✔ SEC-12: login quota survives real process replacement and is shared atomically across workers (496.278583ms)
+✔ SEC-13: public booking quotas survive restart, are atomic across workers, and enforce daily limits (563.797792ms)
+✔ SEC-14: proxy simulation ignores forged leftmost addresses and groups IPv6 subnet addresses (201.618708ms)
+✔ SEC-15: concurrent mail resend is limited before outbound calls; browser retries cannot mail-bomb (19.132542ms)
+✔ SEC-16: database failures fail closed; responses and application logs omit secrets/SQL details (160.65525ms)
+✔ SEC-17: production startup rejects missing/legacy hashes and unsafe origins before opening a port (654.556375ms)
+✔ SEC-18: prototype pollution and body identifier replacement cannot grant privileges or edit another booking (165.692208ms)
+✔ SEC-19: admin edit/cancel/resend rejects invalid or nonexistent IDs and cancelled edits (194.316833ms)
+✔ SEC-20: URL flags and ambient PGSSLMODE cannot disable TLS verification or discard the configured CA (7.361166ms)
+✔ SEC-21: actual PostgreSQL TLS handshake rejects an untrusted certificate and accepts explicit test CA (189.6645ms)
+ℹ tests 35
+ℹ suites 0
+ℹ pass 35
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5478.278583
+Temporary PostgreSQL stopped.

@@ -1,0 +1,15 @@
+{
+  "date": "2026-09-14",
+  "environment": "isolated localhost app, temporary PostgreSQL, outbound notifications disabled",
+  "browser": "Codex in-app browser",
+  "method": "Actual UI login, DOM and accessibility inspection, UI logout",
+  "fixture": "Legacy stored HTML attack in name, source, LINE, referral, note and email fields",
+  "result": {
+    "attackShownAsText": true,
+    "injectedImages": 0,
+    "injectedEventHandlers": 0,
+    "scriptDialogPresent": false,
+    "logoutReturnsToLogin": true
+  },
+  "limitations": "Single browser engine; not a cross-browser certification or an exhaustive XSS payload corpus"
+}

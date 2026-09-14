@@ -1,0 +1,55 @@
+Temporary PostgreSQL started; only isolated test data will be used.
+✔ 健康檢查與安全標頭；所有未登入後台入口都被保護 (229.993708ms)
+✔ 密碼登入、Cookie、CSRF、跨站拒絕與登出撤銷 (186.590125ms)
+✔ 工作階段逾時及密碼輪替使舊登入立即失效 (442.241083ms)
+✔ 登入嘗試限制持久儲存，第六次遭拒絕 (13.773041ms)
+✔ 正式模式使用 Secure 及 __Host Cookie (150.988917ms)
+✔ 前台 13 人遭拒，12 人可成立，未設定寄信不影響預約 (14.122375ms)
+✔ 後台新增、修改及 force 都不能超過 12 人 (10.928708ms)
+✔ 前台、後台新增及編輯缺少 Email 都遭拒絕 (155.436417ms)
+✔ 20 筆同時新增只接受 12 位，真實 PostgreSQL 鎖定防超額 (26.632666ms)
+✔ 相同送出鍵同時重試只建立一筆；變更內容不能重用鍵 (15.091584ms)
+✔ 兩筆同時移到剩餘兩位的時段，只容許一筆成功 (9.773208ms)
+✔ 修改跨時段釋出容量；取消保留資料並釋出座位 (13.988208ms)
+寄送確認信失敗： 23
+✔ 通知逾時保留成功預約並標記失敗，不再次新增 (8.965625ms)
+✔ 錯誤不洩漏資料庫細節，資料庫不可用健康檢查回 503 (6.7405ms)
+✔ SEC-01: every admin endpoint rejects anonymous/forged credentials and never returns customer data (205.621416ms)
+✔ SEC-02: origin, content type, absent/mismatched/session-swapped CSRF cannot change bookings (316.490583ms)
+✔ SEC-03: successful login rotates sessions; raw cookies are never stored; logout invalidates replay (302.130542ms)
+✔ SEC-04: route case variants, errors and authenticated HTML all prohibit caching and embedding (165.933ms)
+✔ SEC-05: backup/source/config files and encoded traversal cannot expose private assets (10.926709ms)
+✔ SEC-06: typed validation rejects arrays, booleans, objects, controls, malformed UUID and recipient injection (7.603125ms)
+✔ SEC-07: SQL injection and mass assignment remain inert; public queries contain no PII (10.039958ms)
+✔ SEC-08: reusing a public request key after staff edits/cancels reveals no edited PII or false success (10.877541ms)
+✔ SEC-09: all stored customer fields including legacy source render as escaped text (6.508625ms)
+✔ SEC-10: malformed/oversized/compressed JSON cannot crash the server or expose parsing contents (13.662791ms)
+✔ SEC-11: LINE signature rejects mutations; even correctly signed malformed events cannot terminate process (122.35375ms)
+✔ SEC-12: login quota survives real process replacement and is shared atomically across workers (455.105125ms)
+✔ SEC-13: public booking quotas survive restart, are atomic across workers, and enforce daily limits (300.223417ms)
+✔ SEC-14: proxy simulation ignores forged leftmost addresses and groups IPv6 subnet addresses (185.621833ms)
+✔ SEC-15: concurrent mail resend is limited before outbound calls; browser retries cannot mail-bomb (17.56975ms)
+✔ SEC-16: database failures fail closed; responses and application logs omit secrets/SQL details (152.417834ms)
+✔ SEC-17: production startup rejects missing/legacy hashes and unsafe origins before opening a port (610.837958ms)
+✔ SEC-18: prototype pollution and body identifier replacement cannot grant privileges or edit another booking (162.983208ms)
+✔ SEC-19: admin edit/cancel/resend rejects invalid or nonexistent IDs and cancelled edits (161.15025ms)
+✔ SEC-20: URL flags and ambient PGSSLMODE cannot disable TLS verification or discard the configured CA (6.187084ms)
+✔ SEC-21: actual PostgreSQL TLS handshake rejects an untrusted certificate and accepts explicit test CA (129.379291ms)
+✔ 日期、清邁時區與保留時間 (0.913125ms)
+✔ 前後台表單均拒絕 13 人、60 人、非整數與週二 (1.464583ms)
+✔ Email 統一必填，後台或舊 emailOptional 選項也不能繞過 (0.276167ms)
+✔ 13 人以上提供 LINE 洽詢資訊，客人改回 12 人可恢復一般預約 (1.440833ms)
+✔ 第一組與多組共用同一個 12 人上限 (0.268125ms)
+✔ 確認信安全跳脫姓名，文案由店員處理逾時 (0.225458ms)
+✔ 寄信未設定、成功、拒絕、連線逾時各自回報，使用 HTTPS 與去重鍵 (0.753292ms)
+✔ 密碼使用獨立 salt 雜湊，不接受短密碼 (286.755083ms)
+✔ 成功頁姓名與 Email 僅作文字；未送信不承諾 LINE 私訊 (0.944417ms)
+ℹ tests 44
+ℹ suites 0
+ℹ pass 44
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5251.678667
+Temporary PostgreSQL stopped.

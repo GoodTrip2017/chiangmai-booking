@@ -1,26 +1,18 @@
-/** 後台 API。每個請求都要帶 X-Admin-Token（或 ?token=）。 */
+/** 後台 API：資料庫工作階段 + 同源 CSRF 驗證。 */
 const express = require('express');
 const { getWeekData } = require('../services/admin');
 const booking = require('../services/booking');
+const auth = require('../services/auth');
 
 const router = express.Router();
 
-function isAdminToken(token) {
-  const expected = process.env.ADMIN_TOKEN || '';
-  return !!expected && token === expected;
-}
-
-router.use((req, res, next) => {
-  const token = req.get('X-Admin-Token') || String(req.query.token || '');
-  if (!isAdminToken(token)) {
-    return res.status(401).json({ error: '無權限：後台憑證不正確，請重新開啟後台連結。' });
-  }
-  next();
-});
+router.use(auth.requireAdmin, auth.requireCsrf);
+router.get('/session', (req, res) => res.json({ csrfToken: req.adminSession.csrf_token }));
+router.post('/logout', auth.logout);
 
 router.get('/week', async (req, res, next) => {
   try {
-    const monday = String(req.query.monday || '') || require('../util/datetime').todayStr();
+    const monday = req.query.monday === undefined || req.query.monday === '' ? require('../util/datetime').todayStr() : req.query.monday;
     res.json(await getWeekData(monday));
   } catch (err) { next(err); }
 });
@@ -50,4 +42,3 @@ router.post('/bookings/:id/resend-mail', async (req, res, next) => {
 });
 
 module.exports = router;
-module.exports.isAdminToken = isAdminToken;

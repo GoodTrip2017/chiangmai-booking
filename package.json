@@ -1,21 +1,28 @@
 {
   "name": "chiangmai-booking",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "GoodTrip 清邁店線上預約系統 (Node.js + Express + PostgreSQL)",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "migrate": "node src/db/migrate.js"
+    "migrate": "node src/db/migrate.js",
+    "admin:password": "node scripts/admin-password.js",
+    "test": "node --test test/unit.test.js",
+    "test:integration": "node --test --test-concurrency=1 test/integration.test.js",
+    "test:security": "node --test --test-concurrency=1 test/security.test.js",
+    "test:all": "node --test --test-concurrency=1 test/unit.test.js test/integration.test.js test/security.test.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": "24.x"
+  },
+  "overrides": {
+    "qs": "^6.16.0"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^8.6.2",
-    "nodemailer": "^9.0.5",
     "pg": "^8.12.0"
   }
 }

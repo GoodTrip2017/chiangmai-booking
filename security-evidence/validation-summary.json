@@ -1,0 +1,16 @@
+{
+  "verified_at": "2026-09-14T03:56:43.006145+00:00",
+  "tests": {
+    "unit": 9,
+    "integration": 14,
+    "security": 21,
+    "passed": 44,
+    "failed": 0,
+    "skipped": 0
+  },
+  "javascript_syntax_files": 26,
+  "npm_known_vulnerabilities": 0,
+  "source_manifest_matches": true,
+  "production_deployment_verified": false,
+  "test_environment_stopped": true
+}

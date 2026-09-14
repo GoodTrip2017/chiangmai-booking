@@ -1,11 +1,9 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-const useSsl = String(process.env.DATABASE_SSL || '').toLowerCase() === 'true';
+const { connectionConfig } = require('./config');
+const pool = new Pool(connectionConfig());
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: useSsl ? { rejectUnauthorized: false } : undefined,
-});
+pool.on('error', (err) => console.error('閒置資料庫連線中斷：', err.code || 'UNKNOWN'));
 
 module.exports = { pool };

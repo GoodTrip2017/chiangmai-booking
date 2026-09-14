@@ -1,7 +1,7 @@
+const { userError } = require('../util/errors');
 /**
  * 空位查詢與容量規則（後端唯一權威）：
- *   - 該時段目前 0 組  → 任何人數都接受（第一組可包場）
- *   - 該時段已有 >=1 組 → 只有「現有總人數 + 本次人數 <= 12」才接受
+ * 每個時段所有組別合計最多 CONFIG.MAX_PAX 人，第一組也適用。
  */
 const { pool } = require('../db');
 const { CONFIG, SLOTS, STATUS } = require('../config');
@@ -25,13 +25,13 @@ async function slotState(db, dateStr, slot, excludeId) {
   const list = await confirmedIn(db, dateStr, slot, excludeId);
   const totalPax = list.reduce((sum, b) => sum + b.pax, 0);
   const groups = list.length;
-  const remaining = groups === 0 ? null : Math.max(0, CONFIG.MAX_PAX_MULTI - totalPax);
+  const remaining = Math.max(0, CONFIG.MAX_PAX - totalPax);
   return {
     slot,
     groups,
     totalPax,
-    remaining,               // null = 尚無人預約，第一組不限人數
-    isWholeVenue: groups === 1 && totalPax > CONFIG.MAX_PAX_MULTI,
+    remaining,
+    overCapacity: totalPax > CONFIG.MAX_PAX,
     bookings: list,
   };
 }
@@ -39,26 +39,25 @@ async function slotState(db, dateStr, slot, excludeId) {
 /** 容量判定。excludeId：修改既有預約時排除自己，避免自我衝突。 */
 async function capacityCheck(db, dateStr, slot, pax, excludeId) {
   const state = await slotState(db, dateStr, slot, excludeId);
-  if (state.groups === 0) return { ok: true, state };
-  if (state.totalPax + pax <= CONFIG.MAX_PAX_MULTI) return { ok: true, state };
+  if (Number.isInteger(pax) && pax >= 1 && state.totalPax + pax <= CONFIG.MAX_PAX) return { ok: true, state };
   return {
     ok: false,
     state,
     reason: `該時段已有 ${state.groups} 組預約、共 ${state.totalPax} 人。` +
-      `多組共用時每個時段上限 ${CONFIG.MAX_PAX_MULTI} 人，目前只剩 ` +
+      `每個時段接待上限 ${CONFIG.MAX_PAX} 人，目前只剩 ` +
       `${state.remaining} 個位子，無法容納 ${pax} 人。`,
   };
 }
 
 /** 前台：取某一天四個時段的即時狀態 */
 async function getAvailability(dateStr) {
-  if (!dt.isValidDateStr(dateStr)) throw new Error('日期格式不正確。');
+  if (!dt.isValidDateStr(dateStr)) throw userError('日期格式不正確。');
 
   const result = {
     date: dateStr,
     dateLabel: dt.formatDateZh(dateStr),
     closed: dt.isClosedDay(dateStr),
-    maxPax: CONFIG.MAX_PAX_MULTI,
+    maxPax: CONFIG.MAX_PAX,
     slots: [],
   };
   if (result.closed) {
@@ -78,7 +77,7 @@ async function getAvailability(dateStr) {
     } else if (st.groups === 0) {
       status = 'OPEN';
       statusText = '可預約';
-      maxPax = CONFIG.MAX_PAX_INPUT;
+      maxPax = st.remaining;
     } else if (st.remaining > 0) {
       status = 'PARTIAL';
       statusText = `剩餘 ${st.remaining} 位`;

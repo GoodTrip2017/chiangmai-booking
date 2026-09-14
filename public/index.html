@@ -112,7 +112,7 @@
     <p class="notice">
       預約時間以清邁本地時間為主（GMT+7）<br>
       每週二固定公休｜營業時間：14:00 - 23:00<br>
-      其餘公休時間另於 Google Maps 和 IG 公告
+      每個時段合計最多接待 12 人<br>其餘公休時間另於 Google Maps 和 IG 公告
     </p>
   </div>
 
@@ -129,7 +129,12 @@
     </div>
 
     <label>人數<span class="req">*</span> <span class="hint" id="paxHint"></span></label>
-    <input type="number" id="pax" min="1" step="1" value="1">
+    <input type="number" id="pax" min="1" step="1" value="1" aria-describedby="paxHint groupNotice">
+    <div id="groupNotice" class="msg info" role="status" aria-live="polite">
+      <strong>多人同行，歡迎先和我們聊聊！</strong>
+      <p style="margin:6px 0 10px">線上預約每個時段最多接待 12 人。超過 12 人的團體，歡迎先透過 LINE 私訊，由店員確認接待方式與可預約時段；聯絡後仍需等候店員確認安排。</p>
+      <a href="https://lin.ee/DcpM9f7" target="_blank" rel="noopener noreferrer">透過 LINE 洽詢多人預約 ↗</a>
+    </div>
 
     <label>是否為第一次接觸<span class="req">*</span></label>
     <div class="radios" id="firstTime">
@@ -141,7 +146,7 @@
     <input type="text" id="line" maxlength="80" placeholder="LINE ID 或顯示名稱">
 
     <label>Email<span class="req">*</span></label>
-    <input type="email" id="email" placeholder="you@example.com">
+    <input type="email" id="email" placeholder="you@example.com" required maxlength="120" autocomplete="email">
 
     <label>從哪邊知道我們的？<span class="req">*</span></label>
     <div class="radios grid2" id="referral">
@@ -162,183 +167,6 @@
   <p class="foot">有任何問題歡迎透過 <a href="https://lin.ee/DcpM9f7" target="_blank">LINE</a> 與我們聯絡</p>
 </div>
 
-<script>
-  var state = { slot: '', firstTime: '', referral: '', slotMax: 60, loading: false };
-
-  var $ = function (id) { return document.getElementById(id); };
-
-  // API helper：非 2xx 時丟出後端的 error 訊息
-  async function api(path, options) {
-    var res = await fetch(path, options);
-    var data = await res.json().catch(function () { return {}; });
-    if (!res.ok) throw new Error(data.error || '連線失敗，請稍後再試。');
-    return data;
-  }
-
-  // 今天（清邁時間）當作日期欄位下限
-  api('/api/config').then(function (cfg) {
-    $('date').min = cfg.today;
-  }).catch(function () {});
-
-  function showMsg(text, kind) {
-    var m = $('msg');
-    m.textContent = text;
-    m.className = 'msg show ' + (kind || 'error');
-  }
-  function clearMsg() { $('msg').className = 'msg'; }
-
-  // ---- 是否第一次接觸
-  Array.prototype.forEach.call($('firstTime').children, function (el) {
-    el.addEventListener('click', function () {
-      state.firstTime = el.getAttribute('data-v');
-      Array.prototype.forEach.call($('firstTime').children, function (o) {
-        o.className = 'slot' + (o === el ? ' on' : '');
-      });
-    });
-  });
-
-  // ---- 從哪邊知道我們的
-  Array.prototype.forEach.call($('referral').children, function (el) {
-    el.addEventListener('click', function () {
-      state.referral = el.getAttribute('data-v');
-      Array.prototype.forEach.call($('referral').children, function (o) {
-        o.className = 'slot' + (o === el ? ' on' : '');
-      });
-    });
-  });
-
-  // ---- 日期 → 查空位
-  $('date').addEventListener('change', function () {
-    var v = $('date').value;
-    state.slot = '';
-    if (!v) return;
-    var wd = new Date(v + 'T00:00:00Z').getUTCDay(); // 0=週日, 2=週二
-    if (wd === 2) {
-      renderSlotHint('每週二為固定公休日，請改選其他日期。', 'error');
-      return;
-    }
-    renderSlotHint('查詢空位中…', 'info');
-    api('/api/availability?date=' + encodeURIComponent(v))
-      .then(renderSlots)
-      .catch(function (err) { renderSlotHint(err.message || '查詢失敗，請重新整理。', 'error'); });
-  });
-
-  function renderSlotHint(text, kind) {
-    $('slots').innerHTML = '<div class="msg show ' + kind + '">' + text + '</div>';
-  }
-
-  function renderSlots(data) {
-    if (data.closed) { renderSlotHint(data.message, 'error'); return; }
-    var box = $('slots');
-    box.innerHTML = '';
-    data.slots.forEach(function (s) {
-      var cls = 'slot';
-      if (!s.selectable) cls += ' off';
-      if (s.status === 'OPEN') cls += ' free';
-      else if (s.status === 'PARTIAL') cls += ' few';
-      else cls += ' no';
-
-      var el = document.createElement('div');
-      el.className = cls;
-      el.innerHTML = '<span class="t">' + s.slot + '</span><span class="s">' + s.statusText + '</span>';
-      if (s.selectable) {
-        el.addEventListener('click', function () { pickSlot(el, s); });
-      }
-      box.appendChild(el);
-    });
-    updatePaxHint();
-  }
-
-  function pickSlot(el, s) {
-    state.slot = s.slot;
-    state.slotMax = s.maxPax;
-    Array.prototype.forEach.call($('slots').children, function (o) {
-      o.className = o.className.replace(' on', '');
-    });
-    el.className += ' on';
-    $('pax').max = s.maxPax;
-    if (Number($('pax').value) > s.maxPax) $('pax').value = s.maxPax;
-    updatePaxHint();
-    clearMsg();
-  }
-
-  function updatePaxHint() {
-    if (!state.slot) { $('paxHint').textContent = ''; return; }
-    $('paxHint').textContent = state.slotMax >= 60
-      ? '（此時段目前尚無其他預約，人數不限）'
-      : '（此時段已有其他客人，最多可再 ' + state.slotMax + ' 人）';
-  }
-
-  // ---- 送出
-  $('go').addEventListener('click', function () {
-    if (state.loading) return;
-    clearMsg();
-
-    var form = {
-      name: $('name').value.trim(),
-      pax: Number($('pax').value),
-      date: $('date').value,
-      slot: state.slot,
-      firstTime: state.firstTime,
-      line: $('line').value.trim(),
-      email: $('email').value.trim(),
-      referral: state.referral
-    };
-
-    if (!form.name) return showMsg('請填寫預約人（綽號或本名）。');
-    if (!form.date) return showMsg('請選擇預約日期。');
-    if (!form.slot) return showMsg('請選擇預約時段。');
-    if (!form.pax || form.pax < 1) return showMsg('請填寫人數。');
-    if (!form.firstTime) return showMsg('請選擇是否為第一次接觸。');
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return showMsg('請填寫正確的 Email。');
-    if (!form.referral) return showMsg('請選擇從哪邊知道我們的。');
-
-    state.loading = true;
-    $('go').disabled = true;
-    $('go').textContent = '送出中，請稍候…';
-
-    api('/api/bookings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form)
-    })
-      .then(onDone)
-      .catch(function (err) {
-        state.loading = false;
-        $('go').disabled = false;
-        $('go').textContent = '送出預約';
-        showMsg(err.message || '送出失敗，請稍後再試或改用 LINE 聯絡我們。');
-        if ($('date').value) {
-          api('/api/availability?date=' + encodeURIComponent($('date').value))
-            .then(renderSlots).catch(function () {});
-        }
-      });
-  });
-
-  function onDone(res) {
-    var s = res.summary;
-    $('formCard').style.display = 'none';
-    var mailLine = res.mailSent
-      ? '確認信已寄至 <strong>' + s.email + '</strong>，若沒收到請檢查垃圾信件匣。'
-      : '確認信寄送遇到問題，但您的預約已成立，我們會另外透過 LINE 與您確認。';
-
-    $('doneCard').innerHTML =
-      '<h2>預約成功 🎉</h2>' +
-      '<p>感謝您的預約！我們已為您安排好專屬的飛行體驗。</p>' +
-      '<dl>' +
-        '<dt>預約人</dt><dd>' + s.name + '</dd>' +
-        '<dt>日期</dt><dd>' + s.dateLabel + '</dd>' +
-        '<dt>時段</dt><dd>' + s.slotLabel + '（GMT+7）</dd>' +
-        '<dt>人數</dt><dd>' + s.pax + ' 人</dd>' +
-      '</dl>' +
-      '<p>' + mailLine + '</p>' +
-      '<p class="notice">座位將為您保留 10 分鐘，請於 <strong>' + s.deadline +
-        ' 前</strong> 抵達；若有延誤請隨時用 ' +
-        '<a href="https://lin.ee/DcpM9f7" target="_blank">LINE</a> 告訴我們。</p>' +
-      '<p>期待在清邁與您見面！🫡</p>';
-    $('doneCard').style.display = 'block';
-    window.scrollTo(0, 0);
-  }
-</script>
+<script src="/assets/booking.js" defer></script>
 </body>
 </html>

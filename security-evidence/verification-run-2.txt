@@ -1,0 +1,75 @@
+Temporary PostgreSQL started; only isolated test data will be used.
+✔ 健康檢查與安全標頭；所有未登入後台入口都被保護 (216.721209ms)
+✔ 密碼登入、Cookie、CSRF、跨站拒絕與登出撤銷 (195.574542ms)
+✔ 工作階段逾時及密碼輪替使舊登入立即失效 (438.60275ms)
+✔ 登入嘗試限制持久儲存，第六次遭拒絕 (12.141292ms)
+✔ 正式模式使用 Secure 及 __Host Cookie (151.621666ms)
+✔ 前台 13 人遭拒，12 人可成立，未設定寄信不影響預約 (14.177333ms)
+✔ 後台新增、修改及 force 都不能超過 12 人 (10.463916ms)
+✔ 前台、後台新增及編輯缺少 Email 都遭拒絕 (157.056375ms)
+✔ 20 筆同時新增只接受 12 位，真實 PostgreSQL 鎖定防超額 (28.041083ms)
+✔ 相同送出鍵同時重試只建立一筆；變更內容不能重用鍵 (10.093417ms)
+✔ 兩筆同時移到剩餘兩位的時段，只容許一筆成功 (11.064542ms)
+✔ 修改跨時段釋出容量；取消保留資料並釋出座位 (12.194167ms)
+寄送確認信失敗： 23
+✔ 通知逾時保留成功預約並標記失敗，不再次新增 (9.304083ms)
+✔ 錯誤不洩漏資料庫細節，資料庫不可用健康檢查回 503 (6.737875ms)
+✔ SEC-01: every admin endpoint rejects anonymous/forged credentials and never returns customer data (212.331666ms)
+✔ SEC-02: origin, content type, absent/mismatched/session-swapped CSRF cannot change bookings (309.183292ms)
+✔ SEC-03: successful login rotates sessions; raw cookies are never stored; logout invalidates replay (304.060458ms)
+✔ SEC-04: route case variants, errors and authenticated HTML all prohibit caching and embedding (167.28675ms)
+✔ SEC-05: backup/source/config files and encoded traversal cannot expose private assets (11.091083ms)
+✔ SEC-06: typed validation rejects arrays, booleans, objects, controls, malformed UUID and recipient injection (6.338ms)
+✔ SEC-07: SQL injection and mass assignment remain inert; public queries contain no PII (10.306166ms)
+✔ SEC-08: reusing a public request key after staff edits/cancels reveals no edited PII or false success (10.515958ms)
+✔ SEC-09: all stored customer fields including legacy source render as escaped text (6.903292ms)
+✔ SEC-10: malformed/oversized/compressed JSON cannot crash the server or expose parsing contents (8.968917ms)
+✔ SEC-11: LINE signature rejects mutations; even correctly signed malformed events cannot terminate process (117.079833ms)
+✔ SEC-12: login quota survives real process replacement and is shared atomically across workers (472.620292ms)
+✔ SEC-13: public booking quotas survive restart, are atomic across workers, and enforce daily limits (302.23775ms)
+✔ SEC-14: proxy simulation ignores forged leftmost addresses and groups IPv6 subnet addresses (174.38325ms)
+✔ SEC-15: concurrent mail resend is limited before outbound calls; browser retries cannot mail-bomb (17.262958ms)
+✔ SEC-16: database failures fail closed; responses and application logs omit secrets/SQL details (155.536208ms)
+✔ SEC-17: production startup rejects missing/legacy hashes and unsafe origins before opening a port (523.191459ms)
+✔ SEC-18: prototype pollution and body identifier replacement cannot grant privileges or edit another booking (167.370917ms)
+✔ SEC-19: admin edit/cancel/resend rejects invalid or nonexistent IDs and cancelled edits (165.449416ms)
+✔ SEC-20: URL flags and ambient PGSSLMODE cannot disable TLS verification or discard the configured CA (5.959542ms)
+✖ SEC-21: actual PostgreSQL TLS handshake rejects an untrusted certificate and accepts explicit test CA (77.446459ms)
+ℹ tests 35
+ℹ suites 0
+ℹ pass 34
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4742.925208
+
+✖ failing tests:
+
+test at test/security.test.js:281:1
+✖ SEC-21: actual PostgreSQL TLS handshake rejects an untrusted certificate and accepts explicit test CA (77.446459ms)
+  AssertionError [ERR_ASSERTION]: The validation function is expected to return "true". Received false
+
+  Caught error:
+
+  error: TEST_TLS_HANDSHAKE_OK
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (<project>/test/security.test.js:309:10)
+      at async Test.run (node:internal/test_runner/test:1125:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: error: TEST_TLS_HANDSHAKE_OK
+        at parseErrorMessage (<project>/node_modules/pg-protocol/dist/parser.js:306:11)
+        at Parser.handlePacket (<project>/node_modules/pg-protocol/dist/parser.js:143:27)
+        at Parser.parse (<project>/node_modules/pg-protocol/dist/parser.js:37:38)
+        at TLSSocket.<anonymous> (<project>/node_modules/pg-protocol/dist/index.js:12:42)
+        at TLSSocket.emit (node:events:508:28)
+        at addChunk (node:internal/streams/readable:563:12)
+        at readableAddChunkPushByteMode (node:internal/streams/readable:514:3)
+        at Readable.push (node:internal/streams/readable:394:5)
+        at TLSWrap.onStreamRead (node:internal/stream_base_commons:189:23),
+    operator: 'rejects',
+    diff: 'simple'
+  }
+Temporary PostgreSQL stopped.

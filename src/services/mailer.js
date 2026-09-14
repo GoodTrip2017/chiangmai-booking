@@ -1,26 +1,12 @@
 /**
  * 預約確認信。沿用原本的文案。
- * SMTP 未設定時不寄信（回傳 false），預約流程照常成立。
+ * 使用 Resend HTTPS API；通知結果不影響已成立的預約。
  */
-const nodemailer = require('nodemailer');
 const { CONFIG } = require('../config');
 const dt = require('../util/datetime');
 
 function isConfigured() {
-  return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
-}
-
-let transporter = null;
-function getTransporter() {
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 465),
-      secure: String(process.env.SMTP_SECURE || 'true').toLowerCase() === 'true',
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    });
-  }
-  return transporter;
+  return !!(process.env.RESEND_API_KEY && process.env.MAIL_FROM);
 }
 
 function escapeHtml(s) {
@@ -56,7 +42,7 @@ function buildConfirmationText(booking) {
     `1. 座位保留： 我們將為您保留預約時段 ${CONFIG.GRACE_MINUTES} 分鐘。`,
     '',
     `2. 逾時處理： 由於現場空間有限且可能會有其他客人預約，若您未能於 ${deadline} 前 抵達，` +
-      '原預約將自動取消，需請您於現場重新候位，敬請見諒。🙇🏻‍♀️🙇🏻‍♂️',
+      '請透過 LINE 聯絡店員；逾時座位將由店員依現場情況安排，可能需要重新候位。🙇🏻‍♀️🙇🏻‍♂️',
     '',
     `3. 聯繫方式： 如行程有變動，或交通上的延誤，歡迎隨時透過 LINE (${CONFIG.LINE_URL}) ` +
       '與我們聯絡，為您彈性保留調整。',
@@ -93,8 +79,8 @@ function buildConfirmationHtml(booking) {
       '<ol style="padding-left:20px">' +
         `<li style="margin:8px 0"><strong>座位保留：</strong> 我們將為您保留預約時段 ${CONFIG.GRACE_MINUTES} 分鐘。</li>` +
         '<li style="margin:8px 0"><strong>逾時處理：</strong> 由於現場空間有限且可能會有其他客人預約，' +
-          `若您未能於 <strong>${deadline} 前</strong> 抵達，原預約將自動取消，` +
-          '需請您於現場重新候位，敬請見諒。🙇🏻‍♀️🙇🏻‍♂️</li>' +
+          `若您未能於 <strong>${deadline} 前</strong> 抵達，請透過 LINE 聯絡店員；逾時座位將由店員依現場情況安排，` +
+          '可能需要重新候位。🙇🏻‍♀️🙇🏻‍♂️</li>' +
         '<li style="margin:8px 0"><strong>聯繫方式：</strong> 如行程有變動，或交通上的延誤，' +
           `歡迎隨時透過 <a href="${CONFIG.LINE_URL}">LINE</a> 與我們聯絡，為您彈性保留調整。</li>` +
       '</ol>' +
@@ -104,24 +90,30 @@ function buildConfirmationHtml(booking) {
     '</div>';
 }
 
-/**
- * 寄出確認信。沒有 Email 或 SMTP 未設定就跳過（回傳 false）。
- * booking 需含 name / pax / date / slot / email。
- */
-async function sendConfirmation(booking) {
-  if (!booking.email) return false;
-  if (!isConfigured()) {
-    console.warn('SMTP 未設定，略過寄送確認信。');
-    return false;
-  }
-  await getTransporter().sendMail({
-    from: `"${CONFIG.SENDER_NAME}" <${process.env.MAIL_FROM || process.env.SMTP_USER}>`,
-    to: booking.email,
-    subject: mailSubject(booking),
-    text: buildConfirmationText(booking),
-    html: buildConfirmationHtml(booking),
+/** ACCEPTED 代表寄信服務已接受，不保證信箱投遞成功。 */
+async function sendConfirmation(booking, requestKey) {
+  if (!booking.email) return 'NO_EMAIL';
+  if (!isConfigured()) return 'NOT_CONFIGURED';
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    signal: AbortSignal.timeout(8000),
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+      'User-Agent': 'chiangmai-booking/1.1',
+      'Idempotency-Key': requestKey || `confirmation/${booking.id}`,
+    },
+    body: JSON.stringify({
+      from: process.env.MAIL_FROM,
+      to: [booking.email],
+      subject: mailSubject(booking),
+      text: buildConfirmationText(booking),
+      html: buildConfirmationHtml(booking),
+    }),
   });
-  return true;
+  if (!response.ok) throw Object.assign(new Error('寄信服務暫時無法接受請求。'), { code: `MAIL_HTTP_${response.status}` });
+  const result = await response.json();
+  if (!result.id) throw Object.assign(new Error('寄信服務回應不完整。'), { code: 'MAIL_RESPONSE_INVALID' });
+  return 'ACCEPTED';
 }
-
-module.exports = { sendConfirmation, isConfigured };
+module.exports = { sendConfirmation, isConfigured, buildConfirmationHtml, buildConfirmationText };

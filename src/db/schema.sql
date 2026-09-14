@@ -18,3 +18,39 @@ CREATE TABLE IF NOT EXISTS bookings (
 );
 
 CREATE INDEX IF NOT EXISTS idx_bookings_date_slot ON bookings (date, slot) WHERE status = 'CONFIRMED';
+
+-- 保留舊預約，不自動刪減；新寫入或修改的單筆不得超過 12 人。
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'bookings_pax_limit' AND conrelid = 'bookings'::regclass) THEN
+    ALTER TABLE bookings ADD CONSTRAINT bookings_pax_limit CHECK (status = 'CANCELLED' OR pax BETWEEN 1 AND 12) NOT VALID;
+  END IF;
+END $$;
+
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS mail_status TEXT NOT NULL DEFAULT 'NOT_REQUESTED';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS request_key UUID;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS request_hash TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_request_key ON bookings (request_key) WHERE request_key IS NOT NULL;
+
+-- Cookie 僅持有隨機憑證；資料庫只保存其雜湊。
+CREATE TABLE IF NOT EXISTS admin_sessions (
+  token_hash TEXT PRIMARY KEY,
+  csrf_token TEXT NOT NULL,
+  credential_version TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_admin_sessions_expiry ON admin_sessions (expires_at);
+
+CREATE TABLE IF NOT EXISTS admin_login_limits (
+  bucket TEXT PRIMARY KEY,
+  attempts INTEGER NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_admin_login_limits_expiry ON admin_login_limits (expires_at);
+
+CREATE TABLE IF NOT EXISTS request_limits (
+  bucket TEXT PRIMARY KEY,
+  attempts INTEGER NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_request_limits_expiry ON request_limits (expires_at);

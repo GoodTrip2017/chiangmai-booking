@@ -24,7 +24,7 @@ function todayStr() {
 }
 
 function isValidDateStr(dateStr) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr || ''))) return false;
+  if (typeof dateStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
   const [y, m, day] = dateStr.split('-').map(Number);
   const d = new Date(Date.UTC(y, m - 1, day));
   return d.getUTCFullYear() === y && d.getUTCMonth() === m - 1 && d.getUTCDate() === day;

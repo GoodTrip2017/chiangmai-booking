@@ -49,6 +49,7 @@ async function pushToGroup(text) {
   try {
     const res = await fetch('https://api.line.me/v2/bot/message/push', {
       method: 'POST',
+      signal: AbortSignal.timeout(8000),
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
@@ -59,12 +60,12 @@ async function pushToGroup(text) {
       }),
     });
     if (!res.ok) {
-      console.error('LINE 推播失敗：', res.status, await res.text());
+      console.error('LINE 推播失敗：', res.status);
       return false;
     }
     return true;
   } catch (err) {
-    console.error('LINE 推播失敗：', err);
+    console.error('LINE 推播失敗：', err.name);
     return false;
   }
 }

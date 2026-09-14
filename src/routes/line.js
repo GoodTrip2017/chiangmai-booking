@@ -11,6 +11,7 @@
  */
 const express = require('express');
 const crypto = require('crypto');
+const { userError } = require('../util/errors');
 
 const router = express.Router();
 
@@ -20,38 +21,35 @@ function verifySignature(req) {
   const signature = req.get('X-Line-Signature') || '';
   const expected = crypto.createHmac('sha256', secret).update(req.rawBody || '').digest('base64');
   return signature.length > 0 &&
-    signature.length === expected.length &&
+    Buffer.byteLength(signature) === Buffer.byteLength(expected) &&
     crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
 
 async function handleEvent(event) {
-  // bot 被邀進群組時，把 groupId 印出來 → 填到環境變數 LINE_GROUP_ID
+  // 不把群組 ID、訊息或個資寫入應用日誌。
   if (event.type === 'join' && event.source && event.source.type === 'group') {
-    console.log('★ LINE bot 已加入群組，LINE_GROUP_ID =', event.source.groupId);
+    console.log('LINE bot 已加入群組。');
     return;
   }
-  // 群組內任何訊息也會帶 groupId（bot 已在群裡但錯過 join log 時用這個看）
+  // 預留群組事件；實際通知目標由 LINE_GROUP_ID 設定。
   if (event.type === 'message' && event.source && event.source.type === 'group') {
-    console.log('LINE 群組訊息，groupId =', event.source.groupId);
     return;
   }
   // TODO: 之後在這裡處理一對一 message / follow / postback 等事件
-  console.log('LINE event:', event.type);
 }
 
-router.post('/', async (req, res) => {
-  if (!process.env.LINE_CHANNEL_SECRET) return res.sendStatus(200); // 尚未啟用
-  if (!verifySignature(req)) return res.sendStatus(401);
-
-  const events = (req.body && req.body.events) || [];
-  for (const event of events) {
-    try {
-      await handleEvent(event);
-    } catch (err) {
-      console.error('LINE event 處理失敗：', err);
+router.post('/', async (req, res, next) => {
+  try {
+    if (!process.env.LINE_CHANNEL_SECRET) return res.sendStatus(200); // 尚未啟用
+    if (!verifySignature(req)) return res.sendStatus(401);
+    const events = req.body?.events;
+    if (!Array.isArray(events) || events.length > 100 || events.some(event =>
+      !event || typeof event !== 'object' || Array.isArray(event) || typeof event.type !== 'string' || event.type.length > 80)) {
+      throw userError('Webhook 格式不正確。');
     }
-  }
-  res.sendStatus(200);
+    for (const event of events) await handleEvent(event);
+    res.sendStatus(200);
+  } catch (err) { next(err); }
 });
 
 module.exports = router;

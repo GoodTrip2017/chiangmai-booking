@@ -5,8 +5,7 @@ require('dotenv').config();
 
 const CONFIG = {
   TZ_OFFSET_MINUTES: 7 * 60,          // Asia/Bangkok GMT+7（無夏令時間）
-  MAX_PAX_MULTI: 12,                  // 一旦有第 2 組，該時段人數總上限
-  MAX_PAX_INPUT: 60,                  // 單筆表單允許填的最大人數（防亂填）
+  MAX_PAX: 12,                        // 每個時段所有預約合計的接待上限
   CLOSED_WEEKDAYS: [2],               // 公休日：2 = 週二（ISO 週一=1 ... 週日=7）
   GRACE_MINUTES: 10,                  // 座位保留分鐘數
   EVENT_NAME: '頂級飛行體驗 (GoodTrip x Herb Uncle Cannabis CNX)',

@@ -1,3 +1,4 @@
+const { userError } = require('../util/errors');
 /** 後台週行事曆資料 */
 const { pool } = require('../db');
 const { CONFIG, SLOTS } = require('../config');
@@ -17,14 +18,15 @@ function publicBooking(b) {
     email: b.email,
     referral: b.referral,
     note: b.note,
-    mailFailed: b.note.includes('MAIL_FAILED'),
+    mailStatus: b.mail_status,
+    mailFailed: ['FAILED', 'NOT_CONFIGURED'].includes(b.mail_status) || b.note.includes('MAIL_FAILED'),
     createdAt: dt.formatShortBkk(new Date(b.created_at)),
   };
 }
 
 /** 一週的預約總覽（週一 ~ 週日） */
 async function getWeekData(mondayStr) {
-  if (!dt.isValidDateStr(mondayStr)) throw new Error('日期格式不正確。');
+  if (!dt.isValidDateStr(mondayStr)) throw userError('日期格式不正確。');
   const monday = dt.mondayOf(mondayStr);
   const today = dt.todayStr();
 
@@ -47,7 +49,7 @@ async function getWeekData(mondayStr) {
         groups: st.groups,
         totalPax: st.totalPax,
         remaining: st.remaining,
-        isWholeVenue: st.isWholeVenue,
+        overCapacity: st.overCapacity,
         full: st.groups > 0 && st.remaining <= 0,
         bookings: st.bookings.map(publicBooking),
       });
@@ -61,7 +63,7 @@ async function getWeekData(mondayStr) {
     nextMonday: dt.addDaysStr(monday, 7),
     thisMonday: dt.mondayOf(today),
     rangeLabel: `${dt.formatDateZh(monday)} ~ ${dt.formatDateZh(dt.addDaysStr(monday, 6))}`,
-    maxPax: CONFIG.MAX_PAX_MULTI,
+    maxPax: CONFIG.MAX_PAX,
     slotDefs: SLOTS.map((s) => ({ slot: s.slot, label: dt.slotLabelZh(s.slot) })),
     days,
   };

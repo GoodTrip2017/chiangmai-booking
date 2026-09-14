@@ -1,0 +1,149 @@
+Temporary PostgreSQL started; only isolated test data will be used.
+✔ SEC-01: every admin endpoint rejects anonymous/forged credentials and never returns customer data (106.053625ms)
+✖ SEC-02: origin, content type, absent/mismatched/session-swapped CSRF cannot change bookings (88.139334ms)
+✔ SEC-03: successful login rotates sessions; raw cookies are never stored; logout invalidates replay (72.2475ms)
+✖ SEC-04: route case variants, errors and authenticated HTML all prohibit caching and embedding (39.363542ms)
+✔ SEC-05: backup/source/config files and encoded traversal cannot expose private assets (10.125041ms)
+✖ SEC-06: typed validation rejects arrays, booleans, objects, controls, malformed UUID and recipient injection (5.924209ms)
+✖ SEC-07: SQL injection and mass assignment remain inert; public queries contain no PII (10.146083ms)
+✖ SEC-08: reusing a public request key after staff edits/cancels reveals no edited PII or false success (7.609167ms)
+✖ SEC-09: all stored customer fields including legacy source render as escaped text (5.066917ms)
+✖ SEC-10: malformed/oversized/compressed JSON cannot crash the server or expose parsing contents (5.462875ms)
+✖ SEC-11: LINE signature rejects mutations; even correctly signed malformed events cannot terminate process (99.354291ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 3
+ℹ fail 8
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 586.376959
+
+✖ failing tests:
+
+test at test/security.test.js:94:1
+✖ SEC-02: origin, content type, absent/mismatched/session-swapped CSRF cannot change bookings (88.139334ms)
+  AssertionError [ERR_ASSERTION]: {"headers":{"Sec-Fetch-Site":"cross-site"}}: 200
+      at TestContext.<anonymous> (<project>/test/security.test.js:99:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1125:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test/security.test.js:112:1
+✖ SEC-04: route case variants, errors and authenticated HTML all prohibit caching and embedding (39.363542ms)
+  AssertionError [ERR_ASSERTION]: /ADMIN
+  + actual - expected
+
+  + 'public, max-age=0'
+  - 'no-store'
+
+      at TestContext.<anonymous> (<project>/test/security.test.js:116:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1125:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'public, max-age=0',
+    expected: 'no-store',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/security.test.js:131:1
+✖ SEC-06: typed validation rejects arrays, booleans, objects, controls, malformed UUID and recipient injection (5.924209ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection: name:["Name"]
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (<project>/test/security.test.js:133:33)
+      at async Test.run (node:internal/test_runner/test:1125:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: { status: 400 },
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at test/security.test.js:137:1
+✖ SEC-07: SQL injection and mass assignment remain inert; public queries contain no PII (10.146083ms)
+  AssertionError [ERR_ASSERTION]: /api/availability?date[]=2099-01-01
+
+  200 !== 400
+
+      at TestContext.<anonymous> (<project>/test/security.test.js:144:186)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1125:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 400,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/security.test.js:146:1
+✖ SEC-08: reusing a public request key after staff edits/cancels reveals no edited PII or false success (7.609167ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (<project>/test/security.test.js:150:3)
+      at async Test.run (node:internal/test_runner/test:1125:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at test/security.test.js:154:1
+✖ SEC-09: all stored customer fields including legacy source render as escaped text (5.066917ms)
+  AssertionError [ERR_ASSERTION]: <div class="cellhead"><span class="cnt">1 / 12</span><span>1 組</span><button class="add" data-d="0" data-s="0" title="手動新增">＋</button></div><div class="chip" data-d="0" data-s="0" data-i="0"><div class="nm">&lt;img src=x onerror=alert(1)&gt; <span class="cnt">x1</span><span class="tag"><img src=x onerror=alert(1)></span></div><div class="meta">LINE &lt;img src=x onerror=alert(1)&gt; · &lt;img src=x onerror=alert(1)&gt; · 來自 &lt;img src=x onerror=alert(1)&gt;</div><div class="meta">📝 &lt;img src=x onerror=alert(1)&gt;</div></div>
+      at TestContext.<anonymous> (<project>/test/security.test.js:160:10)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test/security.test.js:162:1
+✖ SEC-10: malformed/oversized/compressed JSON cannot crash the server or expose parsing contents (5.462875ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  200 !== 400
+
+      at TestContext.<anonymous> (<project>/test/security.test.js:164:122)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1125:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 400,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/security.test.js:167:1
+✖ SEC-11: LINE signature rejects mutations; even correctly signed malformed events cannot terminate process (99.354291ms)
+  Error: socket hang up
+      at Socket.socketOnEnd (node:_http_client:599:25)
+      at Socket.emit (node:events:520:35)
+      at endReadableNT (node:internal/streams/readable:1729:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+    code: 'ECONNRESET'
+  }
+Temporary PostgreSQL stopped.
