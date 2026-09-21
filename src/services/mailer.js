@@ -105,6 +105,7 @@ async function sendConfirmation(booking, requestKey) {
     },
     body: JSON.stringify({
       from: process.env.MAIL_FROM,
+      ...(process.env.MAIL_REPLY_TO ? { reply_to: process.env.MAIL_REPLY_TO } : {}),
       to: [booking.email],
       subject: mailSubject(booking),
       text: buildConfirmationText(booking),

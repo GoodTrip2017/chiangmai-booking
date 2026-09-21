@@ -68,19 +68,23 @@ test('確認信安全跳脫姓名，文案由店員處理逾時', () => {
   assert.ok(!mailer.buildConfirmationText(booking).includes('自動取消'));
 });
 test('寄信未設定、成功、拒絕、連線逾時各自回報，使用 HTTPS 與去重鍵', async () => {
-  const prior = { fetch: global.fetch, key: process.env.RESEND_API_KEY, from: process.env.MAIL_FROM };
+  const prior = { fetch: global.fetch, key: process.env.RESEND_API_KEY, from: process.env.MAIL_FROM, replyTo: process.env.MAIL_REPLY_TO };
   try {
     delete process.env.RESEND_API_KEY; delete process.env.MAIL_FROM;
     assert.equal(await mailer.sendConfirmation(form), 'NOT_CONFIGURED');
     assert.equal(await mailer.sendConfirmation({ ...form, email: '' }), 'NO_EMAIL');
     process.env.RESEND_API_KEY = 'test-only'; process.env.MAIL_FROM = 'test@example.invalid';
+    delete process.env.MAIL_REPLY_TO;
     global.fetch = async (url, options) => {
       assert.equal(url, 'https://api.resend.com/emails');
       assert.equal(options.headers['Idempotency-Key'], 'test-key');
       assert.ok(options.signal instanceof AbortSignal);
       assert.deepEqual(JSON.parse(options.body).to, [form.email]);
+      assert.equal(JSON.parse(options.body).reply_to, process.env.MAIL_REPLY_TO);
       return { ok: true, json: async () => ({ id: 'fake-email-id' }) };
     };
+    assert.equal(await mailer.sendConfirmation(form, 'test-key'), 'ACCEPTED');
+    process.env.MAIL_REPLY_TO = 'store@example.invalid';
     assert.equal(await mailer.sendConfirmation(form, 'test-key'), 'ACCEPTED');
     global.fetch = async () => ({ ok: false, status: 429 });
     await assert.rejects(mailer.sendConfirmation(form), { code: 'MAIL_HTTP_429' });
@@ -88,7 +92,7 @@ test('寄信未設定、成功、拒絕、連線逾時各自回報，使用 HTTP
     await assert.rejects(mailer.sendConfirmation(form), { name: 'TimeoutError' });
   } finally {
     global.fetch = prior.fetch;
-    for (const [key, value] of [['RESEND_API_KEY', prior.key], ['MAIL_FROM', prior.from]]) {
+    for (const [key, value] of [['RESEND_API_KEY', prior.key], ['MAIL_FROM', prior.from], ['MAIL_REPLY_TO', prior.replyTo]]) {
       if (value === undefined) delete process.env[key]; else process.env[key] = value;
     }
   }

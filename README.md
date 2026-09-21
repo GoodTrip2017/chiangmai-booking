@@ -33,38 +33,38 @@ Node.js 24 + Express + PostgreSQL。前台、管理後台與 API 由一個服務
 
 ## Railway 部署
 
-目前以專案內的 **Dockerfile** 建置，使用 Node.js 24，容器以非 root 使用者執行。已移除舊 `railway.json` 與 NIXPACKS 設定，避免覆蓋新服務的設定；這次並未建立或修改任何 Railway 雲端服務。
+目前以專案內的 **Dockerfile** 分階段建置。正式執行環境為固定 digest 的 Distroless Node.js 24 / Debian 13，以 UID 65532 執行，不包含 shell、npm 或 yarn；套件只在建置階段安裝。GitHub Actions 會執行 46 項測試、npm audit、實際容器建置及完整映像掃描，高風險或重大漏洞會讓檢查失敗。Railway 應設定等待 GitHub 檢查通過才部署。
 
 1. 在 Railway 建立專案，從 `GoodTrip2017/chiangmai-booking` 建立應用服務，Root Directory 設為 repo 根目錄 `/`。
 2. 同一專案與環境建立 PostgreSQL。應用與資料庫選同一區域，使用內部連線。
-3. 確認服務的 Railway Config File 欄位沒有指向舊 `railway.json`。使用自動偵測到的 Dockerfile；清除舊 NIXPACKS 或開發用啟動指令覆寫。容器的啟動命令已設定，若需要手動填則為 `node src/server.js`。
+3. 確認服務的 Railway Config File 欄位沒有指向舊 `railway.json`。使用自動偵測到的 Dockerfile；清除舊 NIXPACKS 或開發用啟動指令覆寫。容器已設定入口與啟動命令，Start Command 請保持空白；Distroless 沒有 shell，不能填入 npm 或 shell 指令。
 4. 設定應用服務 Variables：
 
 | 變數 | 設定 |
 |---|---|
 | `NODE_ENV` | `production`（Dockerfile 已預設） |
-| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}`，服務名須與實際名稱一致 |
+| `DATABASE_URL` | 使用同環境內網的專用應用帳號；正式服務使用 `booking_app`，不要直接沿用 postgres 超級使用者 |
 | `DATABASE_SSL` | Railway 內網用 `false` |
 | `ADMIN_PASSWORD_HASH` | 執行密碼工具後產生的雜湊，必填 |
 | `APP_ORIGIN` | 正式 HTTPS 網址，不含結尾 `/`；預設網域也可由 `RAILWAY_PUBLIC_DOMAIN` 取得 |
-| `RESEND_API_KEY`、`MAIL_FROM` | 啟用確認信時填寫 |
+| `RESEND_API_KEY`、`MAIL_FROM` | 完成寄件網域驗證後啟用確認信；`MAIL_REPLY_TO` 可另設店家收信地址 |
 | `LINE_CHANNEL_ACCESS_TOKEN`、`LINE_GROUP_ID` | 啟用工作群組通知時填寫 |
 | `LINE_CHANNEL_SECRET` | 啟用 LINE webhook 驗簽時填寫 |
 
 5. Settings → Networking → Generate Domain。先產生網域或填 `APP_ORIGIN`，再確認部署啟動；正式環境缺少網站來源或有效密碼雜湊會拒絕啟動。
 6. Settings → Healthcheck Path 設 `/healthz`，Timeout 設 `300` 秒。這項必須在 Railway 設定，不能只依賴 Dockerfile。
-7. Restart Policy 設 `ON_FAILURE`，最多 5 次；初期一個應用實例即可。應用不需要額外 Volume；PostgreSQL 的持久儲存與備份須在資料庫服務配置。
+7. Restart Policy 設 `ON_FAILURE`，最多 5 次；初期一個應用實例即可。應用不需要額外 Volume；PostgreSQL 的持久儲存與備份須在資料庫服務配置。2026-09-14 此專案 Hobby 帳號的備份頁要求 Pro，原生排程備份尚未啟用；已有一次手動備份與隔離還原演練，不能當成持續備份。
 8. 部署後測試登入、12 人預約、滿額拒絕、修改、取消、重寄信、LINE 群組通知，以及重啟後資料仍存在。
 
 正式環境必須明確設定 `DATABASE_SSL`。若用 TLS，憑證及目標名稱（包含 IP 位址）都必須驗證；請把連線網址中的 `sslmode`、`sslrootcert` 等參數移除，統一用 `DATABASE_SSL=true` 及必要的 `DATABASE_CA_CERT`，避免 pg 覆蓋設定。禁止 `NODE_TLS_REJECT_UNAUTHORIZED=0`。
 
-`trust proxy=1` 以 Railway 作為唯一受信任入口；本機已模擬一層代理與偽造前綴 IP 的情境。正式部署仍須確認來源標頭會由 Railway 正確追加／重寫，以及沒有繞過代理的公開直連路徑。加入其他代理時需重新檢查信任設定。
+Railway 正式環境的限流只讀取平台重寫的 `X-Real-IP`，不使用訪客可偽造的 `X-Forwarded-For`。已在真正 HTTPS 入口驗證偽造來源不能繞過預約／登入限制。不要替應用增加公開 TCP 直連入口；更换平台或增加其他代理時必須重新驗證。
 
 ### 寄信設定
 
 本版完全移除 SMTP 依賴，使用 `https://api.resend.com/emails`。Railway Free／Trial／Hobby 不支援 SMTP；HTTPS API 不受此限制。
 
-在 Resend 驗證自己的寄件網域後，再設定 `RESEND_API_KEY` 與 `MAIL_FROM`。範例寄件地址或未驗證網域不能當成已完成正式寄信設定。此次測試模擬寄信服務，尚未發送真實 Email。
+在 Resend 驗證自己的寄件網域後，再設定 `RESEND_API_KEY` 與 `MAIL_FROM`。建議使用專用子網域，保留官網既有 MX 記錄；`MAIL_REPLY_TO` 可設定店家的 Gmail，讓客人回覆至店家信箱。範例寄件地址或未驗證網域不能當成已完成正式寄信設定。此次測試模擬寄信服務，尚未發送真實 Email。
 
 確認信重寄同一筆每分鐘最多 1 次，全站每小時最多 60 次；限制存在資料庫，重新部署不會清除。
 
@@ -109,8 +109,8 @@ Migration 保留舊資料，不自動取消或縮減人數。舊時段如果超�
 
 - `npm test`：日期、表單、12 人容量、輸入安全、寄信與密碼雜湊檢查。
 - `TEST_DATABASE_URL=... npm run test:integration`：在指定 PostgreSQL 建立隨機獨立 schema，測完清除該 schema；不清空既有資料表。涵蓋遷移、登入、CSRF、容量、20 筆同時預約、重複送出與改期。
-- `TEST_DATABASE_URL=... npm run test:security`：21 組安全案例，涵蓋所有後台操作的權限／CSRF、注入、資料外洩、真實程序重啟／多實例、LINE 驗簽與異常資料、TLS 憑證及名稱驗證。TLS 測試另需系統 `openssl` 指令。
-- `TEST_DATABASE_URL=... npm run test:all`：一次執行所有 44 組測試。測試只建立隨機獨立 schema，仍建議使用專用測試資料庫；需要允許 localhost 監聽與子程序。
+- `TEST_DATABASE_URL=... npm run test:security`：22 組安全案例，涵蓋所有後台操作的權限／CSRF、注入、資料外洩、真實程序重啟／多實例、LINE 驗簽與異常資料、TLS 憑證及名稱驗證。TLS 測試另需系統 `openssl` 指令。
+- `TEST_DATABASE_URL=... npm run test:all`：一次執行所有 46 組測試。測試只建立隨機獨立 schema，仍建議使用專用測試資料庫；需要允許 localhost 監聽與子程序。
 - `npm audit --omit=dev`：查詢鎖定套件的最新已知漏洞。
 - 測試不寄送 Email 或 LINE 訊息。完整實際送達仍需在正式憑證配置後驗證。安全測試結果及未驗項目請見 [安全性檢測報告](安全性檢測報告.md)。
 
@@ -128,3 +128,7 @@ Migration 保留舊資料，不自動取消或縮減人數。舊時段如果超�
 - [Resend 網域驗證](https://resend.com/docs/dashboard/domains/introduction)
 
 Railway 正式環境會以平台提供的 `X-Real-IP` 計算預約與登入限制，不信任訪客可自行填寫的 `X-Forwarded-For`。辨識依據為 `NODE_ENV=production` 與 Railway 自動提供的 `RAILWAY_ENVIRONMENT_ID`。請勿增加可繞過 Railway HTTPS 邊緣的公開 TCP 入口。
+
+### 執行環境維護
+
+映像固定 digest 以便重現；更新 Node.js 或 Distroless 時要修改 Dockerfile、重新掃描並確認健康檢查成功。Distroless 沒有 shell，所以 Railway SSH 的互動 shell 不適用；查看日誌、健康檢查或建立隔離的診斷環境，不要為方便而改用 root/debug 正式映像。應用帳號擁有自己的四張表與 schema 建表權以執行 migration，但沒有超級使用者、建資料庫、建角色或複製權限。

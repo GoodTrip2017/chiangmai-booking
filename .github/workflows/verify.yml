@@ -1,0 +1,49 @@
+name: Verify booking service
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: booking_test
+          POSTGRES_PASSWORD: isolated-ci-only
+          POSTGRES_DB: booking_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U booking_test -d booking_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      TEST_DATABASE_URL: postgres://booking_test:isolated-ci-only@127.0.0.1:5432/booking_test
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.21.0'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-fund
+      - run: npm run test:all
+      - run: npm audit --omit=dev
+      - name: Build the production image and verify its runtime
+        run: docker build --pull --tag booking-verified:${{ github.sha }} .
+      - name: Scan the complete production image
+        shell: bash
+        run: |
+          curl --fail --silent --show-error --location https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-64bit.tar.gz --output /tmp/trivy.tar.gz
+          echo '2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a  /tmp/trivy.tar.gz' | sha256sum --check
+          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
+          /tmp/trivy image --image-src docker --scanners vuln --disable-telemetry --skip-version-check --no-progress --timeout 5m --format json --output /tmp/container-vulnerabilities.json booking-verified:${{ github.sha }}
+          node -e 'const r=require("/tmp/container-vulnerabilities.json"); const all=r.Results.flatMap(x=>x.Vulnerabilities||[]); console.log(JSON.stringify({counts:all.reduce((a,v)=>(a[v.Severity]=(a[v.Severity]||0)+1,a),{}),blocking:all.filter(v=>["HIGH","CRITICAL"].includes(v.Severity)).map(v=>({id:v.VulnerabilityID,package:v.PkgName,severity:v.Severity}))},null,2)); if(all.some(v=>["HIGH","CRITICAL"].includes(v.Severity))) process.exit(1);'
