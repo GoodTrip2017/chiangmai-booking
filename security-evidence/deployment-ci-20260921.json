@@ -1,0 +1,38 @@
+{
+  "date": "2026-09-21",
+  "commit": "6f5eb625c246a0a62eddfb1ee1e7d32ab203cabe",
+  "run_url": "https://github.com/GoodTrip2017/chiangmai-booking/actions/runs/35563516729",
+  "result": "success",
+  "tests": {
+    "passed": 46,
+    "failed": 0,
+    "skipped": 0
+  },
+  "npm_audit_known_vulnerabilities": 0,
+  "full_application_image_scan": {
+    "tool": "Trivy 0.74.0",
+    "critical": 0,
+    "high": 0,
+    "medium": 13,
+    "low": 7,
+    "ignore_unfixed": false
+  },
+  "runtime": {
+    "node": "v24.21.0",
+    "openssl": "3.5.8",
+    "uid": 65532,
+    "no_shell_npm_or_yarn": true,
+    "application_dependencies_load": true
+  },
+  "railway": {
+    "deployment_id": "6750cf6a-ee1b-4904-82e6-ac8021b55003",
+    "status": "SUCCESS",
+    "commit_verified": true,
+    "build_runtime_verified": true,
+    "database_healthcheck": true,
+    "auto_deploy_from": "GoodTrip2017/chiangmai-booking main",
+    "wait_for_github_checks": true
+  },
+  "https_checks_passed": 31,
+  "temporary_ssh_keys_remaining": 0
+}

@@ -1,0 +1,165 @@
+{
+  "date": "2026-09-21T05:19:40.481Z",
+  "base": "https://chiangmai-booking-production.up.railway.app",
+  "createdBookings": 0,
+  "externalNotificationsSent": 0,
+  "checks": [
+    {
+      "name": "HTTPS health, database connectivity and security headers",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "HTTP redirects to HTTPS",
+      "pass": true,
+      "status": 301
+    },
+    {
+      "name": "Capacity configuration is 12",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "Protected admin page /admin",
+      "pass": true,
+      "status": 303
+    },
+    {
+      "name": "Protected admin page /ADMIN",
+      "pass": true,
+      "status": 303
+    },
+    {
+      "name": "Protected admin page /admin.html",
+      "pass": true,
+      "status": 303
+    },
+    {
+      "name": "Anonymous data blocked /api/admin/week",
+      "pass": true,
+      "status": 401
+    },
+    {
+      "name": "Anonymous data blocked /api/admin/session",
+      "pass": true,
+      "status": 401
+    },
+    {
+      "name": "Anonymous write blocked /api/admin/bookings",
+      "pass": true,
+      "status": 401
+    },
+    {
+      "name": "Anonymous write blocked /api/admin/bookings/00000000-0000-4000-8000-000000000000/cancel",
+      "pass": true,
+      "status": 401
+    },
+    {
+      "name": "Anonymous write blocked /api/admin/bookings/00000000-0000-4000-8000-000000000000/resend-mail",
+      "pass": true,
+      "status": 401
+    },
+    {
+      "name": "Anonymous write blocked /api/admin/logout",
+      "pass": true,
+      "status": 401
+    },
+    {
+      "name": "Forged cookie rejected",
+      "pass": true,
+      "status": 401
+    },
+    {
+      "name": "Cross-origin login blocked",
+      "pass": true,
+      "status": 403
+    },
+    {
+      "name": "Login without origin blocked",
+      "pass": true,
+      "status": 403
+    },
+    {
+      "name": "Cross-site metadata rejected",
+      "pass": true,
+      "status": 403
+    },
+    {
+      "name": "Non-JSON rejected",
+      "pass": true,
+      "status": 415
+    },
+    {
+      "name": "Malformed JSON rejected",
+      "pass": true,
+      "status": 400
+    },
+    {
+      "name": "Oversized body rejected",
+      "pass": true,
+      "status": 413
+    },
+    {
+      "name": "Array body rejected",
+      "pass": true,
+      "status": 400
+    },
+    {
+      "name": "Internal file blocked /.env",
+      "pass": true,
+      "status": 404
+    },
+    {
+      "name": "Internal file blocked /.git/config",
+      "pass": true,
+      "status": 404
+    },
+    {
+      "name": "Internal file blocked /views/admin.html",
+      "pass": true,
+      "status": 404
+    },
+    {
+      "name": "Internal file blocked /src/server.js",
+      "pass": true,
+      "status": 404
+    },
+    {
+      "name": "Availability has no customer details",
+      "pass": true,
+      "status": 200
+    },
+    {
+      "name": "Repeated date rejected",
+      "pass": true,
+      "status": 400
+    },
+    {
+      "name": "Email mandatory",
+      "pass": true,
+      "status": 400
+    },
+    {
+      "name": "13 people receive LINE contact prompt",
+      "pass": true,
+      "status": 400
+    },
+    {
+      "name": "Fractional pax rejected",
+      "pass": true,
+      "status": 400
+    },
+    {
+      "name": "Forged IP cannot bypass booking limit 1",
+      "pass": true,
+      "status": 429
+    },
+    {
+      "name": "Forged IP cannot bypass booking limit 2",
+      "pass": true,
+      "status": 429
+    }
+  ],
+  "passed": 31,
+  "failed": 0
+}
