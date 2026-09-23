@@ -90,10 +90,20 @@
   <button id="this" disabled>本週</button>
   <button id="next" disabled>下一週 →</button>
   <button id="reload">重新整理</button>
+  <button id="lineGroups" type="button">LINE 群組設定</button>
   <button class="primary" id="addNew" disabled>＋ 手動新增</button>
   <button id="logout">登出</button>
   <div class="range" id="range"></div>
 </header>
+
+<section id="linePanel" class="scroll" style="display:none" aria-label="LINE 群組設定">
+  <div class="card"><h2>LINE 工作群組通知</h2>
+    <p>將官方帳號邀入工作群組後，在群組傳一則訊息，再按「重新讀取群組」。選定正確的群組 ID，填到 Railway 預約服務的 LINE_GROUP_ID 變數並重新部署。</p>
+    <p id="lineStatus" role="status"></p>
+    <button id="lineRefresh" type="button">重新讀取群組</button>
+    <div id="lineGroupList"></div>
+  </div>
+</section>
 
 <div id="loading">載入中…</div>
 <div class="scroll" id="scroll" style="display:none"><table id="grid"></table></div>

@@ -54,3 +54,10 @@ CREATE TABLE IF NOT EXISTS request_limits (
   expires_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_request_limits_expiry ON request_limits (expires_at);
+
+-- 只記錄已通過 LINE 簽名驗證的群組 ID，供登入後台的店員選擇通知群組。
+-- 不保存群組對話或成員資料。
+CREATE TABLE IF NOT EXISTS line_group_candidates (
+  group_id TEXT PRIMARY KEY,
+  seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

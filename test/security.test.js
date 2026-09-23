@@ -74,6 +74,7 @@ before(async () => {
 });
 beforeEach(async () => {
   await pool.query('TRUNCATE bookings, admin_sessions, admin_login_limits');
+  await pool.query('TRUNCATE line_group_candidates');
   if ((await pool.query("SELECT to_regclass('request_limits') AS table_name")).rows[0].table_name) await pool.query('TRUNCATE request_limits');
 });
 after(async () => {
@@ -174,6 +175,16 @@ test('SEC-11: LINE signature rejects mutations; even correctly signed malformed 
     assert.equal((await request('/webhook/line',{base:url,method:'POST',raw,headers:{'X-Line-Signature':'é'}})).status,401);
     assert.equal((await request('/webhook/line',{base:url,method:'POST',raw:raw+' ',headers:{'X-Line-Signature':sign(raw)}})).status,401);
     assert.equal((await request('/webhook/line',{base:url,method:'POST',raw,headers:{'X-Line-Signature':sign(raw)}})).status,200);
+    const groupId='C'+'a'.repeat(32);
+    const joined=JSON.stringify({events:[{type:'join',source:{type:'group',groupId}}]});
+    assert.equal((await request('/webhook/line',{base:url,method:'POST',raw:joined})).status,401);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM line_group_candidates')).rows[0].n,0);
+    assert.equal((await request('/webhook/line',{base:url,method:'POST',raw:joined,headers:{'X-Line-Signature':sign(joined)}})).status,200);
+    assert.equal((await request('/api/admin/line/groups')).status,401);
+    const session=await login();
+    const groups=await request('/api/admin/line/groups',session);
+    assert.equal(groups.status,200);
+    assert.equal(groups.data.groups[0].group_id,groupId);
     for (const events of [{},'invalid',[null],[{}],Array.from({length:101},()=>({type:'message'}))]) {
       const body=JSON.stringify({events}); const r=await request('/webhook/line',{base:url,method:'POST',raw:body,headers:{'X-Line-Signature':sign(body)}}); assert.equal(r.status,400);
       assert.equal((await request('/healthz',{base:url})).status,200);

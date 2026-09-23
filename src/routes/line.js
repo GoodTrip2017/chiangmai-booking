@@ -12,6 +12,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const { userError } = require('../util/errors');
+const { pool } = require('../db');
 
 const router = express.Router();
 
@@ -26,13 +27,10 @@ function verifySignature(req) {
 }
 
 async function handleEvent(event) {
-  // 不把群組 ID、訊息或個資寫入應用日誌。
-  if (event.type === 'join' && event.source && event.source.type === 'group') {
-    console.log('LINE bot 已加入群組。');
-    return;
-  }
-  // 預留群組事件；實際通知目標由 LINE_GROUP_ID 設定。
-  if (event.type === 'message' && event.source && event.source.type === 'group') {
+  // 驗簽通過後只保留群組 ID；不保存對話、成員資料或訊息內容。
+  if (['join', 'message'].includes(event.type) && event.source?.type === 'group' &&
+      /^C[0-9a-f]{32}$/i.test(event.source.groupId || '')) {
+    await pool.query('INSERT INTO line_group_candidates (group_id) VALUES ($1) ON CONFLICT (group_id) DO UPDATE SET seen_at = now()', [event.source.groupId]);
     return;
   }
   // TODO: 之後在這裡處理一對一 message / follow / postback 等事件

@@ -251,6 +251,26 @@
   $('next').addEventListener('click', function () { load(week.nextMonday); });
   $('this').addEventListener('click', function () { load(week.thisMonday); });
   $('reload').addEventListener('click', function () { load(); });
+  function loadLineGroups() {
+    $('lineStatus').textContent = '讀取中…';
+    api('/api/admin/line/groups').then(function (data) {
+      $('lineStatus').textContent = (data.webhookReady ? 'Webhook 已設定' : '尚未設定 LINE_CHANNEL_SECRET') +
+        ' · ' + (data.pushReady ? '推播金鑰已設定' : '尚未設定 LINE_CHANNEL_ACCESS_TOKEN') +
+        ' · ' + (data.selectedGroupId ? '通知群組已設定' : '尚未選定通知群組');
+      $('lineGroupList').replaceChildren();
+      if (!data.groups.length) { $('lineGroupList').textContent = '尚未收到群組事件。請確認 Bot 已入群、Webhook 已啟用，並在群組傳一則訊息。'; return; }
+      data.groups.forEach(function (group) {
+        var p = document.createElement('p');
+        p.textContent = '群組 ID：' + group.group_id + '（最近收到：' + new Date(group.seen_at).toLocaleString() + '）';
+        $('lineGroupList').appendChild(p);
+      });
+    }).catch(function (err) { $('lineStatus').textContent = err.message; });
+  }
+  $('lineGroups').addEventListener('click', function () {
+    $('linePanel').style.display = $('linePanel').style.display === 'none' ? 'block' : 'none';
+    if ($('linePanel').style.display === 'block') loadLineGroups();
+  });
+  $('lineRefresh').addEventListener('click', loadLineGroups);
   $('addNew').addEventListener('click', function () { openNew(null, null); });
 
   $('logout').addEventListener('click', function () {

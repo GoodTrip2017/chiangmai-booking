@@ -49,7 +49,9 @@ Node.js 24 + Express + PostgreSQL。前台、管理後台與 API 由一個服務
 | `APP_ORIGIN` | 正式 HTTPS 網址，不含結尾 `/`；預設網域也可由 `RAILWAY_PUBLIC_DOMAIN` 取得 |
 | `RESEND_API_KEY`、`MAIL_FROM` | 完成寄件網域驗證後啟用確認信；`MAIL_REPLY_TO` 可另設店家收信地址 |
 | `LINE_CHANNEL_ACCESS_TOKEN`、`LINE_GROUP_ID` | 啟用工作群組通知時填寫 |
-| `LINE_CHANNEL_SECRET` | 啟用 LINE webhook 驗簽時填寫 |
+| `LINE_CHANNEL_SECRET` | 啟用 LINE webhook 驗簽與擷取工作群組 ID 時填寫 |
+
+LINE 群組通知設定：在 LINE 官方帳號啟用 Messaging API，將 Webhook URL 設為 `https://chiangmai-booking-production.up.railway.app/webhook/line` 並開啟 Use webhook；在 LINE Developers 的 Messaging API 設定開啟「Allow bot to join group chats」。把該頻道的 `LINE_CHANNEL_SECRET` 與 `LINE_CHANNEL_ACCESS_TOKEN` 存入 Railway 預約服務的 Variables 並重新部署。由店員將同一個官方帳號邀進工作群組，在群內傳一則訊息，然後登入預約後台按「LINE 群組設定」查看最近驗簽通過的群組 ID。核對後將正確 ID 存為 `LINE_GROUP_ID` 並重新部署。只有三個變數都設定且 Bot 留在群組時，預約通知才會送達。群組 ID 僅對已登入的後台顯示，不會記錄對話內容。請使用內部工作群組，通知可能包含預約人姓名及聯絡方式。
 
 5. Settings → Networking → Generate Domain。先產生網域或填 `APP_ORIGIN`，再確認部署啟動；正式環境缺少網站來源或有效密碼雜湊會拒絕啟動。
 6. Settings → Healthcheck Path 設 `/healthz`，Timeout 設 `300` 秒。這項必須在 Railway 設定，不能只依賴 Dockerfile。
@@ -116,7 +118,7 @@ Migration 保留舊資料，不自動取消或縮減人數。舊時段如果超�
 
 ## 尚未提供的功能
 
-臨時公休管理、報到與自動取消、LINE 一對一預約及前一天提醒、Google Calendar 同步、舊資料匯入。現有 webhook 僅驗簽及檢查事件格式，不記錄訊息或群組 ID；工作群組 ID 需在 LINE 整合設定流程取得。群組通知與私訊功能應分開理解。
+臨時公休管理、報到與自動取消、LINE 一對一預約及前一天提醒、Google Calendar 同步、舊資料匯入。現有 webhook 僅驗簽並保留曾加入或傳訊的群組 ID，供已登入後台設定通知目標；不記錄訊息內容。群組通知與私訊功能應分開理解。
 
 ## 官方參考
 
