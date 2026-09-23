@@ -22,7 +22,7 @@ const auth = require('../src/services/auth');
 const booking = require('../src/services/booking');
 const { createApp } = require('../src/app');
 const password = crypto.randomBytes(24).toString('hex');
-const form = { name: 'Security fixture', pax: 1, date: '2099-01-01', slot: '14:30-16:30', firstTime: '否', email: 'test@example.invalid', referral: '網路搜尋' };
+const form = { name: 'Security fixture', pax: 1, date: '2099-01-01', slot: '14:00-15:30', firstTime: '否', email: 'test@example.invalid', referral: '網路搜尋' };
 let server, origin;
 const children = new Set();
 // Raw HTTP preserves encoded traversal paths and allows testing malformed bodies.

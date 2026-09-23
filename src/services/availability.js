@@ -7,24 +7,40 @@ const { pool } = require('../db');
 const { CONFIG, SLOTS, STATUS } = require('../config');
 const dt = require('../util/datetime');
 
-/** 讀取某日（可選：某時段）所有已確認預約。傳入 client 可在交易內使用。 */
+/** 讀取某日所有已確認預約。容量須包含與目標時段重疊的舊預約。 */
 async function confirmedIn(db, dateStr, slot, excludeId) {
-  const params = [dateStr, slot];
-  let sql = `SELECT * FROM bookings WHERE status = '${STATUS.CONFIRMED}' AND date = $1 AND slot = $2`;
+  const params = [dateStr];
+  let sql = `SELECT * FROM bookings WHERE status = '${STATUS.CONFIRMED}' AND date = $1`;
   if (excludeId) {
     params.push(excludeId);
-    sql += ' AND id <> $3';
+    sql += ' AND id <> $2';
   }
   sql += ' ORDER BY created_at';
   const { rows } = await db.query(sql, params);
-  return rows;
+  const target = dt.getSlotDef(slot);
+  return rows.filter(b => {
+    const other = dt.getSlotDef(b.slot);
+    return other && other.start < target.end && target.start < other.end;
+  });
 }
 
 /** 某時段目前狀態 */
 async function slotState(db, dateStr, slot, excludeId) {
   const list = await confirmedIn(db, dateStr, slot, excludeId);
-  const totalPax = list.reduce((sum, b) => sum + b.pax, 0);
-  const groups = list.length;
+  const target = dt.getSlotDef(slot);
+  // 舊時段可能前後接到兩組新時段；計算任一時刻的最大同時人數，
+  // 不把互不相遇的兩組錯加成一組。
+  const points = [target.start, ...list.map(b => dt.getSlotDef(b.slot).start)
+    .filter(start => start > target.start && start < target.end)];
+  let totalPax = 0, groups = 0;
+  for (const point of points) {
+    const active = list.filter(b => {
+      const def = dt.getSlotDef(b.slot);
+      return def.start <= point && point < def.end;
+    });
+    const pax = active.reduce((sum, b) => sum + b.pax, 0);
+    if (pax > totalPax) { totalPax = pax; groups = active.length; }
+  }
   const remaining = Math.max(0, CONFIG.MAX_PAX - totalPax);
   return {
     slot,
@@ -32,7 +48,7 @@ async function slotState(db, dateStr, slot, excludeId) {
     totalPax,
     remaining,
     overCapacity: totalPax > CONFIG.MAX_PAX,
-    bookings: list,
+    bookings: list.filter(b => b.slot === slot),
   };
 }
 
@@ -49,7 +65,7 @@ async function capacityCheck(db, dateStr, slot, pax, excludeId) {
   };
 }
 
-/** 前台：取某一天四個時段的即時狀態 */
+/** 前台：取某一天六個時段的即時狀態 */
 async function getAvailability(dateStr) {
   if (!dt.isValidDateStr(dateStr)) throw userError('日期格式不正確。');
 

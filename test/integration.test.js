@@ -18,7 +18,7 @@ const auth = require('../src/services/auth');
 const booking = require('../src/services/booking');
 const { createApp } = require('../src/app');
 const password = crypto.randomBytes(24).toString('hex');
-const form = { name: '測試預約', pax: 2, date: '2099-01-01', slot: '14:30-16:30', firstTime: '否', email: 'test@example.invalid', referral: '網路搜尋' };
+const form = { name: '測試預約', pax: 2, date: '2099-01-01', slot: '14:00-15:30', firstTime: '否', email: 'test@example.invalid', referral: '網路搜尋' };
 let server, origin;
 async function request(path, { method = 'GET', body, cookie, csrf, headers = {} } = {}) {
   const res = await fetch(origin + path, {
@@ -115,6 +115,26 @@ test('前台 13 人遭拒，12 人可成立，未設定寄信不影響預約', a
   assert.equal(availability.data.slots[0].status, 'FULL');
   assert.equal((await pool.query('SELECT mail_status FROM bookings')).rows[0].mail_status, 'NOT_CONFIGURED');
 });
+test('切換 90 分鐘時段時保留舊預約，顯示後台並阻止重疊超額', async () => {
+  const a = await pool.query("INSERT INTO bookings(name,pax,date,slot,email) VALUES ('舊預約甲',10,$1,'14:30-16:30',$2) RETURNING id", [form.date, form.email]);
+  await pool.query("INSERT INTO bookings(name,pax,date,slot,email) VALUES ('舊預約乙',10,$1,'16:30-18:30',$2)", [form.date, form.email]);
+  const availability = await request('/api/availability?date=' + form.date);
+  assert.deepEqual(availability.data.slots.map(slot => slot.slot), [
+    '14:00-15:30', '15:30-17:00', '17:00-18:30',
+    '18:30-20:00', '20:00-21:30', '21:30-23:00',
+  ]);
+  assert.equal(availability.data.slots[1].maxPax, 2);
+  await assert.rejects(booking.createManualBooking({ ...form, slot: '14:30-16:30' }), { status: 400 });
+  await assert.rejects(booking.createManualBooking({ ...form, slot: '15:30-17:00', pax: 3 }), { status: 409 });
+  const week = await request('/api/admin/week?monday=' + form.date, await login());
+  assert.equal(week.status, 200);
+  assert.ok(week.data.slotDefs.some(def => def.slot === '14:30-16:30' && def.legacy));
+  assert.ok(week.data.days.some(day => day.slots.some(slot => slot.bookings.some(b => b.name === '舊預約甲'))));
+  await booking.updateBooking({ ...form, id: a.rows[0].id, slot: '14:30-16:30', pax: 9 });
+  await assert.rejects(booking.updateBooking({ ...form, id: a.rows[0].id, slot: '14:30-16:30', date: '2099-01-02' }), { status: 400 });
+  await booking.createManualBooking({ ...form, slot: '15:30-17:00', pax: 2 });
+  await assert.rejects(booking.createManualBooking({ ...form, slot: '15:30-17:00', pax: 1 }), { status: 409 });
+});
 test('後台新增、修改及 force 都不能超過 12 人', async () => {
   const first = await booking.createManualBooking({ ...form, pax: 10 });
   const second = await booking.createManualBooking({ ...form, pax: 2 });
@@ -149,15 +169,15 @@ test('相同送出鍵同時重試只建立一筆；變更內容不能重用鍵',
 });
 test('兩筆同時移到剩餘兩位的時段，只容許一筆成功', async () => {
   await booking.createManualBooking({ ...form, pax: 10 });
-  const one = await booking.createManualBooking({ ...form, slot: '16:30-18:30' });
-  const two = await booking.createManualBooking({ ...form, slot: '18:30-20:30' });
+  const one = await booking.createManualBooking({ ...form, slot: '15:30-17:00' });
+  const two = await booking.createManualBooking({ ...form, slot: '17:00-18:30' });
   const results = await Promise.allSettled([one,two].map(b => booking.updateBooking({ ...form, id: b.id })));
   assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
   assert.equal((await pool.query('SELECT sum(pax)::int AS n FROM bookings WHERE slot=$1',[form.slot])).rows[0].n, 12);
 });
 test('修改跨時段釋出容量；取消保留資料並釋出座位', async () => {
   const b = await booking.createManualBooking({ ...form, pax: 12 });
-  await booking.updateBooking({ ...form, id: b.id, slot: '16:30-18:30', pax: 12 });
+  await booking.updateBooking({ ...form, id: b.id, slot: '15:30-17:00', pax: 12 });
   await booking.createManualBooking({ ...form, pax: 12 });
   await booking.cancelBooking(b.id);
   await booking.cancelBooking(b.id);

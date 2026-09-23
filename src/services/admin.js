@@ -1,7 +1,7 @@
 const { userError } = require('../util/errors');
 /** 後台週行事曆資料 */
 const { pool } = require('../db');
-const { CONFIG, SLOTS } = require('../config');
+const { CONFIG, SLOTS, LEGACY_SLOTS, STATUS } = require('../config');
 const dt = require('../util/datetime');
 const { slotState } = require('./availability');
 
@@ -29,6 +29,16 @@ async function getWeekData(mondayStr) {
   if (!dt.isValidDateStr(mondayStr)) throw userError('日期格式不正確。');
   const monday = dt.mondayOf(mondayStr);
   const today = dt.todayStr();
+  const sunday = dt.addDaysStr(monday, 6);
+  const { rows: legacyRows } = await pool.query(
+    'SELECT DISTINCT slot FROM bookings WHERE status=$1 AND date BETWEEN $2 AND $3 AND slot = ANY($4::text[])',
+    [STATUS.CONFIRMED, monday, sunday, LEGACY_SLOTS.map(def => def.slot)]
+  );
+  const usedLegacy = new Set(legacyRows.map(row => row.slot));
+  const defs = [
+    ...SLOTS.map(def => ({ ...def, legacy: false })),
+    ...LEGACY_SLOTS.filter(def => usedLegacy.has(def.slot)).map(def => ({ ...def, legacy: true })),
+  ];
 
   const days = [];
   for (let d = 0; d < 7; d++) {
@@ -42,7 +52,7 @@ async function getWeekData(mondayStr) {
       isToday: dateStr === today,
       slots: [],
     };
-    for (const def of SLOTS) {
+    for (const def of defs) {
       const st = await slotState(pool, dateStr, def.slot);
       day.slots.push({
         slot: def.slot,
@@ -64,7 +74,7 @@ async function getWeekData(mondayStr) {
     thisMonday: dt.mondayOf(today),
     rangeLabel: `${dt.formatDateZh(monday)} ~ ${dt.formatDateZh(dt.addDaysStr(monday, 6))}`,
     maxPax: CONFIG.MAX_PAX,
-    slotDefs: SLOTS.map((s) => ({ slot: s.slot, label: dt.slotLabelZh(s.slot) })),
+    slotDefs: defs.map((s) => ({ slot: s.slot, label: dt.slotLabelZh(s.slot), legacy: s.legacy })),
     days,
   };
 }

@@ -1,12 +1,12 @@
 /**
  * 建立／修改／取消預約。
- * 「讀狀態 → 判容量 → 寫入」在同一個交易內，並用 advisory lock 鎖住 (date, slot)，
+ * 「讀狀態 → 判容量 → 寫入」在同一個交易內，並用 advisory lock 鎖住日期，
  * 避免兩位客人同時搶最後幾個位子而超賣。
  */
 const crypto = require('node:crypto');
 const { userError } = require('../util/errors');
 const { pool } = require('../db');
-const { CONFIG, REFERRAL_OPTIONS, SOURCES, STATUS } = require('../config');
+const { CONFIG, SLOTS, LEGACY_SLOTS, REFERRAL_OPTIONS, SOURCES, STATUS } = require('../config');
 const dt = require('../util/datetime');
 const { capacityCheck } = require('./availability');
 const { consumeLimit } = require('./rateLimits');
@@ -43,7 +43,7 @@ function validateForm(form, opts = {}) {
   }
   if (!dt.isValidDateStr(dateStr)) throw userError('請選擇預約日期。');
   if (dt.isClosedDay(dateStr)) throw userError('每週二為固定公休日，請改選其他日期。');
-  if (!dt.getSlotDef(slot)) throw userError('請選擇預約時段。');
+  if (!SLOTS.some(def => def.slot === slot) && opts.allowedLegacySlot !== slot) throw userError('請選擇預約時段。');
   if (!opts.allowPast && dt.isSlotPast(dateStr, slot)) {
     throw userError('該時段已經開始或已過，請改選其他時段。');
   }
@@ -68,9 +68,9 @@ function validId(value) {
   return value;
 }
 async function lockSlots(client, entries) {
-  // 跨時段修改也鎖住原時段；固定排序避免兩筆互換時段時死鎖。
-  for (const key of [...new Set(entries.map(([date, slot]) => `${date}|${slot}`))].sort()) {
-    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [key]);
+  // 舊時段可能與兩個新時段交疊，整日共用鎖才能避免跨時段超額。
+  for (const date of [...new Set(entries.map(([date]) => date))].sort()) {
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`booking-date:${date}`]);
   }
 }
 function rejectForce(payload) {
@@ -158,7 +158,6 @@ async function updateBooking(payload) {
   const p = payload || {};
   rejectForce(p);
   const id = validId(p.id);
-  const data = validateForm(p, { allowPast: true, referralOptional: true });
   const client = await pool.connect();
   let updated, previous;
   try {
@@ -167,6 +166,9 @@ async function updateBooking(payload) {
     const booking = rows[0];
     if (!booking) throw userError('找不到這筆預約。', 404);
     if (booking.status !== STATUS.CONFIRMED) throw userError('這筆預約已取消，無法修改。', 409);
+    const allowedLegacySlot = p.date === booking.date && LEGACY_SLOTS.some(def => def.slot === booking.slot)
+      ? booking.slot : undefined;
+    const data = validateForm(p, { allowPast: true, referralOptional: true, allowedLegacySlot });
     await lockSlots(client, [[booking.date, booking.slot], [data.date, data.slot]]);
     const check = await capacityCheck(client, data.date, data.slot, data.pax, id);
     if (!check.ok) throw userError(check.reason, 409);

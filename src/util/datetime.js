@@ -2,7 +2,7 @@
  * 清邁時間（GMT+7，無夏令時間）的日期時間工具。
  * 內部一律用「把 UTC 時間加 7 小時後取 UTC 欄位」的方式計算，避免依賴伺服器時區。
  */
-const { CONFIG, SLOTS } = require('../config');
+const { CONFIG, SLOTS, LEGACY_SLOTS } = require('../config');
 
 const OFFSET_MS = CONFIG.TZ_OFFSET_MINUTES * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -53,7 +53,7 @@ function isClosedDay(dateStr) {
 }
 
 function getSlotDef(slot) {
-  return SLOTS.find((s) => s.slot === slot) || null;
+  return SLOTS.find((s) => s.slot === slot) || LEGACY_SLOTS.find((s) => s.slot === slot) || null;
 }
 
 function addDaysStr(dateStr, days) {

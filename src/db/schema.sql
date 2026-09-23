@@ -1,4 +1,4 @@
--- 預約資料表。date/slot 用文字存（'yyyy-MM-dd' / '14:30-16:30'），
+-- 預約資料表。date/slot 用文字存（'yyyy-MM-dd' / '14:00-15:30'），
 -- 與清邁牆上時間一一對應，避免時區換算歧義；規則判斷都在應用層。
 CREATE TABLE IF NOT EXISTS bookings (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   name         TEXT NOT NULL,
   pax          INTEGER NOT NULL CHECK (pax >= 1),
   date         TEXT NOT NULL,                      -- 'yyyy-MM-dd'（清邁時間）
-  slot         TEXT NOT NULL,                      -- '14:30-16:30' 等
+  slot         TEXT NOT NULL,                      -- 新舊時段皆保留原字串
   first_time   TEXT NOT NULL DEFAULT '否',          -- '是' / '否'
   line         TEXT NOT NULL DEFAULT '',
   email        TEXT NOT NULL DEFAULT '',

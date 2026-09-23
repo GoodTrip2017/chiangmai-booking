@@ -8,7 +8,7 @@ const { capacityCheck } = require('../src/services/availability');
 const mailer = require('../src/services/mailer');
 const { hashPassword } = require('../src/services/auth');
 const { pool } = require('../src/db');
-const form = { name: '測試', pax: 2, date: '2099-01-01', slot: '14:30-16:30', firstTime: '否', email: 'test@example.invalid', referral: '網路搜尋' };
+const form = { name: '測試', pax: 2, date: '2099-01-01', slot: '14:00-15:30', firstTime: '否', email: 'test@example.invalid', referral: '網路搜尋' };
 
 after(() => pool.end());
 test('日期、清邁時區與保留時間', () => {
@@ -16,7 +16,12 @@ test('日期、清邁時區與保留時間', () => {
   assert.equal(dt.isValidDateStr('2026-02-30'), false);
   assert.equal(dt.isValidDateStr('2028-02-29'), true);
   assert.equal(dt.mondayOf('2026-09-20'), '2026-09-14');
-  assert.equal(dt.graceDeadlineZh('2026-09-16', '14:30-16:30'), '下午 2:40');
+  assert.equal(dt.graceDeadlineZh('2026-09-16', '14:00-15:30'), '下午 2:10');
+  assert.deepEqual(require('../src/config').SLOTS.map(def => def.slot), [
+    '14:00-15:30', '15:30-17:00', '17:00-18:30',
+    '18:30-20:00', '20:00-21:30', '21:30-23:00',
+  ]);
+  assert.throws(() => validateForm({ ...form, slot: '14:30-16:30' }), { status: 400 });
 });
 test('前後台表單均拒絕 13 人、60 人、非整數與週二', () => {
   for (const opts of [{}, { allowPast: true, emailOptional: true, referralOptional: true }]) {
@@ -55,9 +60,23 @@ test('第一組與多組共用同一個 12 人上限', async () => {
   assert.equal((await check([], 12)).ok, true);
   assert.equal((await check([], 13)).ok, false);
   assert.equal((await check([], 60)).ok, false);
-  assert.equal((await check([{ pax: 10 }], 2)).ok, true);
-  assert.equal((await check([{ pax: 10 }], 3)).ok, false);
-  assert.equal((await check([{ pax: 13 }], 1)).ok, false);
+  assert.equal((await check([{ pax: 10, slot: form.slot }], 2)).ok, true);
+  assert.equal((await check([{ pax: 10, slot: form.slot }], 3)).ok, false);
+  assert.equal((await check([{ pax: 13, slot: form.slot }], 1)).ok, false);
+});
+test('新時段扣除重疊舊預約，但不合計彼此不重疊的舊預約', async () => {
+  const db = rows => ({ query: async () => ({ rows }) });
+  const date = form.date;
+  let check = await capacityCheck(db([{ slot: '14:30-16:30', pax: 10 }]), date, '14:00-15:30', 3);
+  assert.equal(check.ok, false);
+  check = await capacityCheck(db([{ slot: '14:30-16:30', pax: 10 }]), date, '15:30-17:00', 2);
+  assert.equal(check.ok, true);
+  check = await capacityCheck(db([{ slot: '14:30-16:30', pax: 10 }, { slot: '16:30-18:30', pax: 10 }]), date, '15:30-17:00', 2);
+  assert.equal(check.ok, true);
+  check = await capacityCheck(db([{ slot: '14:30-16:30', pax: 10 }, { slot: '16:30-18:30', pax: 10 }]), date, '15:30-17:00', 3);
+  assert.equal(check.ok, false);
+  check = await capacityCheck(db([{ slot: '14:30-16:30', pax: 12 }]), date, '17:00-18:30', 12);
+  assert.equal(check.ok, true);
 });
 test('確認信安全跳脫姓名，文案由店員處理逾時', () => {
   const booking = { ...form, name: '<img src=x onerror=alert(1)>' };

@@ -17,8 +17,17 @@ const CONFIG = {
   BUSINESS_HOURS: '14:00 - 23:00',
 };
 
-/** 四個固定時段。slot 字串（如 14:30-16:30）就是資料庫裡的鍵值。 */
+/** 14:00–23:00 每段 90 分鐘；slot 字串就是資料庫裡的鍵值。 */
 const SLOTS = [
+  { slot: '14:00-15:30', start: '14:00', end: '15:30' },
+  { slot: '15:30-17:00', start: '15:30', end: '17:00' },
+  { slot: '17:00-18:30', start: '17:00', end: '18:30' },
+  { slot: '18:30-20:00', start: '18:30', end: '20:00' },
+  { slot: '20:00-21:30', start: '20:00', end: '21:30' },
+  { slot: '21:30-23:00', start: '21:30', end: '23:00' },
+];
+/** 保留舊預約原時段；新預約不能再選這些時段。 */
+const LEGACY_SLOTS = [
   { slot: '14:30-16:30', start: '14:30', end: '16:30' },
   { slot: '16:30-18:30', start: '16:30', end: '18:30' },
   { slot: '18:30-20:30', start: '18:30', end: '20:30' },
@@ -31,4 +40,4 @@ const SOURCES = ['WEB', 'WALK_IN', 'LINE', 'PHONE'];
 
 const STATUS = { CONFIRMED: 'CONFIRMED', CANCELLED: 'CANCELLED' };
 
-module.exports = { CONFIG, SLOTS, REFERRAL_OPTIONS, SOURCES, STATUS };
+module.exports = { CONFIG, SLOTS, LEGACY_SLOTS, REFERRAL_OPTIONS, SOURCES, STATUS };

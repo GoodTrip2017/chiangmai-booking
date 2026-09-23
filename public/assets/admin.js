@@ -46,10 +46,10 @@
     html += '</tr>';
 
     week.slotDefs.forEach(function (sd, si) {
-      html += '<tr><td class="slotcol">' + sd.slot + '</td>';
+      html += '<tr><td class="slotcol">' + (sd.legacy ? '舊時段 ' : '') + sd.slot + '</td>';
       week.days.forEach(function (d, di) {
         if (d.closed) { html += '<td class="closed">公休</td>'; return; }
-        html += '<td>' + cellHtml(d, d.slots[si], di, si) + '</td>';
+        html += '<td>' + cellHtml(d, d.slots[si], di, si, sd.legacy) + '</td>';
       });
       html += '</tr>';
     });
@@ -72,7 +72,7 @@
     });
   }
 
-  function cellHtml(day, cell, di, si) {
+  function cellHtml(day, cell, di, si, legacy) {
     var head;
     if (cell.groups === 0) {
       head = '<span class="cnt">—</span>';
@@ -84,9 +84,10 @@
         (cell.full ? '<span style="color:var(--err)">已滿</span>' : '');
     }
     var out = '<div class="cellhead' + (cell.full ? ' full' : '') + '">' + head +
-      '<button class="add" data-d="' + di + '" data-s="' + si + '" title="手動新增">＋</button></div>';
+      (legacy ? '' : '<button class="add" data-d="' + di + '" data-s="' + si + '" title="手動新增">＋</button>') + '</div>';
 
-    if (cell.groups === 0) return out + '<div class="empty">無預約</div>';
+    if (cell.bookings.length === 0) return out + '<div class="empty">' +
+      (cell.groups ? '由重疊的舊時段預約占用' : '無預約') + '</div>';
 
     cell.bookings.forEach(function (b, i) {
       var bad = b.mailFailed;
@@ -110,9 +111,13 @@
 
   // ---------------- Modal
   function slotOptions(selected) {
-    return week.slotDefs.map(function (s) {
+    var options = week.slotDefs.filter(function (s) { return !s.legacy; }).map(function (s) {
       return '<option value="' + s.slot + '"' + (s.slot === selected ? ' selected' : '') + '>' + s.slot + '</option>';
     }).join('');
+    if (week.slotDefs.some(function (s) { return s.legacy && s.slot === selected; })) {
+      options += '<option value="' + selected + '" selected>舊時段 ' + selected + '</option>';
+    }
+    return options;
   }
 
   function openModal() {
