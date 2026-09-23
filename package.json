@@ -1,7 +1,7 @@
 {
   "name": "chiangmai-booking",
   "version": "1.1.0",
-  "description": "GoodTrip 清邁店線上預約系統 (Node.js + Express + PostgreSQL)",
+  "description": "GoodTrip x Herb Uncle 清邁尼曼店線上預約系統 (Node.js + Express + PostgreSQL)",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",

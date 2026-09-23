@@ -1,4 +1,4 @@
-# GoodTrip 清邁店預約系統
+# GoodTrip x Herb Uncle 清邁尼曼店預約系統
 
 Node.js 24 + Express + PostgreSQL。前台、管理後台與 API 由一個服務提供。每個時段所有預約合計最多 **12 人**，前後台皆不得超額。
 
