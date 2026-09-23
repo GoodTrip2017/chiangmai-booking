@@ -53,7 +53,7 @@ Node.js 24 + Express + PostgreSQL。前台、管理後台與 API 由一個服務
 
 5. Settings → Networking → Generate Domain。先產生網域或填 `APP_ORIGIN`，再確認部署啟動；正式環境缺少網站來源或有效密碼雜湊會拒絕啟動。
 6. Settings → Healthcheck Path 設 `/healthz`，Timeout 設 `300` 秒。這項必須在 Railway 設定，不能只依賴 Dockerfile。
-7. Restart Policy 設 `ON_FAILURE`，最多 5 次；初期一個應用實例即可。應用不需要額外 Volume；PostgreSQL 的持久儲存與備份須在資料庫服務配置。2026-09-14 此專案 Hobby 帳號的備份頁要求 Pro，原生排程備份尚未啟用；已有一次手動備份與隔離還原演練，不能當成持續備份。
+7. Restart Policy 設 `ON_FAILURE`，最多 5 次；初期一個應用實例即可。應用不需要額外 Volume；PostgreSQL 的持久儲存與備份須在資料庫服務配置。2026-09-23 使用者升級 Pro 後，已啟用每日、每週、每月原生備份（API 保留期分別 6、27、89 天），並建立第一份原生備份。另有 2026-09-14 手動備份的隔離還原演練；未對正式資料庫執行還原。
 8. 部署後測試登入、12 人預約、滿額拒絕、修改、取消、重寄信、LINE 群組通知，以及重啟後資料仍存在。
 
 正式環境必須明確設定 `DATABASE_SSL`。若用 TLS，憑證及目標名稱（包含 IP 位址）都必須驗證；請把連線網址中的 `sslmode`、`sslrootcert` 等參數移除，統一用 `DATABASE_SSL=true` 及必要的 `DATABASE_CA_CERT`，避免 pg 覆蓋設定。禁止 `NODE_TLS_REJECT_UNAUTHORIZED=0`。
@@ -64,7 +64,7 @@ Railway 正式環境的限流只讀取平台重寫的 `X-Real-IP`，不使用訪
 
 本版完全移除 SMTP 依賴，使用 `https://api.resend.com/emails`。Railway Free／Trial／Hobby 不支援 SMTP；HTTPS API 不受此限制。
 
-在 Resend 驗證自己的寄件網域後，再設定 `RESEND_API_KEY` 與 `MAIL_FROM`。建議使用專用子網域，保留官網既有 MX 記錄；`MAIL_REPLY_TO` 可設定店家的 Gmail，讓客人回覆至店家信箱。範例寄件地址或未驗證網域不能當成已完成正式寄信設定。此次測試模擬寄信服務，尚未發送真實 Email。
+在 Resend 驗證自己的寄件網域後，再設定 `RESEND_API_KEY` 與 `MAIL_FROM`。建議使用專用子網域，保留官網既有 MX 記錄；`MAIL_REPLY_TO` 可設定店家的 Gmail，讓客人回覆至店家信箱。範例寄件地址或未驗證網域不能當成已完成正式寄信設定。2026-09-23 已驗證 notify.goodtrip2017.com 的專用寄信金鑰；使用正式寄件設定及應用版型寄出一封驗證信，使用者確認收到且內容正常。驗證信由本機驗證程式發出，不建立預約；不等同正式預約端到端寄信測試。
 
 確認信重寄同一筆每分鐘最多 1 次，全站每小時最多 60 次；限制存在資料庫，重新部署不會清除。
 
