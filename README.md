@@ -34,7 +34,7 @@ Node.js 24 + Express + PostgreSQL。前台、管理後台與 API 由一個服務
 
 ## Railway 部署
 
-目前以專案內的 **Dockerfile** 分階段建置。正式執行環境為固定 digest 的 Distroless Node.js 24 / Debian 13，以 UID 65532 執行，不包含 shell、npm 或 yarn；套件只在建置階段安裝。GitHub Actions 會執行 46 項測試、npm audit、實際容器建置及完整映像掃描，高風險或重大漏洞會讓檢查失敗。Railway 應設定等待 GitHub 檢查通過才部署。
+目前以專案內的 **Dockerfile** 分階段建置。正式執行環境為固定 digest 的 Distroless Node.js 24 / Debian 13，以 UID 65532 執行，不包含 shell、npm 或 yarn；套件只在建置階段安裝。GitHub Actions 會執行完整測試、npm audit、實際容器建置及完整映像掃描，高風險或重大漏洞會讓檢查失敗。Railway 應設定等待 GitHub 檢查通過才部署。
 
 1. 在 Railway 建立專案，從 `GoodTrip2017/chiangmai-booking` 建立應用服務，Root Directory 設為 repo 根目錄 `/`。
 2. 同一專案與環境建立 PostgreSQL。應用與資料庫選同一區域，使用內部連線。
@@ -113,7 +113,7 @@ Migration 保留舊資料，不自動取消或縮減人數。舊時段如果超�
 - `npm test`：日期、表單、12 人容量、輸入安全、寄信與密碼雜湊檢查。
 - `TEST_DATABASE_URL=... npm run test:integration`：在指定 PostgreSQL 建立隨機獨立 schema，測完清除該 schema；不清空既有資料表。涵蓋遷移、登入、CSRF、容量、20 筆同時預約、重複送出與改期。
 - `TEST_DATABASE_URL=... npm run test:security`：22 組安全案例，涵蓋所有後台操作的權限／CSRF、注入、資料外洩、真實程序重啟／多實例、LINE 驗簽與異常資料、TLS 憑證及名稱驗證。TLS 測試另需系統 `openssl` 指令。
-- `TEST_DATABASE_URL=... npm run test:all`：一次執行所有 46 組測試。測試只建立隨機獨立 schema，仍建議使用專用測試資料庫；需要允許 localhost 監聽與子程序。
+- `TEST_DATABASE_URL=... npm run test:all`：一次執行所有測試。測試只建立隨機獨立 schema，仍建議使用專用測試資料庫；需要允許 localhost 監聽與子程序。
 - `npm audit --omit=dev`：查詢鎖定套件的最新已知漏洞。
 - 測試不寄送 Email 或 LINE 訊息。完整實際送達仍需在正式憑證配置後驗證。安全測試結果及未驗項目請見 [安全性檢測報告](安全性檢測報告.md)。
 
