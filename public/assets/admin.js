@@ -394,6 +394,31 @@
   });
   $('calendarMonthInput').addEventListener('change', function () { calendarView = 'month'; setReportMode('calendar'); });
   var reportMode = 'calendar';
+  var MENU_ITEMS = [['calendarTab', 'calendar', '預約日曆 / Calendar'], ['overviewTab', 'overview', '營運總覽 / Overview'],
+    ['analyticsTab', 'analytics', '數據分析 / Analytics'], ['customersTab', 'customers', '顧客紀錄 / Customers'],
+    ['availabilityTab', 'availability', '營業與容量 / Availability'], ['sourcesTab', 'sources', '來源與合作 / Sources'],
+    ['notificationsTab', 'notifications', 'LINE 通知 / LINE Notifications'], ['lineGroups', 'line', 'LINE 群組設定 / LINE group'],
+    ['accountsTab', 'accounts', '人員權限 / Accounts']];
+  function setMenuOpen(open) {
+    $('sideMenu').className = 'side-menu' + (open ? ' open' : '');
+    $('menuBackdrop').hidden = !open;
+    if ($('menuToggle').setAttribute) $('menuToggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  // 目前頁面在選單裡反白，標題列顯示頁名；選完自動收起抽屜。
+  function highlightMenu(mode) {
+    MENU_ITEMS.forEach(function (item) {
+      var button = $(item[0]);
+      var active = item[1] === mode;
+      button.className = 'menu-item' + (active ? ' active' : '');
+      if (button.setAttribute) button.setAttribute('aria-current', active ? 'page' : 'false');
+      if (active) $('sectionTitle').textContent = item[2];
+    });
+    setMenuOpen(false);
+  }
+  $('menuToggle').addEventListener('click', function () { setMenuOpen(String($('sideMenu').className).indexOf('open') < 0); });
+  $('menuClose').addEventListener('click', function () { setMenuOpen(false); });
+  $('menuBackdrop').addEventListener('click', function () { setMenuOpen(false); });
+  if (document.addEventListener) document.addEventListener('keydown', function (event) { if (event.key === 'Escape') setMenuOpen(false); });
   function setReportMode(mode) {
     reportMode = mode;
     var visible = mode === 'analytics';
@@ -404,13 +429,18 @@
     $('sourcesPanel').hidden = mode !== 'sources';
     $('customersPanel').hidden = mode !== 'customers';
     $('notificationsPanel').hidden = mode !== 'notifications';
+    $('linePanel').style.display = mode === 'line' ? 'block' : 'none';
     $('calendarControls').hidden = mode !== 'calendar' || role === 'ANALYST';
     $('monthGrid').hidden = mode !== 'calendar' || calendarView !== 'month';
-    ['prev','next','this'].forEach(function (id) { $(id).hidden = role === 'ANALYST' || (mode === 'calendar' && calendarView === 'month'); });
+    // 標題列只保留日曆本身的操作；其他頁面不顯示週切換。
+    ['prev','next','this'].forEach(function (id) { $(id).hidden = role === 'ANALYST' || mode !== 'calendar' || calendarView === 'month'; });
+    $('reload').hidden = role === 'ANALYST' || mode !== 'calendar';
+    $('range').hidden = mode !== 'calendar';
     $('scroll').style.display = mode === 'calendar' ? 'block' : 'none';
     $('loading').style.display = mode === 'calendar' ? 'block' : 'none';
     $('reportTitle').textContent = mode === 'analytics' ? '數據分析 / Analytics' : '營運總覽 / Overview';
-    if (visible) loadReport(); else if (mode === 'overview') loadOverview(); else if (mode === 'accounts') loadAccounts(); else if (mode === 'availability') loadAvailability(); else if (mode === 'sources') loadSourceOptions(); else if (mode === 'customers') loadCustomers(); else if (mode === 'notifications') loadNotifications(); else if (calendarView === 'month') loadMonth(); else load(calendarView === 'day' ? calendarDay : undefined);
+    highlightMenu(mode);
+    if (visible) loadReport(); else if (mode === 'overview') loadOverview(); else if (mode === 'line') loadLineGroups(); else if (mode === 'accounts') loadAccounts(); else if (mode === 'availability') loadAvailability(); else if (mode === 'sources') loadSourceOptions(); else if (mode === 'customers') loadCustomers(); else if (mode === 'notifications') loadNotifications(); else if (calendarView === 'month') loadMonth(); else load(calendarView === 'day' ? calendarDay : undefined);
   }
   function loadMonth() {
     var month = $('calendarMonthInput').value;
@@ -1101,8 +1131,7 @@
     }).catch(function (err) { $('lineStatus').textContent = err.message; });
   }
   $('lineGroups').addEventListener('click', function () {
-    $('linePanel').style.display = $('linePanel').style.display === 'none' ? 'block' : 'none';
-    if ($('linePanel').style.display === 'block') loadLineGroups();
+    setReportMode('line');
   });
   $('lineRefresh').addEventListener('click', loadLineGroups);
   $('addNew').addEventListener('click', function () { openNew(null, null); });
@@ -1162,6 +1191,6 @@
     }).catch(function (err) { $('reportMessage').textContent = err.message; });
     ['prev','this','next','reload','calendarTab','addNew'].forEach(function (id) { if (role === 'ANALYST') $(id).hidden = true; });
     loadDiscoverySources();
-    if (role === 'ANALYST') setReportMode('analytics'); else load();
+    setReportMode(role === 'ANALYST' ? 'analytics' : 'calendar');
   })
     .catch(function (err) { $('loading').textContent = err.message; });

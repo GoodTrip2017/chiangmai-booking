@@ -21,8 +21,27 @@
     padding: 14px 18px; border-bottom: 1px solid var(--line); background: var(--card);
     position: sticky; top: 0; z-index: 5;
   }
-  header h1 { font-size: 16px; margin: 0; margin-right: auto; display: flex; align-items: center; gap: 10px; }
+  header h1 { font-size: 16px; margin: 0; margin-right: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
   header h1 img { height: 30px; }
+  .section-title { color: var(--muted); font-weight: 400; font-size: 14px; }
+  .section-title::before { content: '·'; margin-right: 10px; color: var(--line); }
+  .icon-btn { width: 38px; height: 38px; padding: 0; font-size: 22px; line-height: 1; border-radius: 10px; flex: 0 0 auto; }
+  /* 側邊抽屜選單：導覽項目集中於此，標題列只留日曆操作。 */
+  .menu-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 20; }
+  .menu-backdrop[hidden] { display: none; }
+  .side-menu {
+    position: fixed; top: 0; left: 0; bottom: 0; width: min(300px, 86vw); z-index: 21;
+    display: flex; flex-direction: column; gap: 4px; padding: 14px; overflow-y: auto;
+    background: var(--card); border-right: 1px solid var(--line); box-shadow: 4px 0 24px rgba(0,0,0,.4);
+    transform: translateX(-104%); transition: transform .18s ease; visibility: hidden;
+  }
+  .side-menu.open { transform: none; visibility: visible; }
+  .side-menu-head { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 12px; letter-spacing: .08em; padding: 2px 4px 10px; }
+  .side-menu-foot { margin-top: auto; border-top: 1px solid var(--line); padding-top: 8px; }
+  .menu-item { display: block; width: 100%; text-align: left; padding: 11px 14px; border-radius: 10px; background: transparent; border: 1px solid transparent; font-size: 14px; }
+  .menu-item:hover { background: var(--card2); border-color: var(--line); }
+  .menu-item.active { background: var(--accent); color: #10240a; font-weight: 700; border-color: var(--accent); }
+  .menu-item[hidden] { display: none; }
   button {
     font-family: inherit; font-size: 13px; padding: 7px 12px; cursor: pointer;
     color: var(--text); background: var(--card2); border: 1px solid var(--line); border-radius: 8px;
@@ -120,7 +139,9 @@
   @media (max-width: 560px) { .trend-row { grid-template-columns: 85px minmax(45px,1fr) 60px; font-size: 12px; } }
   @media (max-width: 620px) {
     header { position: static; padding: 10px 12px; gap: 6px; }
-    header h1 { flex-basis: 100%; }
+    header h1 { flex: 1 1 60%; }
+    .section-title { flex-basis: 100%; }
+    .section-title::before { content: none; margin: 0; }
     header button { padding: 6px 9px; font-size: 12.5px; }
     .report { padding: 20px 16px; }
     .report-filters { gap: 10px; }
@@ -134,24 +155,29 @@
 </head>
 <body>
 <header>
-  <h1><img src="/logo.png" alt="">預約後台 / Booking admin</h1>
+  <button id="menuToggle" class="icon-btn" type="button" aria-label="開啟選單 / Open menu" aria-expanded="false" aria-controls="sideMenu">⋯</button>
+  <h1><img src="/logo.png" alt="">預約後台 / Booking admin<span id="sectionTitle" class="section-title">預約日曆 / Calendar</span></h1>
   <button id="prev" disabled>← 上一週 / Prev</button>
   <button id="this" disabled>本週 / This week</button>
   <button id="next" disabled>下一週 / Next →</button>
   <button id="reload">重新整理 / Refresh</button>
-  <button id="overviewTab" type="button">營運總覽 / Overview</button>
-  <button id="calendarTab" type="button">預約日曆 / Calendar</button>
-  <button id="analyticsTab" type="button">數據分析 / Analytics</button>
-  <button id="accountsTab" type="button" hidden>人員權限 / Accounts</button>
-  <button id="availabilityTab" type="button" hidden>營業與容量 / Availability</button>
-  <button id="sourcesTab" type="button" hidden>來源與合作 / Sources</button>
-  <button id="customersTab" type="button">顧客紀錄 / Customers</button>
-  <button id="notificationsTab" type="button" hidden>LINE 通知 / LINE Notifications</button>
-  <button id="lineGroups" type="button">LINE 群組設定 / LINE group</button>
   <button class="primary" id="addNew" disabled>＋ 手動新增 / New booking</button>
-  <button id="logout" disabled>登出 / Sign out</button>
   <div class="range" id="range"></div>
 </header>
+<div id="menuBackdrop" class="menu-backdrop" hidden></div>
+<nav id="sideMenu" class="side-menu" aria-label="主選單 / Main menu">
+  <div class="side-menu-head"><span>選單 / MENU</span><button id="menuClose" class="icon-btn" type="button" aria-label="關閉選單 / Close menu">×</button></div>
+  <button id="calendarTab" class="menu-item active" type="button">預約日曆 / Calendar</button>
+  <button id="overviewTab" class="menu-item" type="button">營運總覽 / Overview</button>
+  <button id="analyticsTab" class="menu-item" type="button">數據分析 / Analytics</button>
+  <button id="customersTab" class="menu-item" type="button">顧客紀錄 / Customers</button>
+  <button id="availabilityTab" class="menu-item" type="button" hidden>營業與容量 / Availability</button>
+  <button id="sourcesTab" class="menu-item" type="button" hidden>來源與合作 / Sources</button>
+  <button id="notificationsTab" class="menu-item" type="button" hidden>LINE 通知 / LINE Notifications</button>
+  <button id="lineGroups" class="menu-item" type="button" hidden>LINE 群組設定 / LINE group</button>
+  <button id="accountsTab" class="menu-item" type="button" hidden>人員權限 / Accounts</button>
+  <div class="side-menu-foot"><button id="logout" class="menu-item" type="button" disabled>登出 / Sign out</button></div>
+</nav>
 
 <section id="linePanel" class="scroll" style="display:none" aria-label="LINE 群組設定">
   <div class="card"><h2>LINE 工作群組通知</h2>
