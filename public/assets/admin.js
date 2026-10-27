@@ -478,6 +478,7 @@
     if ($('reportSlot').value.trim()) p.set('slot', $('reportSlot').value.trim());
     if ($('reportTracking').value.trim()) p.set('trackingSource', $('reportTracking').value.trim());
     if ($('reportAssignee').value) p.set('assignedStaffId', $('reportAssignee').value);
+    if ($('reportVisitHistory').value) p.set('visitHistory', $('reportVisitHistory').value);
     if ($('reportFailed').checked) p.set('notificationFailed', 'true');
     return p;
   }

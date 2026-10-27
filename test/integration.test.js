@@ -439,6 +439,9 @@ test('30/60/90 天回訪分母只含完成觀察期的聯絡人', async () => {
   assert.equal(report.cohorts.total.returned_30, 1);
   assert.equal(report.cohorts.total.eligible_90, 1);
   assert.equal(report.cohorts.total.returned_90, 1);
+  assert.equal((await reporting.listBookings({ from: '2020-01-01', to: '2020-01-31', visitHistory: 'returning' })).total, 1);
+  assert.equal((await reporting.analytics({ from: '2020-01-01', to: '2020-01-31', visitHistory: 'no_recorded_prior_visit' })).summary.bookings, 1);
+  await assert.rejects(reporting.analytics({ from: '2020-01-01', visitHistory: 'true-first-visit' }), { status: 400 });
 });
 test('營業設定可產生重疊時段；關店異動先列出受影響預約且不靜默取消', async () => {
   const rules = require('../src/services/rules');

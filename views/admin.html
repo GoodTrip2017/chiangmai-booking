@@ -262,6 +262,7 @@
     <label>開始時段 / Start time<input id="reportSlot" type="text" placeholder="14:00-15:30" maxlength="11"></label>
     <label>追蹤來源 / Tracked source<input id="reportTracking" type="text" maxlength="80" placeholder="instagram"></label>
     <label id="reportAssigneeWrap">負責人員 / Assigned staff<select id="reportAssignee"><option value="">全部 / All</option></select></label>
+    <label>既往到店紀錄 / Prior recorded visit<select id="reportVisitHistory"><option value="">全部 / All</option><option value="returning">此前曾記錄到店 / Recorded prior visit</option><option value="no_recorded_prior_visit">此前無到店紀錄 / No recorded prior visit</option><option value="unknown">無法辨識聯絡人 / Unknown contact</option></select></label>
     <label class="chk"><input id="reportFailed" type="checkbox">只看 LINE 失敗 / LINE failures only</label>
     <button id="reportRefresh" type="button">查詢 / Apply</button>
     <button id="exportAnalytics" type="button">匯出分析 CSV / Export analytics CSV</button>
