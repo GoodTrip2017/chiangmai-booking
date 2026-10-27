@@ -351,6 +351,18 @@ test('已到期結果的取消率與未到率使用不同分母，零分母保�
   assert.equal(report.trend.length, 1);
   assert.equal(report.previous.from, '2026-01-04');
 });
+test('今日營運總覽與歷史分析分開，顯示未結案及通知失敗', async () => {
+  const today = require('../src/util/datetime').todayStr();
+  await pool.query('INSERT INTO bookings(name,pax,date,slot,email,status) VALUES($1,2,$2,$3,$4,$5)',
+    ['Today contact', today, '14:00-15:30', 'today@example.invalid', 'CONFIRMED']);
+  const session = await login();
+  const result = await request('/api/admin/overview', session);
+  assert.equal(result.status, 200);
+  assert.equal(result.data.date, today);
+  assert.equal(result.data.metrics.active_bookings, 1);
+  assert.equal(result.data.metrics.booked_guests, 2);
+  assert.ok(Number.isInteger(result.data.remaining_bookable_places));
+});
 test('營業設定可產生重疊時段；關店異動先列出受影響預約且不靜默取消', async () => {
   const rules = require('../src/services/rules');
   const first = await booking.createManualBooking({ ...form, pax: 10 });

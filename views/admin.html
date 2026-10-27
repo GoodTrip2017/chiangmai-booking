@@ -229,6 +229,16 @@
   <div class="report-scroll"><table class="report-table"><thead><tr><th>時間（清邁） / Time</th><th>操作者 / Actor</th><th>操作 / Action</th><th>對象 / Target</th></tr></thead><tbody id="systemEventRows"></tbody></table></div>
 </section>
 
+<section id="overviewPanel" class="report" hidden>
+  <h2>今日營運 / Today's operations</h2>
+  <p id="overviewMessage" class="report-note" role="status"></p>
+  <div id="overviewMetrics" class="metrics"></div>
+  <p id="overviewCapacityNote" class="report-note"></p>
+  <h2>各時段剩餘名額 / Remaining places by time</h2>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>時段 / Slot</th><th>狀態 / Status</th><th>可再預約 / Places left</th></tr></thead><tbody id="overviewSlots"></tbody></table></div>
+  <button id="overviewBookings" type="button">查看今日預約 / View today's bookings</button>
+</section>
+
 <section id="reportPanel" class="report" hidden>
   <h2 id="reportTitle">營運總覽 / Overview</h2>
   <div class="report-filters">

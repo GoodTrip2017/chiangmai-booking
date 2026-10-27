@@ -2,6 +2,7 @@ const { pool } = require('../db');
 const { STATUS } = require('../config');
 const dt = require('../util/datetime');
 const { userError } = require('../util/errors');
+const { getAvailability } = require('./availability');
 
 function filters(query = {}) {
   const from = query.from || dt.todayStr();
@@ -72,6 +73,28 @@ async function bookingDetail(id) {
   ]);
   if (!booking.rows[0]) throw userError('找不到這筆預約 / Booking not found.', 404);
   return { booking: booking.rows[0], history: history.rows, notifications: notifications.rows };
+}
+
+async function operationalOverview() {
+  const today = dt.todayStr();
+  const due = "((b.date::date + split_part(b.slot,'-',1)::time) AT TIME ZONE 'Asia/Bangkok')";
+  const { rows } = await pool.query(
+    `SELECT count(*) FILTER (WHERE b.status IN ('PENDING','CONFIRMED','CHECKED_IN','COMPLETED'))::int AS active_bookings,
+      COALESCE(sum(b.pax) FILTER (WHERE b.status IN ('PENDING','CONFIRMED','CHECKED_IN','COMPLETED')),0)::int AS booked_guests,
+      COALESCE(sum(b.actual_pax) FILTER (WHERE b.checked_in_at IS NOT NULL),0)::int AS actual_guests,
+      count(*) FILTER (WHERE b.status='PENDING')::int AS pending,
+      count(*) FILTER (WHERE b.status IN ('PENDING','CONFIRMED') AND ${due} BETWEEN now() AND now()+interval '2 hours')::int AS upcoming,
+      count(*) FILTER (WHERE b.status IN ('PENDING','CONFIRMED') AND ${due}<now())::int AS overdue_unresolved,
+      count(*) FILTER (WHERE b.checked_in_at IS NOT NULL AND b.actual_pax IS NULL)::int AS missing_actual_guests,
+      count(*) FILTER (WHERE b.status='CHECKED_IN')::int AS unfinished,
+      count(*) FILTER (WHERE (SELECT n.status FROM notification_events n WHERE n.booking_id=b.id AND n.recipient_kind='LINE_GROUP' ORDER BY n.id DESC LIMIT 1)='FAILED')::int AS line_failures
+     FROM bookings b WHERE b.date=$1`, [today]
+  );
+  const availability = await getAvailability(today);
+  return { date: today, metrics: rows[0],
+    remaining_bookable_places: availability.slots.reduce((sum, slot) => sum + (slot.selectable ? slot.maxPax : 0), 0),
+    slots: availability.slots.map(slot => ({ slot: slot.slot, status: slot.status, remaining: slot.selectable ? slot.maxPax : 0 })),
+    capacity_note: '各可預約起始時段剩餘名額相加；重疊時段共用同一接待容量。 / Sum of available places at each start time; overlapping visits share capacity.' };
 }
 
 async function analytics(query = {}) {
@@ -202,4 +225,4 @@ async function exportBookingsCsv(query = {}) {
   return '\ufeff' + lines.map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }
 
-module.exports = { filters, listBookings, bookingDetail, analytics, csvCell, exportBookingsCsv };
+module.exports = { filters, listBookings, bookingDetail, operationalOverview, analytics, csvCell, exportBookingsCsv };

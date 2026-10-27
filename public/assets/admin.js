@@ -349,8 +349,9 @@
   var reportMode = 'calendar';
   function setReportMode(mode) {
     reportMode = mode;
-    var visible = mode === 'overview' || mode === 'analytics';
+    var visible = mode === 'analytics';
     $('reportPanel').hidden = !visible;
+    $('overviewPanel').hidden = mode !== 'overview';
     $('accountsPanel').hidden = mode !== 'accounts';
     $('availabilityPanel').hidden = mode !== 'availability';
     $('sourcesPanel').hidden = mode !== 'sources';
@@ -359,7 +360,37 @@
     $('scroll').style.display = mode === 'calendar' ? 'block' : 'none';
     $('loading').style.display = mode === 'calendar' ? 'block' : 'none';
     $('reportTitle').textContent = mode === 'analytics' ? '數據分析 / Analytics' : '營運總覽 / Overview';
-    if (visible) loadReport(); else if (mode === 'accounts') loadAccounts(); else if (mode === 'availability') loadAvailability(); else if (mode === 'sources') loadSourceOptions(); else if (mode === 'customers') loadCustomers(); else if (mode === 'notifications') loadNotifications(); else load();
+    if (visible) loadReport(); else if (mode === 'overview') loadOverview(); else if (mode === 'accounts') loadAccounts(); else if (mode === 'availability') loadAvailability(); else if (mode === 'sources') loadSourceOptions(); else if (mode === 'customers') loadCustomers(); else if (mode === 'notifications') loadNotifications(); else load();
+  }
+  function loadOverview() {
+    $('overviewMessage').textContent = '載入中 / Loading…';
+    api('/api/admin/overview').then(function (data) {
+      $('overviewMessage').textContent = data.date + ' · 清邁時間 / Asia/Bangkok';
+      $('overviewMetrics').replaceChildren();
+      [['有效預約 / Active bookings', data.metrics.active_bookings], ['預約人數 / Booked guests', data.metrics.booked_guests],
+        ['實際到店人數 / Actual guests', data.metrics.actual_guests], ['待確認 / Pending', data.metrics.pending],
+        ['兩小時內到店 / Upcoming in two hours', data.metrics.upcoming],
+        ['逾時未處理 / Overdue unresolved', data.metrics.overdue_unresolved],
+        ['未填實際人數 / Missing actual guests', data.metrics.missing_actual_guests],
+        ['已報到未結案 / Checked in, unfinished', data.metrics.unfinished],
+        ['LINE 通知失敗 / LINE failures', data.metrics.line_failures],
+        ['剩餘可預約名額 / Places left', data.remaining_bookable_places]
+      ].forEach(function (pair) {
+        var card = document.createElement('div'); card.className = 'metric';
+        var caption = document.createElement('span'); caption.textContent = pair[0];
+        var count = document.createElement('strong'); count.textContent = pair[1];
+        card.append(caption, count); $('overviewMetrics').appendChild(card);
+      });
+      $('overviewCapacityNote').textContent = data.capacity_note;
+      $('overviewSlots').replaceChildren();
+      data.slots.forEach(function (slot) {
+        var row = document.createElement('tr');
+        [slot.slot, slot.status, slot.remaining].forEach(function (value) {
+          var cell = document.createElement('td'); cell.textContent = value; row.appendChild(cell);
+        });
+        $('overviewSlots').appendChild(row);
+      });
+    }).catch(function (err) { $('overviewMessage').textContent = err.message; });
   }
   function reportQuery() {
     var p = new URLSearchParams({ from: $('reportFrom').value, to: $('reportTo').value,
@@ -463,6 +494,7 @@
     }).catch(function (err) { $('reportMessage').textContent = err.message; });
   }
   $('overviewTab').addEventListener('click', function () { setReportMode('overview'); });
+  $('overviewBookings').addEventListener('click', function () { setReportMode('analytics'); });
   $('calendarTab').addEventListener('click', function () { setReportMode('calendar'); });
   $('analyticsTab').addEventListener('click', function () { setReportMode('analytics'); });
   $('accountsTab').addEventListener('click', function () { setReportMode('accounts'); });
@@ -803,6 +835,7 @@
     $('availabilityTab').hidden = role !== 'ADMIN';
     $('sourcesTab').hidden = role !== 'ADMIN';
     $('customersTab').hidden = role === 'ANALYST';
+    $('overviewTab').hidden = role === 'ANALYST';
     $('lineGroups').hidden = role !== 'ADMIN';
     ['prev','this','next','reload','calendarTab','addNew'].forEach(function (id) { if (role === 'ANALYST') $(id).hidden = true; });
     if (role === 'ANALYST') setReportMode('analytics'); else { loadDiscoverySources(); load(); }
