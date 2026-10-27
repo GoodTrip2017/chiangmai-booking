@@ -63,7 +63,7 @@ async function bookingDetail(id) {
   if (typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) throw userError('預約編號格式不正確 / Invalid booking ID.');
   const [booking, history, notifications] = await Promise.all([
     pool.query('SELECT * FROM bookings WHERE id=$1', [id]),
-    pool.query('SELECT id,event_type,actor_type,reason,created_at,before_data,after_data FROM booking_events WHERE booking_id=$1 ORDER BY id DESC LIMIT 100', [id]),
+    pool.query('SELECT e.id,e.event_type,e.actor_type,e.actor_id,s.display_name AS actor_name,e.reason,e.created_at,e.before_data,e.after_data FROM booking_events e LEFT JOIN staff_accounts s ON s.id::text=e.actor_id WHERE e.booking_id=$1 ORDER BY e.id DESC LIMIT 100', [id]),
     pool.query('SELECT id,event_type,recipient_kind,status,attempt_count,response_code,failure_reason,scheduled_at,attempted_at FROM notification_events WHERE booking_id=$1 ORDER BY id DESC LIMIT 100', [id]),
   ]);
   if (!booking.rows[0]) throw userError('找不到這筆預約 / Booking not found.', 404);

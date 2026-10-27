@@ -312,6 +312,20 @@
     <input type="text" id="fStatusReason" maxlength="300">
     <div class="acts" id="statusActions"></div>
   </div>
+  <section id="bookingDetailPanel" hidden>
+    <h3>內部管理 / Internal management</h3>
+    <label for="fAssignee">負責人員 / Assigned staff</label>
+    <select id="fAssignee"><option value="">未指派 / Unassigned</option></select>
+    <label for="fInternalNote">內部備註 / Internal note（不對客人顯示 / Staff only）</label>
+    <textarea id="fInternalNote" maxlength="2000" rows="3"></textarea>
+    <label for="fAdministrationReason">變更原因 / Change reason</label>
+    <input id="fAdministrationReason" maxlength="300" type="text">
+    <button id="saveAdministration" type="button">儲存內部資料 / Save internal details</button>
+    <h3>LINE 通知紀錄 / LINE notification history</h3>
+    <div id="bookingNotifications" class="report-note"></div>
+    <h3>異動歷程 / Change history</h3>
+    <div id="bookingHistory" class="report-note"></div>
+  </section>
   <div class="chk" id="mailChk"><input type="checkbox" id="fSendMail"><label for="fSendMail" style="margin:0">新增後寄出確認信</label></div>
   <div class="mmsg" id="mMsg"></div>
   <div class="acts">

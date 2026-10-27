@@ -84,4 +84,36 @@ async function changeStatus(id, body = {}, actor = 'ADMIN') {
   finally { client.release(); }
 }
 
-module.exports = { changeStatus, recordEvent, TRANSITIONS };
+async function updateAdministration(id, body = {}, actor = 'ADMIN') {
+  if (typeof id !== 'string' || !UUID.test(id)) throw userError('預約編號格式不正確 / Invalid booking ID.');
+  const expectedRevision = version(body.revision);
+  const reason = clean(body.reason);
+  if (!reason) throw userError('請填寫變更原因 / A change reason is required.');
+  const internalNote = clean(body.internalNote, 2000);
+  const assignedStaffId = body.assignedStaffId === '' || body.assignedStaffId === null ? null : body.assignedStaffId;
+  if (assignedStaffId !== null && (typeof assignedStaffId !== 'string' || !UUID.test(assignedStaffId))) {
+    throw userError('負責人員格式不正確 / Invalid staff assignment.');
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT * FROM bookings WHERE id=$1 FOR UPDATE', [id]);
+    const before = rows[0];
+    if (!before) throw userError('找不到這筆預約 / Booking not found.', 404);
+    if (before.revision !== expectedRevision) throw userError('預約已由其他人修改，請重新整理 / Booking changed; refresh and try again.', 409);
+    if (assignedStaffId) {
+      const { rows: staff } = await client.query("SELECT id FROM staff_accounts WHERE id=$1 AND active=true AND role IN ('ADMIN','STAFF')", [assignedStaffId]);
+      if (!staff[0]) throw userError('負責人員已停用或無權限 / Staff member is unavailable.', 409);
+    }
+    const { rows: updated } = await client.query(
+      'UPDATE bookings SET internal_note=$2,assigned_staff_id=$3,revision=revision+1,updated_at=now() WHERE id=$1 RETURNING *',
+      [id, internalNote, assignedStaffId]
+    );
+    await recordEvent(client, id, 'ADMINISTRATION_UPDATED', before, updated[0], reason, actor);
+    await client.query('COMMIT');
+    return { ok: true, revision: updated[0].revision };
+  } catch (err) { await client.query('ROLLBACK'); throw err; }
+  finally { client.release(); }
+}
+
+module.exports = { changeStatus, updateAdministration, recordEvent, TRANSITIONS };

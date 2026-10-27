@@ -160,10 +160,11 @@
     $('mCancelBooking').style.display = 'none';
     $('mResend').style.display = 'none';
     $('statusPanel').style.display = 'none';
+    $('bookingDetailPanel').hidden = true;
     openModal();
   }
 
-  function openEdit(b) {
+  function openEdit(b, detail) {
     editing = b;
     $('mTitle').textContent = '編輯預約 / Edit booking · ' + b.name;
     $('fId').value = b.id;
@@ -189,7 +190,50 @@
     $('fActualPax').value = b.actualPax === null || b.actualPax === undefined ? b.pax : b.actualPax;
     $('fStatusReason').value = '';
     renderStatusActions(b);
+    $('bookingDetailPanel').hidden = false;
+    $('bookingNotifications').textContent = '載入中 / Loading…';
+    $('bookingHistory').textContent = '載入中 / Loading…';
+    $('fAdministrationReason').value = '';
     openModal();
+    if (detail) renderBookingExtras(detail);
+    else api('/api/admin/bookings/' + encodeURIComponent(b.id)).then(renderBookingExtras)
+      .catch(function (err) { $('bookingHistory').textContent = err.message; });
+  }
+
+  function formatBangkok(value) {
+    if (!value) return '—';
+    return new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit',
+      day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(value));
+  }
+  function renderBookingExtras(data) {
+    if (!editing || editing.id !== data.booking.id) return;
+    $('fInternalNote').value = data.booking.internal_note || '';
+    Promise.all([api('/api/admin/assignees')]).then(function (results) {
+      if (!editing || editing.id !== data.booking.id) return;
+      $('fAssignee').replaceChildren(new Option('未指派 / Unassigned', ''));
+      results[0].items.forEach(function (person) {
+        $('fAssignee').appendChild(new Option(person.display_name + ' / ' + person.role, person.id));
+      });
+      $('fAssignee').value = data.booking.assigned_staff_id || '';
+    }).catch(function (err) { $('bookingHistory').textContent = err.message; });
+    $('bookingNotifications').replaceChildren();
+    if (!data.notifications.length) $('bookingNotifications').textContent = '尚無通知紀錄 / No notification records.';
+    data.notifications.forEach(function (n) {
+      var row = document.createElement('p');
+      row.textContent = formatBangkok(n.attempted_at || n.scheduled_at) + ' · ' + n.event_type + ' · ' +
+        n.status + ' · ' + n.attempt_count + ' 次嘗試 / attempts' +
+        (n.failure_reason ? ' · ' + n.failure_reason : '');
+      $('bookingNotifications').appendChild(row);
+    });
+    $('bookingHistory').replaceChildren();
+    if (!data.history.length) $('bookingHistory').textContent = '尚無異動紀錄 / No change records.';
+    data.history.forEach(function (event) {
+      var row = document.createElement('p');
+      row.textContent = formatBangkok(event.created_at) + ' · ' + event.event_type + ' · ' +
+        (event.actor_name || event.actor_type) +
+        (event.reason ? ' · ' + event.reason : '');
+      $('bookingHistory').appendChild(row);
+    });
   }
 
   function statusLabel(status) {
@@ -393,7 +437,7 @@
       var converted = { id: b.id, name: b.name, pax: b.pax, date: b.date, slot: b.slot, firstTime: b.first_time,
         source: b.source, line: b.line, email: b.email, referral: b.referral, note: b.note, status: b.status,
         revision: b.revision, actualPax: b.actual_pax, discoverySourceId: b.discovery_source_id, discoveryDetail: b.discovery_detail };
-      openEdit(converted);
+      openEdit(converted, data);
     }).catch(function (err) { $('reportMessage').textContent = err.message; });
   }
   $('overviewTab').addEventListener('click', function () { setReportMode('overview'); });
@@ -405,6 +449,19 @@
   $('customersTab').addEventListener('click', function () { setReportMode('customers'); });
   $('reportRefresh').addEventListener('click', loadReport);
   $('searchBookings').addEventListener('click', loadReportBookings);
+  $('saveAdministration').addEventListener('click', function () {
+    if (!editing) return;
+    var reason = $('fAdministrationReason').value.trim();
+    if (!reason) return showMMsg('請填寫變更原因 / A change reason is required.');
+    $('saveAdministration').disabled = true;
+    api('/api/admin/bookings/' + encodeURIComponent(editing.id) + '/administration', {
+      method: 'PATCH', body: JSON.stringify({ revision: editing.revision, assignedStaffId: $('fAssignee').value,
+        internalNote: $('fInternalNote').value.trim(), reason: reason })
+    }).then(function () {
+      $('saveAdministration').disabled = false;
+      closeModal(); load();
+    }).catch(function (err) { $('saveAdministration').disabled = false; showMMsg(err.message); });
+  });
   $('exportBookings').addEventListener('click', async function () {
     var query = reportQuery(); query.set('search', $('reportSearch').value.trim());
     $('reportMessage').textContent = '正在匯出 / Preparing export…';

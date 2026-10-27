@@ -90,6 +90,12 @@ router.get('/bookings.csv', auth.requireRole('ADMIN'), async (req, res, next) =>
 router.get('/bookings/:id', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
   try { res.json(await reporting.bookingDetail(req.params.id)); } catch (err) { next(err); }
 });
+router.get('/assignees', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
+  try {
+    const { rows } = await pool.query("SELECT id,display_name,role FROM staff_accounts WHERE active=true AND role IN ('ADMIN','STAFF') ORDER BY display_name,id");
+    res.json({ items: rows });
+  } catch (err) { next(err); }
+});
 router.get('/customers', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
   try { res.json(await customers.listCustomers(req.query)); } catch (err) { next(err); }
 });
@@ -148,6 +154,10 @@ router.post('/bookings/:id/cancel', auth.requireRole('ADMIN','STAFF'), async (re
 
 router.post('/bookings/:id/status', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
   try { res.json(await lifecycle.changeStatus(req.params.id, req.body, actorFor(req))); }
+  catch (err) { next(err); }
+});
+router.patch('/bookings/:id/administration', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
+  try { res.json(await lifecycle.updateAdministration(req.params.id, req.body, actorFor(req))); }
   catch (err) { next(err); }
 });
 

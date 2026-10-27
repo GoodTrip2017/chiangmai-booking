@@ -130,6 +130,26 @@ test('門市與分析帳號在伺服器端分權；停用帳號立即使工作�
   assert.equal((await request('/api/admin/accounts/' + analyst.data.id, { ...administrator, method: 'PATCH', body: { active: false } })).status, 200);
   assert.equal((await request('/api/admin/analytics?from=' + form.date, analystSession)).status, 401);
 });
+test('負責人及內部備註有版本檢查、權限與操作者歷程', async () => {
+  const administrator = await login();
+  const staff = await request('/api/admin/accounts', { ...administrator, method: 'POST', body: {
+    username: 'assignment', displayName: 'Assigned Staff', role: 'STAFF', password: 'staff-password-123456789',
+  } });
+  assert.equal(staff.status, 201);
+  const created = await booking.createManualBooking(form);
+  const path = '/api/admin/bookings/' + created.id + '/administration';
+  const payload = { revision: 1, assignedStaffId: staff.data.id, internalNote: 'Call before arrival', reason: 'Assigned morning shift' };
+  assert.equal((await request(path, { method: 'PATCH', body: payload })).status, 401);
+  assert.equal((await request(path, { ...administrator, method: 'PATCH', body: { ...payload, reason: '' } })).status, 400);
+  const result = await request(path, { ...administrator, method: 'PATCH', body: payload });
+  assert.equal(result.status, 200);
+  assert.equal((await request(path, { ...administrator, method: 'PATCH', body: payload })).status, 409);
+  const detail = await request('/api/admin/bookings/' + created.id, administrator);
+  assert.equal(detail.data.booking.assigned_staff_id, staff.data.id);
+  assert.equal(detail.data.booking.internal_note, payload.internalNote);
+  assert.equal(detail.data.history[0].event_type, 'ADMINISTRATION_UPDATED');
+  assert.equal(detail.data.history[0].reason, payload.reason);
+});
 test('工作階段逾時及密碼輪替使舊登入立即失效', async () => {
   let session = await login();
   await pool.query("UPDATE admin_sessions SET expires_at=now()-interval '1 second'");
