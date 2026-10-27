@@ -261,7 +261,7 @@ test('SEC-16: database failures fail closed; responses and application logs omit
   const session=await login(), query=pool.query, log=console.error; const logs=[];
   pool.query=async()=>{throw Object.assign(new Error('postgres://sensitive-password@db SELECT customer-email'),{code:'ECONNREFUSED'});}; console.error=(...args)=>logs.push(args.join(' '));
   try {
-    for(const path of ['/admin','/api/admin/week','/api/availability?date='+form.date]) {const r=await request(path,session); assert.equal(r.status,500); assert.deepEqual(r.data,{error:'服務暫時無法處理，請稍後再試。'});}
+    for(const path of ['/admin','/api/admin/week','/api/availability?date='+form.date]) {const r=await request(path,session); assert.equal(r.status,500); assert.deepEqual(r.data,{error:'服務暫時無法處理，請稍後再試 / Service is temporarily unavailable; try again later.'});}
     assert.equal((await request('/healthz')).status,503);
     assert.ok(!logs.join('\n').includes('sensitive-password')); assert.ok(!logs.join('\n').includes('customer-email'));
   } finally {pool.query=query;console.error=log;}

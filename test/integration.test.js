@@ -613,7 +613,12 @@ test('取消預約會寄取消通知給客人、推播工作群組並留下紀�
   const created = await booking.createManualBooking({ ...form, pax: 2 });
   const previousFetch = global.fetch; const sent = [];
   process.env.RESEND_API_KEY = 'integration-only'; process.env.MAIL_FROM = 'booking@example.invalid';
-  global.fetch = async (url, options) => { sent.push({ url, body: JSON.parse(options.body) }); return { ok: true, json: async () => ({ id: 'mock-mail' }) }; };
+  // 只攔截寄信服務；測試自己打後端的 HTTP 請求仍走真正的 fetch。
+  global.fetch = async (url, options) => {
+    if (!String(url).startsWith('https://api.resend.com/')) return previousFetch(url, options);
+    sent.push({ url, body: JSON.parse(options.body) });
+    return { ok: true, json: async () => ({ id: 'mock-mail' }) };
+  };
   try {
     const cancelled = await request('/api/admin/bookings/' + created.id + '/cancel', { ...administrator, method: 'POST', body: { revision: 1, reason: 'customer asked by phone' } });
     assert.equal(cancelled.status, 200);
