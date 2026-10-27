@@ -38,7 +38,7 @@
 
   function render() {
     $('range').textContent = week.rangeLabel;
-    var html = '<tr><th class="slotcol">時段</th>';
+    var html = '<tr><th class="slotcol">時段 / Time slot</th>';
     week.days.forEach(function (d) {
       html += '<th class="' + (d.isToday ? 'today' : '') + '">' + d.weekday + ' ' + d.dayLabel +
         (d.closed ? '（公休）' : '') + (d.isToday ? ' ●' : '') + '</th>';
@@ -134,7 +134,7 @@
 
   function openNew(dateStr, slot) {
     editing = null;
-    $('mTitle').textContent = '手動新增預約';
+    $('mTitle').textContent = '手動新增預約 / Add booking';
     $('fId').value = '';
     $('fName').value = '';
     $('fDate').value = dateStr || week.days[0].date;
@@ -156,7 +156,7 @@
 
   function openEdit(b) {
     editing = b;
-    $('mTitle').textContent = '編輯預約 · ' + b.name;
+    $('mTitle').textContent = '編輯預約 / Edit booking · ' + b.name;
     $('fId').value = b.id;
     $('fName').value = b.name;
     $('fDate').value = b.date;

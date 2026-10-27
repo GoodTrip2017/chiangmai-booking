@@ -118,18 +118,18 @@
   </div>
 
   <div id="formCard" class="card">
-    <label>預約人（綽號或本名）<span class="req">*</span></label>
+    <label for="name">預約人 / Name（綽號或本名）<span class="req">*</span></label>
     <input type="text" id="name" maxlength="60" placeholder="例如：Ken">
 
-    <label>日期<span class="req">*</span> <span class="hint">（週二公休）</span></label>
+    <label for="date">日期 / Date<span class="req">*</span> <span class="hint">（週二公休 / Closed Tuesdays）</span></label>
     <input type="date" id="date">
 
-    <label>時段<span class="req">*</span></label>
+    <label>時段 / Time slot<span class="req">*</span></label>
     <div class="slots" id="slots">
       <div class="msg info show" id="slotHint">請先選擇日期，即可查看各時段空位。</div>
     </div>
 
-    <label>人數<span class="req">*</span> <span class="hint" id="paxHint"></span></label>
+    <label for="pax">人數 / Guests<span class="req">*</span> <span class="hint" id="paxHint"></span></label>
     <input type="number" id="pax" min="1" step="1" value="1" aria-describedby="paxHint groupNotice">
     <div id="groupNotice" class="msg info" role="status" aria-live="polite">
       <strong>多人同行，歡迎先和我們聊聊！</strong>
@@ -137,26 +137,26 @@
       <a href="https://lin.ee/DcpM9f7" target="_blank" rel="noopener noreferrer">透過 LINE 洽詢多人預約 ↗</a>
     </div>
 
-    <label>是否為第一次接觸<span class="req">*</span></label>
+    <label>是否為第一次接觸 / First-time experience<span class="req">*</span></label>
     <div class="radios" id="firstTime">
-      <div class="slot" data-v="是"><span class="t">是</span></div>
-      <div class="slot" data-v="否"><span class="t">否</span></div>
+      <div class="slot" data-v="是"><span class="t">是 / Yes</span></div>
+      <div class="slot" data-v="否"><span class="t">否 / No</span></div>
     </div>
 
-    <label>LINE 聯絡方式 <span class="hint">（選填，方便臨時聯繫）</span></label>
+    <label for="line">LINE 聯絡方式 / LINE contact <span class="hint">（選填 / Optional）</span></label>
     <input type="text" id="line" maxlength="80" placeholder="LINE ID 或顯示名稱">
 
-    <label>Email<span class="req">*</span></label>
+    <label for="email">電子郵件 / Email<span class="req">*</span></label>
     <input type="email" id="email" placeholder="you@example.com" required maxlength="120" autocomplete="email">
 
-    <label>從哪邊知道我們的？<span class="req">*</span></label>
+    <label>從哪邊知道我們的？ / How did you hear about us?<span class="req">*</span></label>
     <div class="radios grid2" id="referral">
       <div class="slot" data-v="Instagram"><span class="t">Instagram</span></div>
       <div class="slot" data-v="Threads"><span class="t">Threads</span></div>
-      <div class="slot" data-v="GoodTrip官網"><span class="t">GoodTrip官網</span></div>
-      <div class="slot" data-v="GoodTrip門市"><span class="t">GoodTrip門市</span></div>
-      <div class="slot" data-v="親友介紹"><span class="t">親友介紹</span></div>
-      <div class="slot" data-v="網路搜尋"><span class="t">網路搜尋</span></div>
+      <div class="slot" data-v="GoodTrip官網"><span class="t">GoodTrip官網 / Website</span></div>
+      <div class="slot" data-v="GoodTrip門市"><span class="t">GoodTrip門市 / Store</span></div>
+      <div class="slot" data-v="親友介紹"><span class="t">親友介紹 / Friends or family</span></div>
+      <div class="slot" data-v="網路搜尋"><span class="t">網路搜尋 / Online search</span></div>
     </div>
 
     <button class="go" id="go">送出預約</button>

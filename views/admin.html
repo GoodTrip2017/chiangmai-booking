@@ -73,7 +73,8 @@
     color: var(--text); background: var(--card2); border: 1px solid var(--line); border-radius: 8px;
   }
   .row2 { display: flex; gap: 10px; }
-  .row2 > div { flex: 1; min-width: 0; }
+  .row2 > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .row2 > div > input, .row2 > div > select { margin-top: auto; }
   .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; }
   .acts button { min-height: 40px; white-space: nowrap; }
   .mmsg { margin-top: 12px; padding: 10px; border-radius: 8px; font-size: 13px; display: none; white-space: pre-line; }
@@ -85,7 +86,7 @@
 </head>
 <body>
 <header>
-  <h1><img src="/logo.png" alt="">預約後台</h1>
+  <h1><img src="/logo.png" alt="">預約後台 / Booking admin</h1>
   <button id="prev" disabled>← 上一週</button>
   <button id="this" disabled>本週</button>
   <button id="next" disabled>下一週 →</button>
@@ -110,58 +111,58 @@
 
 <div class="mask" id="mask"></div>
 <div class="modal" id="modal">
-  <h2 id="mTitle">預約</h2>
+  <h2 id="mTitle">預約 / Booking</h2>
   <input type="hidden" id="fId">
-  <label>預約人（綽號或本名）</label>
+  <label for="fName">預約人 / Name（綽號或本名）</label>
   <input type="text" id="fName" maxlength="60">
   <div class="row2">
     <div>
-      <label>日期</label>
+      <label for="fDate">日期 / Date</label>
       <input type="date" id="fDate">
     </div>
     <div>
-      <label>人數（每個時段合計最多 12 人）</label>
+      <label for="fPax">人數 / Guests（每個時段合計最多 12 人）</label>
       <input type="number" id="fPax" min="1" max="12" step="1">
     </div>
   </div>
   <div class="row2">
     <div>
-      <label>時段</label>
+      <label for="fSlot">時段 / Time slot</label>
       <select id="fSlot"></select>
     </div>
     <div>
-      <label>第一次接觸</label>
-      <select id="fFirst"><option value="是">是</option><option value="否">否</option></select>
+      <label for="fFirst">第一次接觸 / First-time experience</label>
+      <select id="fFirst"><option value="是">是 / Yes</option><option value="否">否 / No</option></select>
     </div>
   </div>
   <div class="row2">
     <div>
-      <label>來源</label>
+      <label for="fSource">來源 / Source</label>
       <select id="fSource">
-        <option value="WALK_IN">現場上門</option>
+        <option value="WALK_IN">現場上門 / Walk-in</option>
         <option value="LINE">LINE</option>
-        <option value="PHONE">電話</option>
-        <option value="WEB">網路預約</option>
+        <option value="PHONE">電話 / Phone</option>
+        <option value="WEB">網路預約 / Website</option>
       </select>
     </div>
     <div>
-      <label>LINE</label>
+      <label for="fLine">LINE 聯絡方式 / LINE contact</label>
       <input type="text" id="fLine" maxlength="80">
     </div>
   </div>
-  <label for="fEmail">Email（必填）</label>
+  <label for="fEmail">電子郵件 / Email（必填 / Required）</label>
   <input type="email" id="fEmail" required maxlength="120" autocomplete="email">
-  <label>從哪邊知道我們的（選填）</label>
+  <label for="fReferral">從哪邊知道我們的 / How did you hear about us?（選填 / Optional）</label>
   <select id="fReferral">
-    <option value="">未填</option>
+    <option value="">未填 / Not provided</option>
     <option value="Instagram">Instagram</option>
     <option value="Threads">Threads</option>
-    <option value="GoodTrip官網">GoodTrip官網</option>
-    <option value="GoodTrip門市">GoodTrip門市</option>
-    <option value="親友介紹">親友介紹</option>
-    <option value="網路搜尋">網路搜尋</option>
+    <option value="GoodTrip官網">GoodTrip官網 / Website</option>
+    <option value="GoodTrip門市">GoodTrip門市 / Store</option>
+    <option value="親友介紹">親友介紹 / Friends or family</option>
+    <option value="網路搜尋">網路搜尋 / Online search</option>
   </select>
-  <label>備註</label>
+  <label for="fNote">備註 / Notes</label>
   <input type="text" id="fNote" maxlength="300">
   <div class="chk" id="mailChk"><input type="checkbox" id="fSendMail"><label for="fSendMail" style="margin:0">新增後寄出確認信</label></div>
   <div class="mmsg" id="mMsg"></div>

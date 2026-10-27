@@ -180,10 +180,10 @@
     var box = $('doneCard');
     box.replaceChildren();
     var heading = document.createElement('h2');
-    heading.textContent = '預約成功 🎉';
+    heading.textContent = '預約成功 / Booking confirmed 🎉';
     box.appendChild(heading);
     var list = document.createElement('dl');
-    [['預約人', s.name], ['日期', s.dateLabel], ['時段', s.slotLabel + '（GMT+7）'], ['人數', s.pax + ' 人']].forEach(function (entry) {
+    [['預約人 / Name', s.name], ['日期 / Date', s.dateLabel], ['時段 / Time slot', s.slotLabel + '（GMT+7）'], ['人數 / Guests', s.pax + ' 人']].forEach(function (entry) {
       var label = document.createElement('dt');
       var value = document.createElement('dd');
       label.textContent = entry[0];
