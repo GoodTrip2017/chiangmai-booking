@@ -211,3 +211,16 @@ test('LINE 群組訊息使用雙語純文字，重試沿用固定 retry key', as
     else process.env.LINE_CHANNEL_ACCESS_TOKEN = oldToken;
   }
 });
+test('確認信在設定 APP_ORIGIN 且預約有 token 時附自助取消連結，否則不附', () => {
+  const booking = { id: '11111111-1111-4111-8111-111111111111', name: 'A', pax: 2, date: '2099-01-01', slot: '14:00-15:30', email: 'a@example.invalid', cancel_token: 'ab'.repeat(16) };
+  const prior = process.env.APP_ORIGIN;
+  process.env.APP_ORIGIN = 'https://booking.example.invalid';
+  try {
+    const expected = 'https://booking.example.invalid/cancel.html?booking=11111111-1111-4111-8111-111111111111&token=' + 'ab'.repeat(16);
+    assert.ok(mailer.buildConfirmationText(booking).includes(expected));
+    assert.ok(mailer.buildConfirmationHtml(booking).includes('href="' + expected.replace(/&/g, '&amp;') + '"'));
+    assert.doesNotMatch(mailer.buildConfirmationText({ ...booking, cancel_token: null }), /cancel\.html/);
+    delete process.env.APP_ORIGIN;
+    assert.doesNotMatch(mailer.buildConfirmationText(booking), /cancel\.html/);
+  } finally { if (prior === undefined) delete process.env.APP_ORIGIN; else process.env.APP_ORIGIN = prior; }
+});

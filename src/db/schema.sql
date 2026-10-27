@@ -282,6 +282,10 @@ CREATE TABLE IF NOT EXISTS slot_overrides (
 );
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS capacity_at_booking INTEGER;
 
+-- 客人自助取消：每筆預約一組隨機 token，只出現在確認信的取消連結裡；比對使用常數時間。
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancel_token TEXT;
+UPDATE bookings SET cancel_token = md5(gen_random_uuid()::text || gen_random_uuid()::text) WHERE cancel_token IS NULL;
+
 -- Keep existing two-state rows intact; new lifecycle states are added without rewriting history.
 CREATE INDEX IF NOT EXISTS idx_bookings_capacity_active ON bookings (date, slot)
   WHERE status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'COMPLETED');
