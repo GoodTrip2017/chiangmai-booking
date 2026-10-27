@@ -33,7 +33,7 @@
   async function api(path, options) {
     var res = await fetch(path, options);
     var data = await res.json().catch(function () { return {}; });
-    if (!res.ok) throw new Error(data.error || '連線失敗，請稍後再試。');
+    if (!res.ok) throw new Error(data.error || '連線失敗，請稍後再試。 / Connection failed. Please try again.');
     return data;
   }
 
@@ -65,7 +65,7 @@
       : '線上預約每個時段最多接待 12 人。超過 12 人的團體，請透過 LINE 私訊，由店員確認接待方式與時段。 / Please contact us on LINE for groups above 12.';
     $('groupNotice').className = 'msg info' + (largeGroup ? ' show' : '');
     $('go').disabled = state.loading || largeGroup;
-    $('go').textContent = state.loading ? '送出中，請稍候…' : largeGroup ? '多人預約請先透過 LINE 聯絡' : '送出預約';
+    $('go').textContent = state.loading ? '送出中 / Sending…' : largeGroup ? '多人預約請先透過 LINE 聯絡 / Contact us on LINE' : '檢查預約資料 / Review booking';
     return largeGroup;
   }
   $('pax').addEventListener('input', updateGroupNotice);
@@ -107,12 +107,12 @@
     state.slot = '';
     state.slotMax = 0;
     updatePaxHint();
-    if (!date) { renderSlotHint('請先選擇日期，即可查看各時段空位。', 'info'); return; }
-    renderSlotHint('查詢空位中…', 'info');
+    if (!date) { renderSlotHint('請先選擇日期，即可查看各時段空位。 / Select a date to see available times.', 'info'); return; }
+    renderSlotHint('查詢空位中 / Checking availability…', 'info');
     api('/api/availability?date=' + encodeURIComponent(date)).then(function (data) {
       if (version === availabilityVersion) renderSlots(data);
     }).catch(function (err) {
-      if (version === availabilityVersion) renderSlotHint(err.message || '查詢失敗，請重新整理。', 'error');
+      if (version === availabilityVersion) renderSlotHint(err.message || '查詢失敗，請重新整理。 / Availability could not be loaded. Please refresh.', 'error');
     });
   });
 
@@ -127,7 +127,7 @@
     state.slot = '';
     state.slotMax = 0;
     updatePaxHint();
-    if (data.closed) { renderSlotHint(data.message, 'error'); return; }
+    if (data.closed) { renderSlotHint((data.message || '當日公休') + ' / Closed on this date.', 'error'); return; }
     var box = $('slots');
     box.innerHTML = '';
     data.slots.forEach(function (s) {
@@ -140,7 +140,12 @@
       var el = document.createElement('div');
       el.className = cls;
       var time = document.createElement('span'); time.className = 't'; time.textContent = s.slot;
-      var status = document.createElement('span'); status.className = 's'; status.textContent = s.statusText;
+      var status = document.createElement('span'); status.className = 's';
+      status.textContent = s.status === 'OPEN' ? '可預約 / Available'
+        : s.status === 'PARTIAL' ? '剩餘 ' + s.maxPax + ' 位 / ' + s.maxPax + ' places left'
+          : s.status === 'FULL' ? '已滿 / Full'
+            : s.status === 'PAST' ? '已過時間 / Past time'
+              : (s.statusText || '暫停預約') + ' / Unavailable';
       el.append(time, status);
       if (s.selectable) {
         el.addEventListener('click', function () { pickSlot(el, s); });
@@ -164,7 +169,7 @@
 
   function updatePaxHint() {
     if (!state.slot) { $('paxHint').textContent = ''; return; }
-    $('paxHint').textContent = '（此時段最多可再預約 ' + state.slotMax + ' 人；總上限 12 人）';
+    $('paxHint').textContent = '（此時段可再預約 ' + state.slotMax + ' 人；同時總上限 12 人 / ' + state.slotMax + ' places left, 12 guests total at a time）';
   }
 
   function showReview(form) {
@@ -225,12 +230,12 @@
       trackingCode: tracking.trackingCode
     };
 
-    if (!form.name) return showMsg('請填寫預約人（綽號或本名）。');
-    if (!form.date) return showMsg('請選擇預約日期。');
-    if (!form.slot) return showMsg('請選擇預約時段。');
-    if (!Number.isInteger(form.pax) || form.pax < 1 || form.pax > state.slotMax) return showMsg('人數請填 1 至 ' + state.slotMax + ' 的整數；每個時段合計最多 12 人。');
-    if (!form.firstTime) return showMsg('請選擇是否為第一次接觸。');
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return showMsg('請填寫正確的 Email。');
+    if (!form.name) return showMsg('請填寫預約人（綽號或本名）。 / Enter the booking contact name.');
+    if (!form.date) return showMsg('請選擇預約日期。 / Select a visit date.');
+    if (!form.slot) return showMsg('請選擇預約時段。 / Select a time slot.');
+    if (!Number.isInteger(form.pax) || form.pax < 1 || form.pax > state.slotMax) return showMsg('人數請填 1 至 ' + state.slotMax + ' 的整數；同時最多 12 人。 / Enter 1–' + state.slotMax + ' guests; shared capacity is 12.');
+    if (!form.firstTime) return showMsg('請選擇是否為第一次接觸。 / Select whether this is your first experience.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return showMsg('請填寫正確的 Email。 / Enter a valid email address.');
     if (!form.discoverySourceId) return showMsg('請選擇得知管道 / Please select how you heard about us.');
 
     state.reviewedForm = form;
@@ -281,7 +286,7 @@
     heading.textContent = '預約成功 / Booking confirmed';
     box.appendChild(heading);
     var list = document.createElement('dl');
-    [['預約編號 / Booking ID', s.bookingId], ['狀態 / Status', '已確認 / Confirmed'], ['預約人 / Name', s.name], ['日期 / Date', s.dateLabel], ['時段 / Time slot', s.slotLabel + '（GMT+7）'], ['人數 / Guests', s.pax + ' 人']].forEach(function (entry) {
+    [['預約編號 / Booking ID', s.bookingId], ['狀態 / Status', '已確認 / Confirmed'], ['預約人 / Name', s.name], ['日期 / Date', s.dateLabel], ['時段 / Time slot', s.slotLabel + '（GMT+7）'], ['人數 / Guests', s.pax + ' 人 / guests']].forEach(function (entry) {
       var label = document.createElement('dt');
       var value = document.createElement('dd');
       label.textContent = entry[0];
@@ -291,12 +296,12 @@
     box.appendChild(list);
     var mail = document.createElement('p');
     mail.textContent = res.mailStatus === 'ACCEPTED'
-      ? '確認信已交由寄信服務寄送至 ' + s.email + '，若未收到請檢查垃圾信件匣。'
-      : '您的預約已成立，但確認信尚未寄出。請保留此畫面；如需確認，請主動透過下方 LINE 聯絡店員。';
+      ? '確認信已交由寄信服務寄送至 ' + s.email + '，若未收到請檢查垃圾信件匣。 / The email service accepted the confirmation for ' + s.email + '; please check spam if it does not arrive.'
+      : '您的預約已成立，但確認信尚未寄出。請保留此畫面；如需確認，請主動透過下方 LINE 聯絡店員。 / Your booking is confirmed, but the email was not sent. Keep this page and contact us on LINE if needed.';
     box.appendChild(mail);
     var notice = document.createElement('p');
     notice.className = 'notice';
-    notice.textContent = '座位保留 ' + s.graceMinutes + ' 分鐘，請於 ' + s.deadline + ' 前抵達。若有延誤請主動透過 LINE 聯絡店員，逾時座位由店員依現場情況安排。';
+    notice.textContent = '座位保留 ' + s.graceMinutes + ' 分鐘，請於 ' + s.deadline + ' 前抵達。若有延誤請透過 LINE 聯絡店員，逾時座位由店員依現場情況安排。 / Please arrive by ' + s.deadline + ' (Chiang Mai time). Contact our staff on LINE if delayed; late arrivals are handled by staff based on availability.';
     box.appendChild(notice);
     box.style.display = 'block';
     $('reviewCard').hidden = true;

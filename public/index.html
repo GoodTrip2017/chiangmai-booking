@@ -38,6 +38,7 @@
   .service-list { list-style: none; padding: 0; margin: 0; }
   .service-list li { padding: 11px 0; border-bottom: 1px solid var(--line); font-size: 16px; font-weight: 400; }
   .service-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+  .service-list .en { color: var(--muted); font-size: 14px; }
   .details { margin: 0; }
   .info-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 18px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 16px; }
   .info-row dt { color: var(--muted); }
@@ -120,23 +121,23 @@
 <div class="wrap">
   <header class="hero">
     <p class="brand">HERB UNCLE × GOODTRIP</p>
-    <h1>預約到店</h1>
-    <p class="lede">歡迎預約服務時段。到店前，請先查看以下服務內容與預約資訊。</p>
+    <h1>預約到店 / Book a Visit</h1>
+    <p class="lede">歡迎預約服務時段。到店前，請先查看以下服務內容與預約資訊。<br>Choose a visit time after reviewing the services and booking information below.</p>
   </header>
 
   <div class="intro">
     <section class="intro-section" aria-labelledby="services-title">
-      <h2 id="services-title">服務內容</h2>
+      <h2 id="services-title">服務內容 / Services</h2>
       <ul class="service-list">
-        <li>店內草本介紹</li>
-        <li>飛行基本知識</li>
-        <li>精緻飛行體驗</li>
-        <li>隨行器具租借</li>
+        <li>店內草本介紹 <span class="en">/ In-store herbal introduction</span></li>
+        <li>飛行基本知識 <span class="en">/ Flight basics</span></li>
+        <li>精緻飛行體驗 <span class="en">/ Curated flight experience</span></li>
+        <li>隨行器具租借 <span class="en">/ Equipment rental</span></li>
       </ul>
     </section>
 
     <section class="intro-section" aria-labelledby="visit-title">
-      <h2 id="visit-title">到店與預約資訊</h2>
+      <h2 id="visit-title">到店與預約資訊 / Visit & Booking</h2>
       <dl class="details">
         <div class="info-row"><dt>營業時間 / Hours</dt><dd id="publicHours">14:00–23:00</dd></div>
         <div class="info-row"><dt>固定公休 / Closed weekly</dt><dd id="publicClosedDays">每週二 / Tuesdays</dd></div>
@@ -144,8 +145,8 @@
         <div class="info-row"><dt>預約起始時間 / First start</dt><dd id="publicStartTime">14:00</dd></div>
         <div class="info-row"><dt>每時段接待上限 / Shared capacity</dt><dd id="publicCapacity">同一時段合計最多 12 人 / 12 guests total at a time</dd></div>
       </dl>
-      <p class="local-time">所有預約時段均以清邁當地時間為準（GMT+7）。</p>
-      <p class="change-note">其他公休及臨時異動，請見 <a href="https://www.google.com/maps/search/?api=1&amp;query=GoodTrip+x+Herb+Uncle+Cannabis+CNX+Chiang+Mai" target="_blank" rel="noopener noreferrer">Google Maps</a> 或 Instagram 公告。</p>
+      <p class="local-time">所有預約時段均以清邁當地時間為準（GMT+7）。<br>All booking times follow Chiang Mai local time (GMT+7).</p>
+      <p class="change-note">其他公休及臨時異動，請見 <a href="https://www.google.com/maps/search/?api=1&amp;query=GoodTrip+x+Herb+Uncle+Cannabis+CNX+Chiang+Mai" target="_blank" rel="noopener noreferrer">Google Maps</a> 或 Instagram 公告。<br>For additional closures or temporary changes, check Google Maps or Instagram announcements.</p>
     </section>
   </div>
 
@@ -158,15 +159,15 @@
 
     <label>時段 / Time slot<span class="req">*</span></label>
     <div class="slots" id="slots">
-      <div class="msg info show" id="slotHint">請先選擇日期，即可查看各時段空位。</div>
+      <div class="msg info show" id="slotHint">請先選擇日期，即可查看各時段空位。 / Select a date to see available times.</div>
     </div>
 
     <label for="pax">人數 / Guests<span class="req">*</span> <span class="hint" id="paxHint"></span></label>
     <input type="number" id="pax" min="1" step="1" value="1" aria-describedby="paxHint groupNotice">
     <div id="groupNotice" class="msg info" role="status" aria-live="polite">
-      <strong>多人同行，歡迎先和我們聊聊！</strong>
-      <p id="groupPolicyText" style="margin:6px 0 10px">線上預約每個時段最多接待 12 人。超過 12 人的團體，歡迎先透過 LINE 私訊，由店員確認接待方式與可預約時段；聯絡後仍需等候店員確認安排。</p>
-      <a href="https://lin.ee/DcpM9f7" target="_blank" rel="noopener noreferrer">透過 LINE 洽詢多人預約 ↗</a>
+      <strong>多人同行，歡迎先和我們聊聊！ / Planning a larger group?</strong>
+      <p id="groupPolicyText" style="margin:6px 0 10px">線上預約每個時段最多接待 12 人。超過 12 人的團體，請透過 LINE 聯絡店員確認安排。 / Online bookings allow up to 12 guests at one time. Please contact our staff on LINE for larger groups.</p>
+      <a href="https://lin.ee/DcpM9f7" target="_blank" rel="noopener noreferrer">透過 LINE 洽詢多人預約 / Ask about group visits</a>
     </div>
 
     <label>是否為第一次接觸 / First-time experience<span class="req">*</span></label>
@@ -176,7 +177,7 @@
     </div>
 
     <label for="line">LINE 聯絡方式 / LINE contact <span class="hint">（選填 / Optional）</span></label>
-    <input type="text" id="line" maxlength="80" placeholder="LINE ID 或顯示名稱">
+    <input type="text" id="line" maxlength="80" placeholder="LINE ID 或顯示名稱 / ID or display name">
 
     <label for="email">電子郵件 / Email<span class="req">*</span></label>
     <input type="email" id="email" placeholder="you@example.com" required maxlength="120" autocomplete="email">
@@ -203,7 +204,7 @@
 
   <div id="doneCard" class="card done" style="display:none"></div>
 
-  <p class="foot">有任何問題歡迎透過 <a href="https://lin.ee/DcpM9f7" target="_blank">LINE</a> 與我們聯絡</p>
+  <p class="foot">有任何問題歡迎透過 <a href="https://lin.ee/DcpM9f7" target="_blank" rel="noopener noreferrer">LINE</a> 與我們聯絡<br>Questions? Contact us on LINE.</p>
 </div>
 
 <script src="/assets/booking.js" defer></script>
