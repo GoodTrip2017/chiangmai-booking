@@ -87,6 +87,8 @@
   .report-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 20px; }
   .report-filters label { color: var(--muted); font-size: 12px; display: grid; gap: 5px; }
   .report-filters input, .report-filters select { color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 7px; padding: 8px; font: inherit; }
+  .report-filters label { min-width: 0; }
+  .report-filters input, .report-filters select { max-width: 100%; }
   .metrics { display: grid; grid-template-columns: repeat(auto-fit,minmax(155px,1fr)); gap: 12px; }
   .metric { background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 16px; }
   .metric strong { display: block; font-size: 27px; margin-top: 7px; }
@@ -111,6 +113,15 @@
   .trend-bar { background: var(--accent); min-width: 2px; height: 12px; border-radius: 3px; }
   .trend-track { background: var(--card2); border-radius: 3px; overflow: hidden; }
   @media (max-width: 560px) { .trend-row { grid-template-columns: 85px minmax(45px,1fr) 60px; font-size: 12px; } }
+  @media (max-width: 620px) {
+    .report { padding: 20px 16px; }
+    .report-filters { gap: 10px; }
+    .report-filters label:not(.chk) { flex: 1 1 100%; }
+    .report-filters input, .report-filters select { width: 100%; min-height: 42px; font-size: 15px; }
+    .report-filters button { min-height: 42px; white-space: normal; }
+    .modal { width: calc(100vw - 24px); padding: 16px; }
+    .acts button { white-space: normal; }
+  }
 </style>
 </head>
 <body>
