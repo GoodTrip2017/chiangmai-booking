@@ -90,6 +90,7 @@
   .report h2 { font-size: 20px; margin: 0 0 18px; }
   .report-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 20px; }
   .report-filters label { color: var(--muted); font-size: 12px; display: grid; gap: 5px; }
+  .report-filters label[hidden] { display: none; }
   .report-filters input, .report-filters select { color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 7px; padding: 8px; font: inherit; }
   .report-filters label { min-width: 0; }
   .report-filters input, .report-filters select { max-width: 100%; }
@@ -118,6 +119,9 @@
   .trend-track { background: var(--card2); border-radius: 3px; overflow: hidden; }
   @media (max-width: 560px) { .trend-row { grid-template-columns: 85px minmax(45px,1fr) 60px; font-size: 12px; } }
   @media (max-width: 620px) {
+    header { position: static; padding: 10px 12px; gap: 6px; }
+    header h1 { flex-basis: 100%; }
+    header button { padding: 6px 9px; font-size: 12.5px; }
     .report { padding: 20px 16px; }
     .report-filters { gap: 10px; }
     .report-filters label:not(.chk) { flex: 1 1 100%; }
@@ -131,10 +135,10 @@
 <body>
 <header>
   <h1><img src="/logo.png" alt="">預約後台 / Booking admin</h1>
-  <button id="prev" disabled>← 上一週</button>
-  <button id="this" disabled>本週</button>
-  <button id="next" disabled>下一週 →</button>
-  <button id="reload">重新整理</button>
+  <button id="prev" disabled>← 上一週 / Prev</button>
+  <button id="this" disabled>本週 / This week</button>
+  <button id="next" disabled>下一週 / Next →</button>
+  <button id="reload">重新整理 / Refresh</button>
   <button id="overviewTab" type="button">營運總覽 / Overview</button>
   <button id="calendarTab" type="button">預約日曆 / Calendar</button>
   <button id="analyticsTab" type="button">數據分析 / Analytics</button>
@@ -143,9 +147,9 @@
   <button id="sourcesTab" type="button" hidden>來源與合作 / Sources</button>
   <button id="customersTab" type="button">顧客紀錄 / Customers</button>
   <button id="notificationsTab" type="button" hidden>LINE 通知 / LINE Notifications</button>
-  <button id="lineGroups" type="button">LINE 群組設定</button>
-  <button class="primary" id="addNew" disabled>＋ 手動新增</button>
-  <button id="logout">登出</button>
+  <button id="lineGroups" type="button">LINE 群組設定 / LINE group</button>
+  <button class="primary" id="addNew" disabled>＋ 手動新增 / New booking</button>
+  <button id="logout" disabled>登出 / Sign out</button>
   <div class="range" id="range"></div>
 </header>
 
@@ -323,7 +327,7 @@
   <div class="report-filters"><button id="bookingPrevious" type="button">上一頁 / Previous</button><button id="bookingNext" type="button">下一頁 / Next</button></div>
 </section>
 
-<div id="loading">載入中…</div>
+<div id="loading">載入中 / Loading…</div>
 <div id="calendarControls" class="calendar-controls">
   <button id="calendarDayView" type="button">日 / Day</button><button id="calendarWeekView" type="button">週 / Week</button><button id="calendarMonthView" type="button">月 / Month</button>
   <label>選擇日期 / Date <input id="calendarDate" type="date"></label>
@@ -428,18 +432,18 @@
       <pre id="manualNotificationText" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
       <button id="sendManualNotification" type="button" disabled>送至工作群組 / Send to staff group</button>
     </div>
-    <h3>LINE 通知紀錄 / LINE notification history</h3>
+    <h3>通知紀錄（LINE 群組與客人 Email） / Notification history</h3>
     <div id="bookingNotifications" class="report-note"></div>
     <h3>異動歷程 / Change history</h3>
     <div id="bookingHistory" class="report-note"></div>
   </section>
-  <div class="chk" id="mailChk"><input type="checkbox" id="fSendMail"><label for="fSendMail" style="margin:0">新增後寄出確認信</label></div>
+  <div class="chk" id="mailChk"><input type="checkbox" id="fSendMail"><label for="fSendMail" style="margin:0">新增後寄出確認信 / Send confirmation after saving</label></div>
   <div class="mmsg" id="mMsg"></div>
   <div class="acts">
-    <button id="mCancelBooking" class="danger" style="display:none">取消此預約</button>
-    <button id="mResend" style="display:none">重寄確認信</button>
-    <button id="mClose">關閉</button>
-    <button id="mSave" class="primary">儲存</button>
+    <button id="mCancelBooking" class="danger" style="display:none">取消此預約 / Cancel booking</button>
+    <button id="mResend" style="display:none">重寄確認信 / Resend confirmation</button>
+    <button id="mClose">關閉 / Close</button>
+    <button id="mSave" class="primary">儲存 / Save</button>
   </div>
 </div>
 

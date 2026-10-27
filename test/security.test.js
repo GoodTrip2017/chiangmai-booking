@@ -163,7 +163,7 @@ test('SEC-08: reusing a public request key after staff edits/cancels reveals no 
   const b=(await pool.query('SELECT * FROM bookings')).rows[0];
   await booking.updateBooking({...form,id:b.id,name:'Private staff correction',email:'private@example.invalid'});
   await assert.rejects(booking.submitBooking(input),err=>err.status===409 && !err.message.includes('private@example.invalid'));
-  await booking.cancelBooking(b.id); await assert.rejects(booking.submitBooking(input),{status:409});
+  await booking.cancelBooking(b.id, { reason: 'test cleanup' }); await assert.rejects(booking.submitBooking(input),{status:409});
   assert.equal((await pool.query('SELECT count(*)::int AS n FROM bookings')).rows[0].n,1);
 });
 test('SEC-09: all stored customer fields including legacy source render as escaped text', () => {
@@ -289,7 +289,7 @@ test('SEC-19: admin edit/cancel/resend rejects invalid or nonexistent IDs and ca
   for(const id of ['not-a-uuid',"x%27%3BOR%201%3D1--",crypto.randomUUID()]) for(const [method,suffix] of [['PUT',''],['POST','/cancel'],['POST','/resend-mail']]) {
     const r=await request('/api/admin/bookings/'+id+suffix,{...session,method,body:{...form,revision:1,reason:'test'}}); assert.ok([400,404].includes(r.status));
   }
-  await booking.cancelBooking(b.id);await assert.rejects(booking.updateBooking({...form,id:b.id}),{status:409});await assert.rejects(booking.resendConfirmation(b.id),{status:409});
+  await booking.cancelBooking(b.id, { reason: 'test cleanup' });await assert.rejects(booking.updateBooking({...form,id:b.id}),{status:409});await assert.rejects(booking.resendConfirmation(b.id),{status:409});
   assert.equal((await pool.query('SELECT status FROM bookings WHERE id=$1',[b.id])).rows[0].status,'CANCELLED');
 });
 test('SEC-20: URL flags and ambient PGSSLMODE cannot disable TLS verification or discard the configured CA', () => {

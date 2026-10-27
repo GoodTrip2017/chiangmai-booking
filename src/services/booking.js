@@ -16,6 +16,7 @@ const { resolveSource } = require('./discovery');
 const { recordEvent } = require('./lifecycle');
 const { resolveTracking } = require('./tracking');
 const { ensureCustomer } = require('./customers');
+const { notifyCancellation } = require('./customerMail');
 
 /** 表單欄位驗證，回傳整理過的資料或丟出錯誤 */
 function validateForm(form, opts = {}) {
@@ -46,7 +47,8 @@ function validateForm(form, opts = {}) {
   if (!name) throw userError('請填寫預約人（綽號或本名） / Enter the booking contact name.');
   if (name.length > 60) throw userError('預約人名稱過長 / Booking contact name is too long.');
   if (!Number.isSafeInteger(pax) || pax < 1) throw userError('人數請填 1 以上的整數 / Guests must be a positive whole number.');
-  if (pax > CONFIG.MAX_PAX) {
+  // 舊的 13 人以上預約修改其他欄位時，人數維持原值即可通過；新預約與調高人數仍限 12 人。
+  if (pax > CONFIG.MAX_PAX && pax !== opts.legacyPax) {
     throw Object.assign(userError(`線上預約每個時段最多接待 ${CONFIG.MAX_PAX} 人。多人團體請先透過 LINE 聯繫店員確認。 / Online capacity is ${CONFIG.MAX_PAX} guests per time slot. Larger groups may contact staff on LINE.`), {
       code: 'GROUP_CONTACT_REQUIRED', contactUrl: CONFIG.LINE_URL,
     });
@@ -132,7 +134,8 @@ async function insertBooking(data, source, requestId, actor) {
        STATUS.CONFIRMED, data.note, key, hash, check.state.maxPax, customerId]
     );
     await recordEvent(client, rows[0].id, 'CREATED', null, rows[0], '', actor || (source === 'WEB' ? 'CUSTOMER' : 'ADMIN'));
-    await enqueueGroup(client, rows[0], 'BOOKING_CONFIRMED');
+    // 補登已開始或已過的時段（店員事後記錄）不推播「新預約已確認」。
+    if (!dt.isSlotPast(data.date, data.slot)) await enqueueGroup(client, rows[0], 'BOOKING_CONFIRMED');
     await scheduleReminder(client, rows[0]);
     await client.query('COMMIT');
     return { booking: rows[0], replayed: false };
@@ -205,7 +208,7 @@ async function updateBooking(payload, actor = 'ADMIN') {
     // 只有人數增加才重新檢查容量。
     const sameTime = p.date === booking.date && p.slot === booking.slot;
     const allowedLegacySlot = sameTime ? booking.slot : undefined;
-    const data = validateForm(p, { allowPast: true, referralOptional: true, allowedLegacySlot });
+    const data = validateForm(p, { allowPast: true, referralOptional: true, allowedLegacySlot, legacyPax: booking.legacy_pax || undefined });
     const discovery = data.discoverySourceId || data.referral
       ? await resolveSource(client, data, { optional: true, currentId: booking.discovery_source_id })
       : { id: booking.discovery_source_id, label: booking.referral };
@@ -249,10 +252,10 @@ async function updateBooking(payload, actor = 'ADMIN') {
 }
 async function cancelBooking(id, payload = {}, actor = 'ADMIN') {
   validId(id);
-  const reason = typeof payload.reason === 'string' ? payload.reason.trim() : 'Legacy administrative cancellation';
+  const reason = typeof payload.reason === 'string' ? payload.reason.trim() : '';
   if (!reason || reason.length > 300 || /[\u0000-\u001f\u007f]/.test(reason)) throw userError('請填寫取消原因 / A cancellation reason is required.');
   const client = await pool.connect();
-  let booking;
+  let booking, cancelled;
   try {
     await client.query('BEGIN');
     const { rows } = await client.query('SELECT * FROM bookings WHERE id=$1 FOR UPDATE', [id]);
@@ -263,16 +266,19 @@ async function cancelBooking(id, payload = {}, actor = 'ADMIN') {
     if (payload.revision !== undefined && payload.revision !== booking.revision) throw userError('預約已由其他人修改，請重新整理 / Booking changed; refresh and try again.', 409);
     await lockSlots(client, [[booking.date, booking.slot]]);
     const { rows: updated } = await client.query('UPDATE bookings SET status=$1, cancel_reason=$3, cancelled_at=now(), updated_at=now(), revision=revision+1 WHERE id=$2 RETURNING *', [STATUS.CANCELLED, id, reason]);
-    await recordEvent(client, id, 'STATUS_CHANGED', booking, updated[0], reason, actor);
+    cancelled = updated[0];
+    await recordEvent(client, id, 'STATUS_CHANGED', booking, cancelled, reason, actor);
     await cancelReminder(client, id);
-    await enqueueGroup(client, updated[0], 'BOOKING_CANCELLED');
+    await enqueueGroup(client, cancelled, 'BOOKING_CANCELLED');
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
   } finally { client.release(); }
   void processPending().catch(err => console.error('處理 LINE 通知失敗：', err.code || err.name));
-  return { ok: true };
+  // 取消後寄客人取消通知；寄信結果不影響已完成的取消。
+  const mailStatus = await notifyCancellation(cancelled);
+  return { ok: true, mailStatus };
 }
 async function resendConfirmation(id) {
   validId(id);

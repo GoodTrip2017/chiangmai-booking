@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-Hant" data-lang="zh">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -26,7 +26,15 @@
     line-height: 1.7;
     -webkit-text-size-adjust: 100%;
   }
-  .wrap { max-width: 668px; margin: 0 auto; padding: 36px 24px 64px; }
+  /* 語言切換：只顯示目前語言的文字；送出的資料與後台紀錄不受影響。 */
+  [data-lang="zh"] .en-only, [data-lang="en"] .zh-only { display: none !important; }
+  .lang-switch { display: flex; gap: 6px; justify-content: flex-end; margin: 0 0 18px; }
+  .lang-btn {
+    padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; border-radius: 999px;
+    color: var(--muted); background: transparent; border: 1px solid var(--line);
+  }
+  .lang-btn.on { color: #10240a; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+  .wrap { max-width: 668px; margin: 0 auto; padding: 28px 24px 64px; }
   .hero { padding: 0 0 36px; }
   .hero .brand { margin: 0 0 16px; color: #c6aa78; font-size: 12px; font-weight: 600; letter-spacing: .14em; line-height: 1.4; }
   .hero h1 { margin: 0 0 16px; font-size: clamp(28px, 7vw, 32px); font-weight: 600; letter-spacing: .02em; line-height: 1.3; }
@@ -38,7 +46,6 @@
   .service-list { list-style: none; padding: 0; margin: 0; }
   .service-list li { padding: 11px 0; border-bottom: 1px solid var(--line); font-size: 16px; font-weight: 400; }
   .service-list li:last-child { border-bottom: 0; padding-bottom: 0; }
-  .service-list .en { color: var(--muted); font-size: 14px; }
   .details { margin: 0; }
   .info-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 18px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 16px; }
   .info-row dt { color: var(--muted); }
@@ -106,7 +113,7 @@
   .done h2 { color: var(--accent); font-size: 20px; margin-top: 0; }
   .done dl { display: grid; grid-template-columns: 92px 1fr; gap: 6px 12px; font-size: 14.5px; margin: 16px 0; }
   .done dt { color: var(--muted); }
-  .done dd { margin: 0; }
+  .done dd { margin: 0; overflow-wrap: anywhere; }
   .review-details { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 12px; margin: 20px 0; font-size: 15px; }
   .review-details dt { color: var(--muted); }
   .review-details dd { margin: 0; overflow-wrap: anywhere; text-align: right; }
@@ -119,73 +126,77 @@
 </head>
 <body>
 <div class="wrap">
+  <div class="lang-switch" role="group" aria-label="Language / 語言">
+    <button type="button" class="lang-btn on" id="langZh" aria-pressed="true">中文</button>
+    <button type="button" class="lang-btn" id="langEn" aria-pressed="false">English</button>
+  </div>
   <header class="hero">
     <p class="brand">HERB UNCLE × GOODTRIP</p>
-    <h1>預約到店 / Book a Visit</h1>
-    <p class="lede">歡迎預約服務時段。到店前，請先查看以下服務內容與預約資訊。<br>Choose a visit time after reviewing the services and booking information below.</p>
+    <h1><span class="zh-only">預約到店</span><span class="en-only">Book a Visit</span></h1>
+    <p class="lede"><span class="zh-only">歡迎預約服務時段。到店前，請先查看以下服務內容與預約資訊。</span><span class="en-only">Choose a visit time after reviewing the services and booking information below.</span></p>
   </header>
 
   <div class="intro">
     <section class="intro-section" aria-labelledby="services-title">
-      <h2 id="services-title">服務內容 / Services</h2>
+      <h2 id="services-title"><span class="zh-only">服務內容</span><span class="en-only">Services</span></h2>
       <ul class="service-list">
-        <li>店內草本介紹 <span class="en">/ In-store herbal introduction</span></li>
-        <li>飛行基本知識 <span class="en">/ Flight basics</span></li>
-        <li>精緻飛行體驗 <span class="en">/ Curated flight experience</span></li>
-        <li>隨行器具租借 <span class="en">/ Equipment rental</span></li>
+        <li><span class="zh-only">店內草本介紹</span><span class="en-only">In-store herbal introduction</span></li>
+        <li><span class="zh-only">飛行基本知識</span><span class="en-only">Flight basics</span></li>
+        <li><span class="zh-only">精緻飛行體驗</span><span class="en-only">Curated flight experience</span></li>
+        <li><span class="zh-only">隨行器具租借</span><span class="en-only">Equipment rental</span></li>
       </ul>
     </section>
 
     <section class="intro-section" aria-labelledby="visit-title">
-      <h2 id="visit-title">到店與預約資訊 / Visit & Booking</h2>
+      <h2 id="visit-title"><span class="zh-only">到店與預約資訊</span><span class="en-only">Visit &amp; Booking</span></h2>
       <dl class="details">
-        <div class="info-row"><dt>營業時間 / Hours</dt><dd id="publicHours">14:00–23:00</dd></div>
-        <div class="info-row"><dt>固定公休 / Closed weekly</dt><dd id="publicClosedDays">每週二 / Tuesdays</dd></div>
-        <div class="info-row"><dt>每段預約 / Service length</dt><dd id="publicServiceMinutes">90 分鐘 / minutes</dd></div>
-        <div class="info-row"><dt>預約起始時間 / First start</dt><dd id="publicStartTime">14:00</dd></div>
-        <div class="info-row"><dt>每時段接待上限 / Shared capacity</dt><dd id="publicCapacity">同一時段合計最多 12 人 / 12 guests total at a time</dd></div>
+        <div class="info-row"><dt><span class="zh-only">營業時間</span><span class="en-only">Hours</span></dt><dd id="publicHours">14:00–23:00</dd></div>
+        <div class="info-row"><dt><span class="zh-only">固定公休</span><span class="en-only">Closed weekly</span></dt><dd id="publicClosedDays"><span class="zh-only">每週二</span><span class="en-only">Tuesdays</span></dd></div>
+        <div class="info-row"><dt><span class="zh-only">每段預約</span><span class="en-only">Service length</span></dt><dd id="publicServiceMinutes"><span class="zh-only">90 分鐘</span><span class="en-only">90 minutes</span></dd></div>
+        <div class="info-row"><dt><span class="zh-only">預約起始時間</span><span class="en-only">First start</span></dt><dd id="publicStartTime">14:00</dd></div>
+        <div class="info-row"><dt><span class="zh-only">每時段接待上限</span><span class="en-only">Shared capacity</span></dt><dd id="publicCapacity"><span class="zh-only">同一時段合計最多 12 人</span><span class="en-only">12 guests total at a time</span></dd></div>
       </dl>
-      <p class="local-time">所有預約時段均以清邁當地時間為準（GMT+7）。<br>All booking times follow Chiang Mai local time (GMT+7).</p>
-      <p class="change-note">其他公休及臨時異動，請見 <a href="https://www.google.com/maps/search/?api=1&amp;query=GoodTrip+x+Herb+Uncle+Cannabis+CNX+Chiang+Mai" target="_blank" rel="noopener noreferrer">Google Maps</a> 或 Instagram 公告。<br>For additional closures or temporary changes, check Google Maps or Instagram announcements.</p>
+      <p class="local-time"><span class="zh-only">所有預約時段均以清邁當地時間為準（GMT+7）。</span><span class="en-only">All booking times follow Chiang Mai local time (GMT+7).</span></p>
+      <p class="change-note"><span class="zh-only">其他公休及臨時異動，請見 <a href="https://www.google.com/maps/search/?api=1&amp;query=GoodTrip+x+Herb+Uncle+Cannabis+CNX+Chiang+Mai" target="_blank" rel="noopener noreferrer">Google Maps</a> 或 Instagram 公告。</span><span class="en-only">For additional closures or temporary changes, check <a href="https://www.google.com/maps/search/?api=1&amp;query=GoodTrip+x+Herb+Uncle+Cannabis+CNX+Chiang+Mai" target="_blank" rel="noopener noreferrer">Google Maps</a> or Instagram announcements.</span></p>
     </section>
   </div>
 
   <div id="formCard" class="card">
-    <label for="name">預約人 / Name（綽號或本名）<span class="req">*</span></label>
-    <input type="text" id="name" maxlength="60" placeholder="例如：Ken">
+    <label for="name"><span class="zh-only">預約人（綽號或本名）</span><span class="en-only">Name (nickname or full name)</span><span class="req">*</span></label>
+    <input type="text" id="name" maxlength="60" placeholder="Ken">
 
-    <label for="date">日期 / Date<span class="req">*</span> <span class="hint" id="dateClosedHint">（週二公休 / Closed Tuesdays）</span></label>
+    <label for="date"><span class="zh-only">日期</span><span class="en-only">Date</span><span class="req">*</span> <span class="hint" id="dateClosedHint"></span></label>
     <input type="date" id="date">
 
-    <label>時段 / Time slot<span class="req">*</span></label>
+    <label><span class="zh-only">時段</span><span class="en-only">Time slot</span><span class="req">*</span></label>
     <div class="slots" id="slots">
-      <div class="msg info show" id="slotHint">請先選擇日期，即可查看各時段空位。 / Select a date to see available times.</div>
+      <div class="msg info show" id="slotHint"><span class="zh-only">請先選擇日期，即可查看各時段空位。</span><span class="en-only">Select a date to see available times.</span></div>
     </div>
 
-    <label for="pax">人數 / Guests<span class="req">*</span> <span class="hint" id="paxHint"></span></label>
+    <label for="pax"><span class="zh-only">人數</span><span class="en-only">Guests</span><span class="req">*</span> <span class="hint" id="paxHint"></span></label>
     <input type="number" id="pax" min="1" step="1" value="1" aria-describedby="paxHint groupNotice">
     <div id="groupNotice" class="msg info" role="status" aria-live="polite">
-      <strong>多人同行，歡迎先和我們聊聊！ / Planning a larger group?</strong>
-      <p id="groupPolicyText" style="margin:6px 0 10px">線上預約每個時段最多接待 12 人。超過 12 人的團體，請透過 LINE 聯絡店員確認安排。 / Online bookings allow up to 12 guests at one time. Please contact our staff on LINE for larger groups.</p>
-      <a href="https://lin.ee/DcpM9f7" target="_blank" rel="noopener noreferrer">透過 LINE 洽詢多人預約 / Ask about group visits</a>
+      <strong><span class="zh-only">多人同行，歡迎先和我們聊聊！</span><span class="en-only">Planning a larger group?</span></strong>
+      <p id="groupPolicyText" style="margin:6px 0 10px"></p>
+      <a href="https://lin.ee/DcpM9f7" target="_blank" rel="noopener noreferrer"><span class="zh-only">透過 LINE 洽詢多人預約</span><span class="en-only">Ask about group visits on LINE</span></a>
     </div>
 
-    <label>是否為第一次接觸 / First-time experience<span class="req">*</span></label>
+    <label><span class="zh-only">是否為第一次接觸</span><span class="en-only">First-time experience</span><span class="req">*</span></label>
     <div class="radios" id="firstTime">
-      <div class="slot" data-v="是"><span class="t">是 / Yes</span></div>
-      <div class="slot" data-v="否"><span class="t">否 / No</span></div>
+      <div class="slot" data-v="是"><span class="t"><span class="zh-only">是</span><span class="en-only">Yes</span></span></div>
+      <div class="slot" data-v="否"><span class="t"><span class="zh-only">否</span><span class="en-only">No</span></span></div>
     </div>
 
-    <label for="line">LINE 聯絡方式 / LINE ID <span class="hint">（選填 / Optional）</span></label>
+    <label for="line"><span class="zh-only">LINE 聯絡方式</span><span class="en-only">LINE ID</span> <span class="hint"><span class="zh-only">（選填）</span><span class="en-only">(optional)</span></span></label>
     <input type="text" id="line" maxlength="80" placeholder="LINE ID">
 
-    <label for="email">電子郵件 / Email<span class="req">*</span></label>
+    <label for="email"><span class="zh-only">電子郵件</span><span class="en-only">Email</span><span class="req">*</span></label>
     <input type="email" id="email" placeholder="you@example.com" required maxlength="120" autocomplete="email">
 
-    <label for="discoverySource">您從哪裡得知我們？ / How did you hear about us?<span class="req">*</span></label>
+    <label for="discoverySource"><span class="zh-only">您從哪裡得知我們？</span><span class="en-only">How did you hear about us?</span><span class="req">*</span></label>
     <select id="discoverySource" required><option value="">請選擇 / Please select</option></select>
     <div id="discoveryDetailWrap" hidden>
-      <label for="discoveryDetail" id="discoveryDetailLabel">補充說明 / Details <span class="hint">（選填 / Optional）</span></label>
+      <label for="discoveryDetail"><span id="discoveryDetailLabel">補充說明</span> <span class="hint"><span class="zh-only">（選填）</span><span class="en-only">(optional)</span></span></label>
       <input type="text" id="discoveryDetail" maxlength="120">
     </div>
 
@@ -194,17 +205,17 @@
   </div>
 
   <section id="reviewCard" class="card" hidden aria-labelledby="reviewTitle">
-    <h2 id="reviewTitle">確認預約資料 / Review booking</h2>
+    <h2 id="reviewTitle"><span class="zh-only">確認預約資料</span><span class="en-only">Review booking</span></h2>
     <dl id="reviewDetails" class="review-details"></dl>
-    <p class="hint">所有時間均以清邁當地時間為準（GMT+7）。<br>All times are in Chiang Mai local time (GMT+7).</p>
-    <button type="button" id="reviewEdit">返回修改 / Edit details</button>
+    <p class="hint"><span class="zh-only">所有時間均以清邁當地時間為準（GMT+7）。</span><span class="en-only">All times are in Chiang Mai local time (GMT+7).</span></p>
+    <button type="button" id="reviewEdit"><span class="zh-only">返回修改</span><span class="en-only">Edit details</span></button>
     <button type="button" class="go" id="reviewSubmit">確認送出 / Confirm booking</button>
     <div class="msg" id="reviewMsg" role="alert"></div>
   </section>
 
   <div id="doneCard" class="card done" style="display:none"></div>
 
-  <p class="foot">有任何問題歡迎透過 <a href="https://lin.ee/DcpM9f7" target="_blank" rel="noopener noreferrer">LINE</a> 與我們聯絡<br>Questions? Contact us on LINE.</p>
+  <p class="foot"><span class="zh-only">有任何問題歡迎透過 <a href="https://lin.ee/DcpM9f7" target="_blank" rel="noopener noreferrer">LINE</a> 與我們聯絡</span><span class="en-only">Questions? Contact us on <a href="https://lin.ee/DcpM9f7" target="_blank" rel="noopener noreferrer">LINE</a>.</span></p>
 </div>
 
 <script src="/assets/booking.js" defer></script>

@@ -48,7 +48,7 @@ before(async () => {
   assert.equal((await pool.query("SELECT count(*)::int AS n FROM availability_rule_events WHERE rule_type='INITIAL_BASELINE'")).rows[0].n, 1);
   const legacy = (await pool.query("SELECT id, pax FROM bookings WHERE name='legacy'")).rows[0];
   assert.equal(legacy.pax, 20);
-  await booking.cancelBooking(legacy.id);
+  await booking.cancelBooking(legacy.id, { reason: 'test cleanup' });
   assert.equal((await pool.query('SELECT status, pax FROM bookings WHERE id=$1', [legacy.id])).rows[0].status, 'CANCELLED');
   process.env.ADMIN_PASSWORD_HASH = await auth.hashPassword(password);
   server = createApp().listen(0, '127.0.0.1');
@@ -311,8 +311,8 @@ test('修改跨時段釋出容量；取消保留資料並釋出座位', async ()
   const b = await booking.createManualBooking({ ...form, pax: 12 });
   await booking.updateBooking({ ...form, id: b.id, slot: '15:30-17:00', pax: 12 });
   await booking.createManualBooking({ ...form, pax: 12 });
-  await booking.cancelBooking(b.id);
-  await booking.cancelBooking(b.id);
+  await booking.cancelBooking(b.id, { reason: 'test cleanup' });
+  await booking.cancelBooking(b.id, { reason: 'test cleanup' });
   assert.equal((await pool.query('SELECT status FROM bookings WHERE id=$1',[b.id])).rows[0].status, 'CANCELLED');
   await assert.rejects(booking.resendConfirmation(b.id), { status: 409 });
 });
@@ -592,4 +592,69 @@ test('空位查詢只讀一次營業規則與當日預約、文案一律雙語�
   for (let i = 0; i < 120; i++) last = await request('/api/availability?date=' + form.date);
   assert.equal(last.status, 429);
   assert.match(last.data.error, /Too many availability requests/);
+});
+test('舊的 13 人以上預約可修改備註、依原人數報到與結案；人數不能改成其他超額值', async () => {
+  const { rows } = await pool.query("INSERT INTO bookings(name,pax,legacy_pax,date,slot,email,status,confirmed_at) VALUES ('legacy-group',20,20,'2099-01-01','14:30-16:30','legacy@example.invalid','CONFIRMED',now()) RETURNING *");
+  const legacy = rows[0];
+  await assert.rejects(pool.query('UPDATE bookings SET pax=21 WHERE id=$1', [legacy.id]), { code: '23514' });
+  const edited = await booking.updateBooking({ ...form, id: legacy.id, pax: 20, slot: legacy.slot, email: legacy.email, note: 'arrive together', revision: 1, changeReason: 'note' });
+  assert.equal(edited.ok, true);
+  await assert.rejects(booking.updateBooking({ ...form, id: legacy.id, pax: 21, slot: legacy.slot, email: legacy.email, revision: 2, changeReason: 'more' }), { status: 400 });
+  await assert.rejects(lifecycle.changeStatus(legacy.id, { status: 'CHECKED_IN', revision: 2, actualPax: 21 }, { type: 'ADMIN', id: 'admin' }), { status: 400 });
+  const checkedIn = await lifecycle.changeStatus(legacy.id, { status: 'CHECKED_IN', revision: 2, actualPax: 20 }, { type: 'STAFF', id: 'staff' });
+  assert.equal(checkedIn.booking.actual_pax, 20);
+  assert.equal(checkedIn.booking.status, 'CHECKED_IN');
+  const completed = await lifecycle.changeStatus(legacy.id, { status: 'COMPLETED', revision: 3 }, { type: 'STAFF', id: 'staff' });
+  assert.equal(completed.booking.status, 'COMPLETED');
+  await assert.rejects(booking.createManualBooking({ ...form, pax: 13 }), { status: 400 });
+});
+test('取消預約會寄取消通知給客人、推播工作群組並留下紀錄；已過的到店時間不寄信', async () => {
+  const administrator = await login();
+  const created = await booking.createManualBooking({ ...form, pax: 2 });
+  const previousFetch = global.fetch; const sent = [];
+  process.env.RESEND_API_KEY = 'integration-only'; process.env.MAIL_FROM = 'booking@example.invalid';
+  global.fetch = async (url, options) => { sent.push({ url, body: JSON.parse(options.body) }); return { ok: true, json: async () => ({ id: 'mock-mail' }) }; };
+  try {
+    const cancelled = await request('/api/admin/bookings/' + created.id + '/cancel', { ...administrator, method: 'POST', body: { revision: 1, reason: 'customer asked by phone' } });
+    assert.equal(cancelled.status, 200);
+    assert.equal(cancelled.data.mailStatus, 'ACCEPTED');
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].url, 'https://api.resend.com/emails');
+    assert.deepEqual(sent[0].body.to, [form.email]);
+    assert.match(sent[0].body.subject, /預約已取消 \/ Booking cancelled/);
+    assert.match(sent[0].body.text, /已經取消/);
+    assert.doesNotMatch(sent[0].body.text, /customer asked by phone/);
+    const events = await pool.query("SELECT recipient_kind,event_type,status,failure_reason FROM notification_events WHERE booking_id=$1 AND event_type='BOOKING_CANCELLED' ORDER BY recipient_kind", [created.id]);
+    assert.deepEqual(events.rows, [
+      { recipient_kind: 'CUSTOMER_EMAIL', event_type: 'BOOKING_CANCELLED', status: 'ACCEPTED', failure_reason: '' },
+      { recipient_kind: 'LINE_GROUP', event_type: 'BOOKING_CANCELLED', status: 'FAILED', failure_reason: 'NOT_CONFIGURED' },
+    ]);
+    const second = await booking.createManualBooking({ ...form, pax: 1 });
+    const viaStatus = await lifecycle.changeStatus(second.id, { status: 'CANCELLED', revision: 1, reason: 'plans changed' }, { type: 'STAFF', id: 'staff' });
+    assert.equal(viaStatus.mailStatus, 'ACCEPTED');
+    assert.equal(sent.length, 2);
+    const past = await booking.createManualBooking({ ...form, date: '2020-01-01', pax: 1 });
+    const pastCancel = await booking.cancelBooking(past.id, { reason: 'bookkeeping' });
+    assert.equal(pastCancel.mailStatus, 'SKIPPED');
+    assert.equal(sent.length, 2);
+    const detail = await request('/api/admin/bookings/' + created.id, administrator);
+    assert.ok(detail.data.notifications.some(item => item.recipient_kind === 'CUSTOMER_EMAIL' && item.status === 'ACCEPTED'));
+  } finally { global.fetch = previousFetch; delete process.env.RESEND_API_KEY; delete process.env.MAIL_FROM; }
+});
+test('更正取消或未到為已確認會清除原因；補登已過時段不推播新預約；取消一定要有原因', async () => {
+  const created = await booking.createManualBooking(form);
+  await assert.rejects(booking.cancelBooking(created.id, {}), { status: 400 });
+  await booking.cancelBooking(created.id, { reason: 'mistake' });
+  const corrected = await lifecycle.correctStatus(created.id, { status: 'CONFIRMED', revision: 2, reason: 'staff error' }, { type: 'ADMIN', id: 'admin' });
+  assert.equal(corrected.booking.status, 'CONFIRMED');
+  assert.equal(corrected.booking.cancel_reason, '');
+  assert.equal(corrected.booking.cancelled_at, null);
+  const history = await pool.query("SELECT before_data->>'cancel_reason' AS previous FROM booking_events WHERE booking_id=$1 AND event_type='STATUS_CORRECTED'", [created.id]);
+  assert.equal(history.rows[0].previous, 'mistake');
+  const backdated = await booking.createManualBooking({ ...form, date: '2020-01-01' });
+  const pushes = await pool.query("SELECT count(*)::int AS n FROM notification_events WHERE booking_id=$1 AND recipient_kind='LINE_GROUP'", [backdated.id]);
+  assert.equal(pushes.rows[0].n, 0);
+  const upcoming = await booking.createManualBooking({ ...form, slot: '15:30-17:00' });
+  const upcomingPush = await pool.query("SELECT event_type FROM notification_events WHERE booking_id=$1 AND recipient_kind='LINE_GROUP'", [upcoming.id]);
+  assert.deepEqual(upcomingPush.rows.map(row => row.event_type), ['BOOKING_CONFIRMED']);
 });

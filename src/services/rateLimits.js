@@ -28,8 +28,8 @@ async function consumeLimit(bucket, limit, windowMs, message, loginStore = false
 async function limitBooking(req, res, next) {
   try {
     const ip = ipDigest(clientIp(req));
-    await consumeLimit(`booking-minute:${ip}`, 3, 60000, '操作太頻繁，請稍候一分鐘再試。');
-    await consumeLimit(`booking-day:${ip}`, 20, 86400000, '今日預約次數已達上限，請改用 LINE 與我們聯絡。');
+    await consumeLimit(`booking-minute:${ip}`, 3, 60000, '操作太頻繁，請稍候一分鐘再試 / Too many requests; wait a minute and try again.');
+    await consumeLimit(`booking-day:${ip}`, 20, 86400000, '今日預約次數已達上限，請改用 LINE 與我們聯絡 / Daily booking limit reached; please contact us on LINE.');
     next();
   } catch (err) { next(err); }
 }

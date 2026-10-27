@@ -13,7 +13,7 @@ const LEGACY_IDS = Object.freeze({
 
 function cleanLabel(value, name) {
   if (typeof value !== 'string' || !value.trim() || value.trim().length > 80 || /[\u0000-\u001f\u007f]/.test(value)) {
-    throw userError(`${name} / ${name === '中文名稱' ? 'Chinese label' : 'English label'} 格式不正確。`);
+    throw userError(`${name}格式不正確 / Invalid ${name === '中文名稱' ? 'Chinese' : 'English'} label.`);
   }
   return value.trim();
 }
