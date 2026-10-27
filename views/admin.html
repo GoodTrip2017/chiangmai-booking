@@ -39,6 +39,10 @@
   th.today { color: var(--accent); }
   th.slotcol, td.slotcol { width: 96px; background: var(--card); font-size: 12.5px; white-space: nowrap; }
   td { width: calc((100% - 96px) / 7); background: var(--card); }
+  table.day-view { min-width: 0; }
+  table.day-view td { width: auto; }
+  .exception-row { cursor: pointer; }
+  .exception-row:hover td, .exception-row:focus td { background: var(--card2); }
   td.closed { background: var(--closed); color: var(--muted); text-align: center; font-size: 12px; }
   .cellhead { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
   .cellhead .cnt { font-weight: 700; color: var(--text); }
@@ -232,6 +236,9 @@
     <label class="chk"><input id="overrideBlocked" type="checkbox">封鎖 / Block</label>
     <button id="saveOverride" type="button">儲存時段設定 / Save slot</button>
   </div>
+  <h2>已設定的例外 / Saved exceptions</h2>
+  <p class="report-note">點選一列會載入上方表單。要恢復營業請取消勾選「停開」後儲存；要解除時段封鎖請取消勾選「封鎖」並清空容量後儲存。<br>Select a row to load it into the form above. To lift a closure, uncheck it and save again.</p>
+  <div class="report-scroll"><table class="report-table" id="exceptionList"></table></div>
   <p id="availabilityMessage" role="status"></p>
 </section>
 

@@ -33,4 +33,11 @@ async function limitBooking(req, res, next) {
     next();
   } catch (err) { next(err); }
 }
-module.exports = { consumeLimit, ipDigest, limitBooking };
+/** 空位查詢是公開端點；同一 IP 每分鐘 120 次，避免被拿來消耗資料庫。 */
+async function limitAvailability(req, res, next) {
+  try {
+    await consumeLimit(`availability-minute:${ipDigest(clientIp(req))}`, 120, 60000, '查詢太頻繁，請稍候再試 / Too many availability requests; try again shortly.');
+    next();
+  } catch (err) { next(err); }
+}
+module.exports = { consumeLimit, ipDigest, limitBooking, limitAvailability };

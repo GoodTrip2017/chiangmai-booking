@@ -127,7 +127,7 @@
     state.slot = '';
     state.slotMax = 0;
     updatePaxHint();
-    if (data.closed) { renderSlotHint((data.message || '當日公休') + ' / Closed on this date.', 'error'); return; }
+    if (data.closed) { renderSlotHint(data.message || '此日期公休 / Closed on this date.', 'error'); return; }
     var box = $('slots');
     box.innerHTML = '';
     data.slots.forEach(function (s) {
@@ -141,11 +141,8 @@
       el.className = cls;
       var time = document.createElement('span'); time.className = 't'; time.textContent = s.slot;
       var status = document.createElement('span'); status.className = 's';
-      status.textContent = s.status === 'OPEN' ? '可預約 / Available'
-        : s.status === 'PARTIAL' ? '剩餘 ' + s.maxPax + ' 位 / ' + s.maxPax + ' places left'
-          : s.status === 'FULL' ? '已滿 / Full'
-            : s.status === 'PAST' ? '已過時間 / Past time'
-              : (s.statusText || '暫停預約') + ' / Unavailable';
+      // 後端 statusText 已是雙語，前端不再自行拼接英文。
+      status.textContent = s.statusText || '暫停預約 / Unavailable';
       el.append(time, status);
       if (s.selectable) {
         el.addEventListener('click', function () { pickSlot(el, s); });

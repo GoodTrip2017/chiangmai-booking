@@ -1,6 +1,6 @@
 /** 前台 API */
 const express = require('express');
-const { limitBooking } = require('../services/rateLimits');
+const { limitBooking, limitAvailability } = require('../services/rateLimits');
 const { getAvailability } = require('../services/availability');
 const { submitBooking } = require('../services/booking');
 const { CONFIG } = require('../config');
@@ -31,7 +31,7 @@ router.get('/config', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/availability', async (req, res, next) => {
+router.get('/availability', limitAvailability, async (req, res, next) => {
   try {
     res.json(await getAvailability(req.query.date));
   } catch (err) { next(err); }

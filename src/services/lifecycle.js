@@ -121,6 +121,11 @@ async function updateAdministration(id, body = {}, actor = 'ADMIN') {
       [id, internalNote, assignedStaffId]
     );
     await recordEvent(client, id, 'ADMINISTRATION_UPDATED', before, updated[0], reason, actor);
+    // revision 變更會讓舊的提醒鍵失效；負責人／內部備註不影響到店，必須重新排程行前提醒。
+    if ([STATUS.PENDING, STATUS.CONFIRMED].includes(updated[0].status)) {
+      await cancelReminder(client, id);
+      await scheduleReminder(client, updated[0]);
+    }
     await client.query('COMMIT');
     return { ok: true, revision: updated[0].revision };
   } catch (err) { await client.query('ROLLBACK'); throw err; }

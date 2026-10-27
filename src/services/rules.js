@@ -69,12 +69,12 @@ async function dayRules(db, date, proposedSettings) {
 
 function isBookableTime(rules, date, slot, { allowPast = false } = {}) {
   const def = rules.slots.find(row => row.slot === slot);
-  if (rules.closed || !def || def.blocked || def.maxPax === 0) return { ok: false, reason: '此日期或時段目前未開放預約 / This visit time is unavailable.' };
+  if (rules.closed || !def || def.blocked || def.maxPax === 0) return { ok: false, code: 'UNAVAILABLE', reason: '此日期或時段目前未開放預約 / This visit time is unavailable.' };
   if (!allowPast) {
     const start = dt.toUtcMs(date, def.start);
-    if (start - Date.now() <= rules.settings.cutoff_minutes * 60000) return { ok: false, reason: '該時段已過預約截止時間 / Booking cutoff has passed.' };
+    if (start - Date.now() <= rules.settings.cutoff_minutes * 60000) return { ok: false, code: 'CUTOFF', reason: '該時段已過預約截止時間 / Booking cutoff has passed.' };
     if (rules.settings.max_advance_days !== null &&
-        date > dt.addDaysStr(dt.todayStr(), rules.settings.max_advance_days)) return { ok: false, reason: '超過最早開放預約日期 / This date is too far in advance.' };
+        date > dt.addDaysStr(dt.todayStr(), rules.settings.max_advance_days)) return { ok: false, code: 'TOO_FAR', reason: '超過最早開放預約日期 / This date is too far in advance.' };
   }
   return { ok: true, def };
 }

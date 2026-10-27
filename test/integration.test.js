@@ -529,3 +529,67 @@ test('錯誤不洩漏資料庫細節，資料庫不可用健康檢查回 503', a
   try { const health = await request('/healthz'); assert.equal(health.status,503); assert.deepEqual(health.data,{ok:false}); }
   finally { pool.query=query; }
 });
+test('修改負責人或內部備註後，行前提醒會以新版本重新排程而不是被跳過', async () => {
+  const administrator = await login();
+  const created = await booking.createManualBooking(form);
+  const saved = (await pool.query('SELECT * FROM bookings WHERE id=$1', [created.id])).rows[0];
+  const line = require('../src/services/lineNotify');
+  process.env.LINE_CHANNEL_ACCESS_TOKEN = 'integration-only'; process.env.LINE_GROUP_ID = 'group-integration-only';
+  try {
+    await line.scheduleReminder(pool, saved);
+    const response = await request('/api/admin/bookings/' + created.id + '/administration', { ...administrator, method: 'PATCH',
+      body: { revision: saved.revision, assignedStaffId: null, internalNote: 'Prefers window seat', reason: 'Recorded preference' } });
+    assert.equal(response.status, 200);
+    const reminders = await pool.query("SELECT status,idempotency_key FROM notification_events WHERE booking_id=$1 AND event_type='REMINDER' ORDER BY id", [created.id]);
+    assert.deepEqual(reminders.rows.map(row => row.status), ['SKIPPED', 'QUEUED']);
+    assert.equal(reminders.rows[1].idempotency_key, `line-group/${created.id}/${response.data.revision}/REMINDER`);
+    // 排程時間到時，processPending 的版本比對必須通過（鍵與目前 revision 一致），不會標成 BOOKING_CHANGED。
+    const current = (await pool.query('SELECT revision FROM bookings WHERE id=$1', [created.id])).rows[0];
+    assert.equal(reminders.rows[1].idempotency_key, `line-group/${created.id}/${current.revision}/REMINDER`);
+  } finally { delete process.env.LINE_CHANNEL_ACCESS_TOKEN; delete process.env.LINE_GROUP_ID; }
+});
+test('時段封鎖或當日停開後，既有預約仍可修改其他欄位；人數增加與改時段才受限', async () => {
+  const rules = require('../src/services/rules');
+  const created = await booking.createManualBooking({ ...form, pax: 4 });
+  const blocked = await rules.upsertSlotOverride({ date: form.date, slot: form.slot, blocked: true, reason: 'maintenance', acknowledgeAffected: true });
+  assert.equal(blocked.ok, true);
+  assert.equal(blocked.affected[0].id, created.id);
+  const edit = { ...form, id: created.id, pax: 4, email: 'fixed@example.invalid', changeReason: 'typo in email' };
+  assert.equal((await booking.updateBooking({ ...edit, revision: 1 })).ok, true);
+  assert.equal((await pool.query('SELECT email,status,capacity_at_booking FROM bookings WHERE id=$1', [created.id])).rows[0].email, 'fixed@example.invalid');
+  await assert.rejects(booking.updateBooking({ ...edit, pax: 5, revision: 2, changeReason: 'more guests' }), { status: 409 });
+  assert.equal((await booking.updateBooking({ ...edit, pax: 3, revision: 2, changeReason: 'fewer guests' })).ok, true);
+  const closed = await rules.upsertException({ date: form.date, closed: true, reason: 'holiday', acknowledgeAffected: true });
+  assert.equal(closed.ok, true);
+  assert.equal((await booking.updateBooking({ ...edit, pax: 3, note: 'call first', revision: 3, changeReason: 'note' })).ok, true);
+  await assert.rejects(booking.updateBooking({ ...edit, pax: 3, slot: '15:30-17:00', revision: 4, changeReason: 'move' }), { status: 409 });
+  await assert.rejects(booking.createManualBooking({ ...form, pax: 1 }), { status: 409 });
+  assert.equal((await pool.query('SELECT status,note FROM bookings WHERE id=$1', [created.id])).rows[0].note, 'call first');
+});
+test('空位查詢只讀一次營業規則與當日預約、文案一律雙語，且有限流', async () => {
+  const rules = require('../src/services/rules');
+  await booking.createManualBooking({ ...form, pax: 2 });
+  await booking.createManualBooking({ ...form, slot: '15:30-17:00', pax: 3 });
+  await new Promise(resolve => setTimeout(resolve, 50)); // 等建單後的背景通知處理結束，避免干擾查詢計數
+  const original = pool.query; let count = 0;
+  pool.query = function () { count++; return original.apply(pool, arguments); };
+  let availability;
+  try { availability = await request('/api/availability?date=' + form.date); }
+  finally { pool.query = original; }
+  assert.equal(availability.status, 200);
+  assert.equal(availability.data.slots.find(item => item.slot === form.slot).maxPax, 10);
+  assert.ok(count <= 6, `availability used ${count} queries`);
+  assert.ok(availability.data.slots.every(item => /\//.test(item.statusText)), 'statusText must be bilingual');
+  assert.ok(availability.data.slots.every(item => (item.statusText.match(/Unavailable|Closed/g) || []).length <= 1));
+  assert.equal((await rules.upsertSlotOverride({ date: form.date, slot: '17:00-18:30', blocked: true, reason: 'private event' })).ok, true);
+  assert.equal((await rules.upsertException({ date: '2099-01-02', closed: true, reason: 'staff holiday' })).ok, true);
+  const withOverride = await request('/api/availability?date=' + form.date);
+  assert.equal(withOverride.data.slots.find(item => item.slot === '17:00-18:30').statusText, 'private event · 暫停預約 / Unavailable');
+  const closedDay = await request('/api/availability?date=2099-01-02');
+  assert.equal(closedDay.data.message, 'staff holiday · 此日期公休 / Closed on this date.');
+  assert.equal((await request('/api/availability?date=2099-01-06')).data.message, '此日期公休 / Closed on this date.');
+  let last;
+  for (let i = 0; i < 120; i++) last = await request('/api/availability?date=' + form.date);
+  assert.equal(last.status, 429);
+  assert.match(last.data.error, /Too many availability requests/);
+});
