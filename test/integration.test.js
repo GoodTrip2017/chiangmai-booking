@@ -174,7 +174,8 @@ test('兩筆同時移到剩餘兩位的時段，只容許一筆成功', async ()
   const one = await booking.createManualBooking({ ...form, slot: '15:30-17:00' });
   const two = await booking.createManualBooking({ ...form, slot: '17:00-18:30' });
   const results = await Promise.allSettled([one,two].map(b => booking.updateBooking({ ...form, id: b.id })));
-  assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
+  assert.equal(results.filter(r => r.status === 'fulfilled').length, 1,
+    results.map(r => r.status === 'rejected' ? r.reason.message : 'fulfilled').join('; '));
   assert.equal((await pool.query('SELECT sum(pax)::int AS n FROM bookings WHERE slot=$1',[form.slot])).rows[0].n, 12);
 });
 test('修改跨時段釋出容量；取消保留資料並釋出座位', async () => {

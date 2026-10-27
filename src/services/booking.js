@@ -95,7 +95,8 @@ async function insertBooking(data, source, requestId) {
       // 舊請求不能讀到店員後續修正的個資，也不能把已取消預約顯示為成功。
       const columns = { firstTime: 'first_time', discoverySourceId: 'discovery_source_id', discoveryDetail: 'discovery_detail' };
       const unchanged = Object.entries(data).every(([field, value]) =>
-        (field === 'referral' && data.discoverySourceId) || saved[columns[field] || field] === value);
+        (field === 'referral' && data.discoverySourceId) ||
+        (field === 'discoverySourceId' && !value) || saved[columns[field] || field] === value);
       if (saved.request_hash !== hash || saved.status !== STATUS.CONFIRMED || !unchanged) {
         throw userError('這次預約資料已變更，請透過 LINE 與店員確認目前的預約狀態。', 409);
       }
