@@ -1,9 +1,9 @@
 const { userError } = require('../util/errors');
 /** 後台週行事曆資料 */
 const { pool } = require('../db');
-const { CONFIG, SLOTS, LEGACY_SLOTS, STATUS } = require('../config');
+const { STATUS } = require('../config');
 const dt = require('../util/datetime');
-const { slotState } = require('./availability');
+const { slotState, activeBookings } = require('./availability');
 const { dayRules, readSettings } = require('./rules');
 
 function publicBooking(b) {
@@ -64,8 +64,10 @@ async function getWeekData(mondayStr) {
       isToday: dateStr === today,
       slots: [],
     };
+    // 營業規則與當日預約各讀一次，再逐時段計算，避免每格都重查資料庫。
+    const context = { rules: dayRuleList[d], rows: await activeBookings(pool, dateStr) };
     for (const def of defs) {
-      const st = await slotState(pool, dateStr, def.slot);
+      const st = await slotState(pool, dateStr, def.slot, undefined, context);
       day.slots.push({
         slot: def.slot,
         groups: st.groups,

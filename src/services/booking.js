@@ -6,7 +6,7 @@
 const crypto = require('node:crypto');
 const { userError } = require('../util/errors');
 const { pool } = require('../db');
-const { CONFIG, SLOTS, LEGACY_SLOTS, REFERRAL_OPTIONS, SOURCES, STATUS } = require('../config');
+const { CONFIG, REFERRAL_OPTIONS, SOURCES, STATUS } = require('../config');
 const dt = require('../util/datetime');
 const { capacityCheck } = require('./availability');
 const { consumeLimit } = require('./rateLimits');
@@ -201,15 +201,21 @@ async function updateBooking(payload, actor = 'ADMIN') {
     if (!booking) throw userError('找不到這筆預約 / Booking not found.', 404);
     if (![STATUS.PENDING, STATUS.CONFIRMED].includes(booking.status)) throw userError('這筆預約目前不能直接修改 / This booking cannot be edited directly.', 409);
     if (p.revision !== undefined && p.revision !== booking.revision) throw userError('預約已由其他人修改，請重新整理 / Booking changed; refresh and try again.', 409);
-    const allowedLegacySlot = p.date === booking.date && LEGACY_SLOTS.some(def => def.slot === booking.slot)
-      ? booking.slot : undefined;
+    // 日期與時段都沒變時，即使原時段已被封鎖、當日已停開或規則已移除該時段，仍可修改其他欄位；
+    // 只有人數增加才重新檢查容量。
+    const sameTime = p.date === booking.date && p.slot === booking.slot;
+    const allowedLegacySlot = sameTime ? booking.slot : undefined;
     const data = validateForm(p, { allowPast: true, referralOptional: true, allowedLegacySlot });
     const discovery = data.discoverySourceId || data.referral
       ? await resolveSource(client, data, { optional: true, currentId: booking.discovery_source_id })
       : { id: booking.discovery_source_id, label: booking.referral };
     await lockSlots(client, [[booking.date, booking.slot], [data.date, data.slot]]);
-    const check = await capacityCheck(client, data.date, data.slot, data.pax, id, { allowPast: true, allowLegacySlot: allowedLegacySlot });
-    if (!check.ok) throw userError(check.reason, 409);
+    let capacityAtBooking = booking.capacity_at_booking;
+    if (!sameTime || data.pax > booking.pax) {
+      const check = await capacityCheck(client, data.date, data.slot, data.pax, id, { allowPast: true, allowLegacySlot: allowedLegacySlot });
+      if (!check.ok) throw userError(check.reason, 409);
+      capacityAtBooking = check.state.maxPax;
+    }
     const customerId = data.email.toLowerCase() === booking.email.toLowerCase()
       ? booking.customer_id || await ensureCustomer(client, data.email)
       : await ensureCustomer(client, data.email);
@@ -225,7 +231,7 @@ async function updateBooking(payload, actor = 'ADMIN') {
        WHERE id=$13 RETURNING *`,
       [data.name, data.pax, data.date, data.slot, data.firstTime, data.line, data.email,
        data.referral || discovery.label, data.note, mailChanged ? 'NOT_REQUESTED' : booking.mail_status,
-       discovery.id, data.discoveryDetail, id, check.state.maxPax, customerId]
+       discovery.id, data.discoveryDetail, id, capacityAtBooking, customerId]
     );
     updated = result.rows[0];
     previous = booking;

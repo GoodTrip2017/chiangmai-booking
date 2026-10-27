@@ -68,6 +68,7 @@
     });
 
     $('grid').innerHTML = html;
+    $('grid').classList.toggle('day-view', calendarView === 'day');
     $('loading').style.display = 'none';
     $('scroll').style.display = reportMode === 'calendar' ? 'block' : 'none';
 
@@ -877,6 +878,50 @@
         box.append(input, document.createTextNode('公休 / Closed ' + label)); $('closedWeekdays').appendChild(box);
       });
     }).catch(function (err) { $('availabilityMessage').textContent = err.message; });
+    api('/api/admin/availability-exceptions').then(renderExceptionList)
+      .catch(function (err) { $('availabilityMessage').textContent = err.message; });
+  }
+  function renderExceptionList(data) {
+    var table = $('exceptionList');
+    table.replaceChildren();
+    var head = document.createElement('tr');
+    ['類型 / Type', '日期 / Date', '時段 / Slot', '狀態 / State', '容量 / Capacity', '原因 / Reason'].forEach(function (text) {
+      var th = document.createElement('th'); th.textContent = text; head.appendChild(th);
+    });
+    table.appendChild(head);
+    var items = (data.exceptions || []).map(function (row) {
+      var hours = (row.open_time || row.close_time) ? (row.open_time || '') + '–' + (row.close_time || '') : '';
+      return { kind: 'date', row: row, cells: ['日期 / Date', row.date, '',
+        row.closed ? '停開 / Closed' : (hours ? '特殊時間 ' + hours + ' / Special hours' : '營業 / Open'),
+        row.max_pax === null ? '' : String(row.max_pax), row.reason] };
+    }).concat((data.overrides || []).map(function (row) {
+      return { kind: 'slot', row: row, cells: ['時段 / Slot', row.date, row.slot,
+        row.blocked ? '封鎖 / Blocked' : '開放 / Open', row.max_pax === null ? '' : String(row.max_pax), row.reason] };
+    }));
+    if (!items.length) {
+      var empty = document.createElement('tr'); var cell = document.createElement('td');
+      cell.colSpan = 6; cell.textContent = '目前沒有例外設定 / No exceptions saved.'; empty.appendChild(cell); table.appendChild(empty); return;
+    }
+    items.forEach(function (item) {
+      var tr = document.createElement('tr'); tr.className = 'exception-row'; tr.tabIndex = 0;
+      item.cells.forEach(function (value) { var td = document.createElement('td'); td.textContent = value; tr.appendChild(td); });
+      function load() {
+        var row = item.row;
+        if (item.kind === 'date') {
+          $('exceptionDate').value = row.date; $('exceptionOpen').value = row.open_time || ''; $('exceptionClose').value = row.close_time || '';
+          $('exceptionCapacity').value = row.max_pax === null ? '' : row.max_pax; $('exceptionReason').value = row.reason; $('exceptionClosed').checked = row.closed;
+          $('exceptionDate').scrollIntoView({ block: 'center' });
+        } else {
+          $('overrideDate').value = row.date; $('overrideSlot').value = row.slot;
+          $('overrideCapacity').value = row.max_pax === null ? '' : row.max_pax; $('overrideReason').value = row.reason; $('overrideBlocked').checked = row.blocked;
+          $('overrideDate').scrollIntoView({ block: 'center' });
+        }
+        $('availabilityMessage').textContent = '已載入到上方表單，修改後請儲存 / Loaded into the form above; save to apply.';
+      }
+      tr.addEventListener('click', load);
+      tr.addEventListener('keydown', function (event) { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); load(); } });
+      table.appendChild(tr);
+    });
   }
   function showAvailabilityError(err) {
     if (err.details && err.details.affected && err.details.affected.length) {
