@@ -487,6 +487,14 @@ test('Email 標準化建立穩定顧客 ID；不同姓名不影響回訪連結',
   const detail = await request('/api/admin/customers/' + ids[0], session);
   assert.equal(detail.status, 200);
   assert.equal(detail.data.bookings.length, 2);
+  const notePath = '/api/admin/customers/' + ids[0] + '/note';
+  const saved = await request(notePath, { ...session, method: 'PATCH', body: { revision: 1,
+    internalNote: 'Prefers afternoon', reason: 'Staff recorded preference' } });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.data.revision, 2);
+  assert.equal((await request(notePath, { ...session, method: 'PATCH', body: { revision: 1,
+    internalNote: 'Overwritten', reason: 'Stale edit' } })).status, 409);
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM system_events WHERE action='CUSTOMER_NOTE_UPDATED' AND target=$1", [ids[0]])).rows[0].n, 1);
   assert.notEqual(first.id, second.id);
 });
 test('錯誤不洩漏資料庫細節，資料庫不可用健康檢查回 503', async () => {

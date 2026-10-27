@@ -131,8 +131,10 @@ CREATE TABLE IF NOT EXISTS customers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   normalized_email TEXT NOT NULL UNIQUE,
   internal_note TEXT NOT NULL DEFAULT '',
+  revision INTEGER NOT NULL DEFAULT 1,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 1;
 INSERT INTO customers (normalized_email)
   SELECT DISTINCT lower(trim(email)) FROM bookings WHERE trim(email) <> ''
   ON CONFLICT (normalized_email) DO NOTHING;

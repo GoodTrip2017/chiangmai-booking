@@ -931,6 +931,24 @@
       $('customerDetail').replaceChildren();
       var heading = document.createElement('h3'); heading.textContent = '顧客 / Customer: ' + data.customer.normalized_email;
       $('customerDetail').appendChild(heading);
+      var noteLabel = document.createElement('label'); noteLabel.textContent = '內部備註 / Internal note（不對客人顯示 / Staff only）';
+      var note = document.createElement('textarea'); note.rows = 3; note.maxLength = 2000;
+      note.value = data.customer.internal_note || ''; note.style.width = '100%';
+      note.style.background = 'var(--card)'; note.style.color = 'var(--text)'; note.style.padding = '10px';
+      var reasonLabel = document.createElement('label'); reasonLabel.textContent = '修改原因 / Change reason';
+      var reason = document.createElement('input'); reason.type = 'text'; reason.maxLength = 300;
+      reason.style.background = 'var(--card)'; reason.style.color = 'var(--text)'; reason.style.padding = '10px'; reason.style.width = '100%';
+      var save = document.createElement('button'); save.type = 'button'; save.textContent = '儲存顧客備註 / Save customer note';
+      save.addEventListener('click', function () {
+        if (!reason.value.trim()) { $('customerMessage').textContent = '請填寫修改原因 / A change reason is required.'; return; }
+        save.disabled = true;
+        api('/api/admin/customers/' + encodeURIComponent(id) + '/note', { method: 'PATCH', body: JSON.stringify({
+          revision: data.customer.revision, internalNote: note.value, reason: reason.value.trim()
+        }) }).then(function () { $('customerMessage').textContent = '內部備註已儲存 / Internal note saved.'; showCustomerDetail(id); })
+          .catch(function (err) { $('customerMessage').textContent = err.message; save.disabled = false; });
+      });
+      $('customerDetail').append(noteLabel, note, reasonLabel, reason, save);
+      var historyTitle = document.createElement('h4'); historyTitle.textContent = '過往預約 / Booking history'; $('customerDetail').appendChild(historyTitle);
       data.bookings.forEach(function (b) {
         var p = document.createElement('p');
         p.textContent = b.date + ' ' + b.slot + ' · ' + statusLabel(b.status) + ' · ' + b.pax + ' 預約 / booked · ' +

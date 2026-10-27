@@ -131,6 +131,10 @@ router.get('/customers', auth.requireRole('ADMIN','STAFF'), async (req, res, nex
 router.get('/customers/:id', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
   try { res.json(await customers.customerDetail(req.params.id)); } catch (err) { next(err); }
 });
+router.patch('/customers/:id/note', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
+  try { res.json(await customers.updateCustomerNote(req.params.id, req.body, actorFor(req))); }
+  catch (err) { next(err); }
+});
 router.get('/analytics', async (req, res, next) => {
   try { res.json(await reporting.analytics(req.query)); } catch (err) { next(err); }
 });
