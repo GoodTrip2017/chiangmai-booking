@@ -758,6 +758,21 @@
       $('reportMessage').textContent = 'CSV 已下載 / CSV downloaded.';
     } catch (err) { $('reportMessage').textContent = err.message; }
   });
+  $('exportAnalytics').addEventListener('click', async function () {
+    $('reportMessage').textContent = '正在匯出分析 / Preparing analytics export…';
+    try {
+      var res = await fetch('/api/admin/analytics.csv?' + reportQuery().toString(), {
+        credentials: 'same-origin', headers: { 'X-CSRF-Token': csrfToken }
+      });
+      if (res.status === 401) { location.replace('/admin/login'); return; }
+      if (!res.ok) { var error = await res.json(); throw new Error(error.error || '匯出失敗 / Export failed.'); }
+      var url = URL.createObjectURL(await res.blob());
+      var link = document.createElement('a'); link.href = url; link.download = 'chiangmai-analytics.csv';
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      $('reportMessage').textContent = '分析 CSV 已下載 / Analytics CSV downloaded.';
+    } catch (err) { $('reportMessage').textContent = err.message; }
+  });
   function loadNotifications() {
     $('notificationMessage').textContent = '載入中 / Loading…';
     api('/api/admin/notification-settings').then(function (data) {
@@ -1079,6 +1094,7 @@
     $('accountsTab').hidden = role !== 'ADMIN';
     $('notificationsTab').hidden = role !== 'ADMIN';
     $('exportBookings').hidden = role !== 'ADMIN';
+    $('exportAnalytics').hidden = role === 'STAFF';
     $('availabilityTab').hidden = role !== 'ADMIN';
     $('sourcesTab').hidden = role !== 'ADMIN';
     $('customersTab').hidden = role === 'ANALYST';

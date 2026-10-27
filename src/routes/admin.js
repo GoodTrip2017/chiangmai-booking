@@ -138,6 +138,17 @@ router.patch('/customers/:id/note', auth.requireRole('ADMIN','STAFF'), async (re
 router.get('/analytics', async (req, res, next) => {
   try { res.json(await reporting.analytics(req.query, req.adminSession.role)); } catch (err) { next(err); }
 });
+router.get('/analytics.csv', auth.requireRole('ADMIN','ANALYST'), async (req, res, next) => {
+  try {
+    const csv = await reporting.exportAnalyticsCsv(req.query, req.adminSession.role);
+    const filter = reporting.filters(req.query);
+    await audit.record(actorFor(req), 'ANALYTICS_CSV_EXPORTED', '',
+      { from: filter.from, to: filter.to, basis: filter.basis, status: filter.status, discovery: filter.discovery });
+    res.set({ 'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="chiangmai-analytics.csv"', 'Cache-Control': 'no-store' });
+    res.send(csv);
+  } catch (err) { next(err); }
+});
 router.get('/overview', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
   try { res.json(await reporting.operationalOverview()); } catch (err) { next(err); }
 });

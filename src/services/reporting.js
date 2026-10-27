@@ -348,4 +348,59 @@ async function exportBookingsCsv(query = {}) {
   return '\ufeff' + lines.map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }
 
-module.exports = { filters, listBookings, bookingDetail, operationalOverview, calendarMonth, analytics, csvCell, exportBookingsCsv };
+async function exportAnalyticsCsv(query = {}, role = 'ADMIN') {
+  const data = await analytics(query, role);
+  const lines = [
+    ['報表 / Report','數據分析 / Analytics'],
+    ['時區 / Timezone','Asia/Bangkok (GMT+7)'],
+    ['匯出時間 / Exported at',new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23' }).format(new Date())],
+    ['日期基準 / Date basis',data.filters.basis === 'visit' ? '到店日期 / Visit date' : '建立日期 / Created date'],
+    ['區間 / Range',data.filters.from + ' – ' + data.filters.to],
+    ['得知管道 / Discovery filter',data.filters.discovery || 'ALL'],
+    ['追蹤來源 / Tracking source filter',data.filters.trackingSource || 'ALL'],
+    ['時段 / Slot filter',data.filters.slot || 'ALL'],
+    [],
+    ['指標 / Metric','數值 / Value','定義 / Definition'],
+    ...Object.entries(data.summary).map(([key,value]) => [key,value === null ? '' : value,data.definitions[key] || '']),
+    [],
+    ['得知管道 / Discovery source','預約筆數 / Bookings','預約人數 / Booked guests','到店筆數 / Checked in','實際人數 / Actual guests','取消分子 / Cancelled due','取消分母 / Decided due','未到分子 / No-show due','未到分母 / Attendance due'],
+    ...data.discovery.map(row => [row.label_zh + ' / ' + row.label_en,row.bookings,row.booked_guests,row.checked_in_bookings,row.actual_guests,row.cancelled_due,row.decided_due,row.no_show_due,row.attendance_due]),
+    [],
+    ['首次追蹤來源 / First tracked source','媒介 / Medium','活動 / Campaign','代碼 / Code','預約筆數 / Bookings','到店筆數 / Checked in'],
+    ...data.tracked.map(row => [row.source,row.medium,row.campaign,row.code,row.bookings,row.checked_in_bookings]),
+    [],
+    ['趨勢日期 / Trend date','預約筆數 / Bookings','預約人數 / Booked guests','到店筆數 / Checked in'],
+    ...data.trend.map(row => [row.day,row.bookings,row.booked_guests,row.checked_in_bookings]),
+    [],
+    ['首次到店月份 / First visit month','首次記錄人數 / Contacts','30 天回訪 / Returned 30','30 天分母 / Eligible 30','60 天回訪 / Returned 60','60 天分母 / Eligible 60','90 天回訪 / Returned 90','90 天分母 / Eligible 90'],
+    ...data.cohorts.rows.map(row => [row.cohort_month,row.first_recorded,row.returned_30,row.eligible_30,row.returned_60,row.eligible_60,row.returned_90,row.eligible_90]),
+    [],
+    ['星期 / Weekday','開始時間 / Start time','預約筆數 / Bookings','預約人數 / Booked guests','實際人數 / Actual guests','未到 / No-shows'],
+    ...data.operations.heatmap.map(row => [row.weekday,row.start_time,row.bookings,row.booked_guests,row.actual_guests,row.no_shows]),
+    [],
+    ['同行規模 / Party size','預約筆數 / Bookings','預約人數 / Booked guests'],
+    ...data.operations.partySize.map(row => [row.group_size,row.bookings,row.booked_guests]),
+    [],
+    ['提前預約天數 / Booking lead days','預約筆數 / Bookings','未到 / No-shows'],
+    ...data.operations.leadTime.map(row => [row.lead_bucket,row.bookings,row.no_shows]),
+    [],
+    ['取消距到店天數 / Cancellation timing','取消筆數 / Cancelled bookings'],
+    ...data.operations.cancellationTiming.map(row => [row.lead_bucket,row.bookings]),
+    [],
+    ['未到得知管道 / No-show discovery source','未到筆數 / No-shows'],
+    ...data.operations.noShowSources.map(row => [row.label_zh + ' / ' + row.label_en,row.no_shows]),
+    [],
+    ['改期事件 / Reschedule events',data.operations.reschedules.events],
+    ['涉及預約 / Changed bookings',data.operations.reschedules.changed_bookings],
+    [],
+    ['取消原因 / Cancellation reason','取消筆數 / Cancelled bookings'],
+    ...data.operations.cancellationReasons.map(row => [row.reason,row.bookings]),
+    [],
+    ['說明 / Notes',data.cohorts.definition],
+    ['說明 / Notes',data.operations.definition],
+  ];
+  return '\ufeff' + lines.map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
+}
+
+module.exports = { filters, listBookings, bookingDetail, operationalOverview, calendarMonth, analytics, csvCell,
+  exportBookingsCsv, exportAnalyticsCsv };
