@@ -4,6 +4,10 @@ const { userError } = require('../util/errors');
 const { getSlotDef, toUtcMs } = require('../util/datetime');
 const { capacityCheck } = require('./availability');
 const { enqueueGroup, cancelReminder, scheduleReminder, processPending } = require('./lineNotify');
+const { notifyCancellation } = require('./customerMail');
+
+/** 舊的 13 人以上預約可以報到其原人數；新預約維持 12 人硬上限。 */
+function guestCeiling(booking) { return Math.max(CONFIG.MAX_PAX, booking.legacy_pax || 0); }
 
 const TRANSITIONS = Object.freeze({
   [STATUS.PENDING]: [STATUS.CONFIRMED, STATUS.CHECKED_IN, STATUS.CANCELLED],
@@ -58,7 +62,8 @@ async function changeStatus(id, body = {}, actor = 'ADMIN') {
     let guests = null;
     if (target === STATUS.CHECKED_IN) {
       guests = actualPax === undefined ? before.pax : actualPax;
-      if (!Number.isSafeInteger(guests) || guests < 1 || guests > CONFIG.MAX_PAX) throw userError('實際到店人數須為 1 至 12 / Actual guests must be between 1 and 12.');
+      const ceiling = guestCeiling(before);
+      if (!Number.isSafeInteger(guests) || guests < 1 || guests > ceiling) throw userError(`實際到店人數須為 1 至 ${ceiling} / Actual guests must be between 1 and ${ceiling}.`);
       if (guests > before.pax) {
         const role = typeof actor === 'string' ? actor : actor?.type;
         if (role !== 'ADMIN') throw userError('超出預約人數僅限管理員處理 / Only an administrator may approve extra guests.', 403);
@@ -90,7 +95,9 @@ async function changeStatus(id, body = {}, actor = 'ADMIN') {
     }
     await client.query('COMMIT');
     void processPending().catch(err => console.error('LINE 通知處理失敗：', err.code || err.name));
-    return { ok: true, booking: updated[0] };
+    // 取消後寄客人取消通知；寄信結果不影響已完成的取消。
+    const mailStatus = target === STATUS.CANCELLED ? await notifyCancellation(updated[0]) : undefined;
+    return { ok: true, booking: updated[0], ...(mailStatus ? { mailStatus } : {}) };
   } catch (err) { await client.query('ROLLBACK'); throw err; }
   finally { client.release(); }
 }
@@ -155,8 +162,9 @@ async function correctStatus(id, body = {}, actor = 'ADMIN') {
     if (before.revision !== expectedRevision) throw userError('預約已由其他人修改，請重新整理 / Booking changed; refresh and try again.', 409);
     if (!allowed[before.status]?.includes(target)) throw userError('不允許這項狀態更正 / This correction is not allowed.', 409);
     const actual = target === STATUS.CHECKED_IN ? (body.actualPax ?? before.actual_pax ?? before.pax) : null;
-    if (target === STATUS.CHECKED_IN && (!Number.isSafeInteger(actual) || actual < 1 || actual > CONFIG.MAX_PAX)) {
-      throw userError('實際人數須為 1 至 12 / Actual guests must be 1 to 12.');
+    const ceiling = guestCeiling(before);
+    if (target === STATUS.CHECKED_IN && (!Number.isSafeInteger(actual) || actual < 1 || actual > ceiling)) {
+      throw userError(`實際人數須為 1 至 ${ceiling} / Actual guests must be 1 to ${ceiling}.`);
     }
     if ([STATUS.CANCELLED, STATUS.NO_SHOW].includes(before.status)) {
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`booking-date:${before.date}`]);
@@ -166,6 +174,7 @@ async function correctStatus(id, body = {}, actor = 'ADMIN') {
     }
     const { rows: updated } = await client.query(
       `UPDATE bookings SET status=$2,actual_pax=$3,
+        cancel_reason='',no_show_note='',
         checked_in_at=CASE WHEN $2='CONFIRMED' THEN NULL ELSE COALESCE(checked_in_at,now()) END,
         completed_at=NULL,cancelled_at=NULL,no_show_at=NULL,
         confirmed_at=CASE WHEN $2='CONFIRMED' THEN COALESCE(confirmed_at,now()) ELSE confirmed_at END,

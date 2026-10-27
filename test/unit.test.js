@@ -172,7 +172,7 @@ test('成功頁姓名與 Email 僅作文字；未送信不承諾 LINE 私訊', (
   vm.runInContext(fs.readFileSync('public/assets/booking.js', 'utf8'), ctx);
   ctx.onDone({ mailStatus: 'NOT_CONFIGURED', summary: { bookingId: 'booking-123', name: '<img onerror=alert(1)>', email: 'x<y@example.invalid', pax: 2, dateLabel: 'date', slotLabel: 'slot', deadline: '下午 2:40', graceMinutes: 10 } });
   const details = nodes.get('doneCard').children[1].children;
-  const nameIndex = details.findIndex((item) => item.text === '預約人 / Name');
+  const nameIndex = details.findIndex((item) => item.text === '預約人');
   assert.equal(details[nameIndex + 1].text, '<img onerror=alert(1)>');
   assert.match(nodes.get('doneCard').children[2].text, /預約已成立/);
   assert.doesNotMatch(nodes.get('doneCard').children[2].text, /我們會另外透過 LINE/);

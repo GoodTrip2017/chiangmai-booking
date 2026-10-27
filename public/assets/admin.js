@@ -8,6 +8,7 @@
   var discoverySources = [];
   var reportPage = 1;
   var reportTotal = 0;
+  var reportPageSize = 25;
   var manualNotificationPreview = null;
   var calendarView = 'week';
   var calendarDay = '';
@@ -17,7 +18,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var esc = function (s) {
     return String(s === undefined || s === null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   };
 
   async function api(path, options) {
@@ -240,9 +241,10 @@
     }).catch(function (err) { $('bookingHistory').textContent = err.message; });
     $('bookingNotifications').replaceChildren();
     if (!data.notifications.length) $('bookingNotifications').textContent = '尚無通知紀錄 / No notification records.';
+    var kindLabel = { LINE_GROUP: 'LINE 群組 / Staff group', CUSTOMER_EMAIL: '客人 Email / Customer email' };
     data.notifications.forEach(function (n) {
       var row = document.createElement('p');
-      row.textContent = formatBangkok(n.attempted_at || n.scheduled_at) + ' · ' + n.event_type + ' · ' +
+      row.textContent = formatBangkok(n.attempted_at || n.scheduled_at) + ' · ' + (kindLabel[n.recipient_kind] || n.recipient_kind) + ' · ' + n.event_type + ' · ' +
         n.status + ' · ' + n.attempt_count + ' 次嘗試 / attempts' +
         (n.failure_reason ? ' · ' + n.failure_reason : '');
       $('bookingNotifications').appendChild(row);
@@ -270,7 +272,8 @@
       button.textContent = statusLabel(target);
       button.addEventListener('click', function () {
         var body = { status: target, revision: b.revision, reason: $('fStatusReason').value.trim() };
-        if (target === 'CHECKED_IN') body.actualPax = Number($('fActualPax').value);
+        // 留空代表依預約人數報到，交給後端決定；不要送出 null。
+        if (target === 'CHECKED_IN' && $('fActualPax').value !== '') body.actualPax = Number($('fActualPax').value);
         busy(true);
         api('/api/admin/bookings/' + encodeURIComponent(b.id) + '/status', { method: 'POST', body: JSON.stringify(body) })
           .then(function () { busy(false); closeModal(); load(); })
@@ -345,21 +348,21 @@
       load();
     }).catch(function (err) {
       busy(false);
-      $('mSave').textContent = '儲存';
-      showMMsg(err.message || '操作失敗。');
+      $('mSave').textContent = '儲存 / Save';
+      showMMsg(err.message || '操作失敗 / Action failed.');
 
     });
   });
 
   $('mCancelBooking').addEventListener('click', function () {
     if (!editing) return;
-    if (!confirm('確定要取消「' + editing.name + ' x' + editing.pax + '人」的預約嗎？\n（不會寄取消信）')) return;
+    if (!confirm('確定要取消「' + editing.name + ' x' + editing.pax + '人」的預約嗎？系統會寄取消通知給客人並推播工作群組。\nCancel this booking? The customer will receive a cancellation email and the staff group will be notified.')) return;
     busy(true);
     var reason = prompt('取消原因 / Cancellation reason');
     if (!reason || !reason.trim()) { busy(false); return; }
     api('/api/admin/bookings/' + encodeURIComponent(editing.id) + '/cancel', { method: 'POST', body: JSON.stringify({ revision: editing.revision, reason: reason.trim() }) })
       .then(function () { busy(false); closeModal(); load(); })
-      .catch(function (err) { busy(false); $('mSave').textContent = '儲存'; showMMsg(err.message || '取消失敗。'); });
+      .catch(function (err) { busy(false); $('mSave').textContent = '儲存 / Save'; showMMsg(err.message || '取消失敗 / Cancellation failed.'); });
   });
 
   $('mClose').addEventListener('click', closeModal);
@@ -646,6 +649,7 @@
     api('/api/admin/bookings?' + query.toString()).then(function (data) {
       $('bookingRows').replaceChildren();
       reportTotal = data.total;
+      reportPageSize = data.pageSize || reportPageSize;
       $('bookingCount').textContent = data.total + ' 筆結果 / results · 第 ' + data.page + ' 頁 / page';
       $('bookingPrevious').disabled = reportPage <= 1;
       $('bookingNext').disabled = reportPage * data.pageSize >= reportTotal;
@@ -685,7 +689,7 @@
   $('reportRefresh').addEventListener('click', loadReport);
   $('searchBookings').addEventListener('click', function () { reportPage = 1; loadReportBookings(); });
   $('bookingPrevious').addEventListener('click', function () { if (reportPage > 1) { reportPage--; loadReportBookings(); } });
-  $('bookingNext').addEventListener('click', function () { if (reportPage * 25 < reportTotal) { reportPage++; loadReportBookings(); } });
+  $('bookingNext').addEventListener('click', function () { if (reportPage * reportPageSize < reportTotal) { reportPage++; loadReportBookings(); } });
   $('saveAdministration').addEventListener('click', function () {
     if (!editing) return;
     var reason = $('fAdministrationReason').value.trim();
@@ -704,11 +708,11 @@
     var reason = $('correctionReason').value.trim();
     if (!reason) return showMMsg('請填寫更正原因 / A correction reason is required.');
     var status = $('correctionStatus').value;
-    if (!confirm('確定將此預約更正為「' + statusLabel(status) + '」？\nThe previous status will remain in history.')) return;
+    if (!confirm('確定將此預約更正為「' + statusLabel(status) + '」？原狀態會保留在異動歷程。\nCorrect this booking to "' + statusLabel(status) + '"? The previous status stays in the change history.')) return;
     $('saveCorrection').disabled = true;
     api('/api/admin/bookings/' + encodeURIComponent(editing.id) + '/correct-status', { method: 'POST',
       body: JSON.stringify({ revision: editing.revision, status: status,
-        actualPax: status === 'CHECKED_IN' ? Number($('fActualPax').value) : undefined, reason: reason }) })
+        actualPax: status === 'CHECKED_IN' && $('fActualPax').value !== '' ? Number($('fActualPax').value) : undefined, reason: reason }) })
       .then(function () { $('saveCorrection').disabled = false; closeModal(); load(); })
       .catch(function (err) { $('saveCorrection').disabled = false; showMMsg(err.message); });
   });
@@ -1110,13 +1114,13 @@
     if (!editing) return;
     var current = payload();
     if (['name','pax','date','slot','email'].some(function (key) { return current[key] !== editing[key]; })) {
-      showMMsg('請先儲存修改，再重寄確認信。'); return;
+      showMMsg('請先儲存修改，再重寄確認信 / Save your changes before resending.'); return;
     }
     busy(true);
     api('/api/admin/bookings/' + encodeURIComponent(editing.id) + '/resend-mail', { method: 'POST' })
-      .then(function () { showMMsg('確認信已交由寄信服務寄送。'); load(); })
+      .then(function () { showMMsg('確認信已交由寄信服務寄送 / The mail service accepted the confirmation.'); load(); })
       .catch(function (err) { showMMsg(err.message); })
-      .finally(function () { busy(false); $('mSave').textContent = '儲存'; });
+      .finally(function () { busy(false); $('mSave').textContent = '儲存 / Save'; });
   });
   function loadDiscoverySources() {
     api('/api/admin/discovery-sources').then(function (data) {
@@ -1138,6 +1142,7 @@
     csrfToken = session.csrfToken; role = session.role;
     $('reportFrom').value = session.today; $('reportTo').value = session.today;
     todayBangkok = session.today;
+    $('logout').disabled = false;
     $('calendarDate').value = session.today; $('calendarMonthInput').value = session.today.slice(0, 7); calendarDay = session.today;
     $('accountsTab').hidden = role !== 'ADMIN';
     $('notificationsTab').hidden = role !== 'ADMIN';

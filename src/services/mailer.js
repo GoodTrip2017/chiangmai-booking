@@ -99,8 +99,50 @@ function buildConfirmationHtml(booking) {
     '</div>';
 }
 
+/** 取消通知。不帶店員填寫的取消原因（屬內部紀錄），只告知客人預約已取消與聯絡方式。 */
+function cancellationSubject(booking) {
+  return `【${CONFIG.SENDER_NAME}】預約已取消 / Booking cancelled — ` +
+    `${dt.formatDateZh(booking.date)} ${dt.formatTimeZh(dt.getSlotDef(booking.slot).start)}`;
+}
+function buildCancellationText(booking) {
+  return [
+    `${booking.name} 您好 / Hello ${booking.name},`,
+    '',
+    '您的以下預約已經取消。 / The following booking has been cancelled.',
+    '',
+    `• 預約編號 / Booking ID: ${booking.id}`,
+    `• 原訂日期 / Visit date: ${dt.formatDateZh(booking.date)}`,
+    `• 原訂時段 / Time slot: ${dt.slotLabelZh(booking.slot)} (GMT+7)`,
+    `• 人數 / Guests: ${booking.pax}`,
+    '',
+    `如需重新預約，歡迎再次使用預約網頁，或透過 LINE (${CONFIG.LINE_URL}) 與我們聯絡。`,
+    `To book again, use the booking page or contact us on LINE (${CONFIG.LINE_URL}).`,
+    '',
+    `若這不是您提出的取消，請透過 LINE 告訴我們。 / If you did not request this cancellation, please let us know on LINE.`,
+    '',
+    `${CONFIG.SENDER_NAME} 敬上`,
+  ].join('\n');
+}
+function buildCancellationHtml(booking) {
+  const row = (label, value) => `<li style="margin:6px 0"><strong>${label}：</strong> ${value}</li>`;
+  return '' +
+    '<div style="font-family:-apple-system,\'Noto Sans TC\',\'Microsoft JhengHei\',sans-serif;font-size:15px;line-height:1.75;color:#222;max-width:620px">' +
+      `<p>${escapeHtml(booking.name)} 您好 / Hello ${escapeHtml(booking.name)},</p>` +
+      '<p>您的以下預約已經取消。 / The following booking has been cancelled.</p>' +
+      '<ul style="list-style:none;padding-left:0">' +
+        row('預約編號 / Booking ID', escapeHtml(booking.id)) +
+        row('原訂日期 / Visit date', dt.formatDateZh(booking.date)) +
+        row('原訂時段 / Time slot', `${dt.slotLabelZh(booking.slot)} (GMT+7)`) +
+        row('人數 / Guests', `${escapeHtml(booking.pax)} 人 / guests`) +
+      '</ul>' +
+      `<p>如需重新預約，歡迎再次使用預約網頁，或透過 <a href="${CONFIG.LINE_URL}">LINE</a> 與我們聯絡。 / To book again, use the booking page or contact us on LINE.</p>` +
+      '<p>若這不是您提出的取消，請透過 LINE 告訴我們。 / If you did not request this cancellation, please let us know on LINE.</p>' +
+      `<p style="margin-top:20px">${escapeHtml(CONFIG.SENDER_NAME)} 敬上</p>` +
+    '</div>';
+}
+
 /** ACCEPTED 代表寄信服務已接受，不保證信箱投遞成功。 */
-async function sendConfirmation(booking, requestKey) {
+async function sendEmail(booking, requestKey, message) {
   if (!booking.email) return 'NO_EMAIL';
   if (!isConfigured()) return 'NOT_CONFIGURED';
   const response = await fetch('https://api.resend.com/emails', {
@@ -110,15 +152,13 @@ async function sendConfirmation(booking, requestKey) {
       Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
       'Content-Type': 'application/json',
       'User-Agent': 'chiangmai-booking/1.1',
-      'Idempotency-Key': requestKey || `confirmation/${booking.id}`,
+      'Idempotency-Key': requestKey,
     },
     body: JSON.stringify({
       from: process.env.MAIL_FROM,
       ...(process.env.MAIL_REPLY_TO ? { reply_to: process.env.MAIL_REPLY_TO } : {}),
       to: [booking.email],
-      subject: mailSubject(booking),
-      text: buildConfirmationText(booking),
-      html: buildConfirmationHtml(booking),
+      ...message,
     }),
   });
   if (!response.ok) throw Object.assign(new Error('寄信服務暫時無法接受請求。'), { code: `MAIL_HTTP_${response.status}` });
@@ -126,4 +166,15 @@ async function sendConfirmation(booking, requestKey) {
   if (!result.id) throw Object.assign(new Error('寄信服務回應不完整。'), { code: 'MAIL_RESPONSE_INVALID' });
   return 'ACCEPTED';
 }
-module.exports = { sendConfirmation, isConfigured, buildConfirmationHtml, buildConfirmationText };
+async function sendConfirmation(booking, requestKey) {
+  return sendEmail(booking, requestKey || `confirmation/${booking.id}`, {
+    subject: mailSubject(booking), text: buildConfirmationText(booking), html: buildConfirmationHtml(booking),
+  });
+}
+async function sendCancellation(booking, requestKey) {
+  return sendEmail(booking, requestKey || `cancellation/${booking.id}/${booking.revision}`, {
+    subject: cancellationSubject(booking), text: buildCancellationText(booking), html: buildCancellationHtml(booking),
+  });
+}
+module.exports = { sendConfirmation, sendCancellation, isConfigured, buildConfirmationHtml, buildConfirmationText,
+  buildCancellationText, buildCancellationHtml, cancellationSubject };

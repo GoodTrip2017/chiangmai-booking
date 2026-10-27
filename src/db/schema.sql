@@ -20,9 +20,14 @@ CREATE TABLE IF NOT EXISTS bookings (
 CREATE INDEX IF NOT EXISTS idx_bookings_date_slot ON bookings (date, slot) WHERE status = 'CONFIRMED';
 
 -- 保留舊預約，不自動刪減；新寫入或修改的單筆不得超過 12 人。
+-- 舊的 13 人以上預約以 legacy_pax 記錄原人數：之後報到、結案、寄信、取消等更新不會被約束擋下，
+-- 但人數不能再改成其他超額值。NOT VALID 的 CHECK 仍會檢查後續 UPDATE，所以不能只靠舊約束。
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS legacy_pax INTEGER;
+ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_pax_limit;
+UPDATE bookings SET legacy_pax = pax WHERE pax > 12 AND legacy_pax IS NULL;
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'bookings_pax_limit' AND conrelid = 'bookings'::regclass) THEN
-    ALTER TABLE bookings ADD CONSTRAINT bookings_pax_limit CHECK (status = 'CANCELLED' OR pax BETWEEN 1 AND 12) NOT VALID;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'bookings_pax_limit_v2' AND conrelid = 'bookings'::regclass) THEN
+    ALTER TABLE bookings ADD CONSTRAINT bookings_pax_limit_v2 CHECK (pax BETWEEN 1 AND 12 OR status = 'CANCELLED' OR pax = legacy_pax) NOT VALID;
   END IF;
 END $$;
 
@@ -139,8 +144,7 @@ INSERT INTO customers (normalized_email)
   SELECT DISTINCT lower(trim(email)) FROM bookings WHERE trim(email) <> ''
   ON CONFLICT (normalized_email) DO NOTHING;
 UPDATE bookings b SET customer_id=c.id FROM customers c
-  WHERE b.customer_id IS NULL AND lower(trim(b.email))=c.normalized_email
-  AND (b.pax BETWEEN 1 AND 12 OR b.status='CANCELLED');
+  WHERE b.customer_id IS NULL AND lower(trim(b.email))=c.normalized_email;
 CREATE INDEX IF NOT EXISTS idx_bookings_customer ON bookings (customer_id, date);
 
 -- Backfill only exact legacy selections. Unknown stays unknown; old text remains untouched.
@@ -152,9 +156,9 @@ UPDATE bookings SET discovery_source_id = CASE referral
   WHEN 'GoodTrip門市' THEN 'legacy-goodtrip-store'
   WHEN '網路搜尋' THEN 'legacy-online-search'
   ELSE NULL END
-WHERE discovery_source_id IS NULL AND referral <> '' AND (pax BETWEEN 1 AND 12 OR status='CANCELLED');
-UPDATE bookings SET entry_source = source WHERE entry_source = 'UNKNOWN' AND source IN ('WEB', 'WALK_IN', 'LINE', 'PHONE') AND (pax BETWEEN 1 AND 12 OR status='CANCELLED');
-UPDATE bookings SET confirmed_at = created_at WHERE status = 'CONFIRMED' AND confirmed_at IS NULL AND pax BETWEEN 1 AND 12;
+WHERE discovery_source_id IS NULL AND referral <> '';
+UPDATE bookings SET entry_source = source WHERE entry_source = 'UNKNOWN' AND source IN ('WEB', 'WALK_IN', 'LINE', 'PHONE');
+UPDATE bookings SET confirmed_at = created_at WHERE status = 'CONFIRMED' AND confirmed_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_bookings_discovery ON bookings (discovery_source_id, date);
 CREATE INDEX IF NOT EXISTS idx_bookings_created ON bookings (created_at);
