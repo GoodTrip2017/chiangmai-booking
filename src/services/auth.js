@@ -27,7 +27,7 @@ function assertAuthConfig() {
 }
 async function hashPassword(password) {
   if (typeof password !== 'string' || password.length < 16 || password.length > 256) {
-    throw userError('密碼請使用 16–256 個字元。');
+    throw userError('密碼請使用 16–256 個字元 / Password must be 16–256 characters.');
   }
   const salt = crypto.randomBytes(16).toString('hex');
   const key = await scrypt(password, salt, 64, SCRYPT_OPTIONS);
@@ -36,7 +36,7 @@ async function hashPassword(password) {
 async function checkPassword(password, storedHash = passwordHash()) {
   const match = storedHash.match(HASH_PATTERN);
   if (!match || typeof password !== 'string' || password.length < 16 || password.length > 256) return false;
-  if (activeChecks >= 2) throw Object.assign(userError('登入忙碌中，請稍後再試。', 429), { retryAfter: 5 });
+  if (activeChecks >= 2) throw Object.assign(userError('登入忙碌中，請稍後再試 / Login is busy; try again shortly.', 429), { retryAfter: 5 });
   activeChecks++;
   try {
     const key = await scrypt(password, match[1], 64, SCRYPT_OPTIONS);
@@ -47,13 +47,13 @@ async function checkPassword(password, storedHash = passwordHash()) {
 // 限制保存在資料庫，重新部署或多個服務實例都不會重設限制。
 async function limitLogin(ip) {
   for (const [bucket, limit] of [[`ip:${ipDigest(ip)}`, 5], ['global', 60]]) {
-    await consumeLimit(bucket, limit, 900000, '登入嘗試過於頻繁，請 15 分鐘後再試。', true);
+    await consumeLimit(bucket, limit, 900000, '登入嘗試過於頻繁，請 15 分鐘後再試 / Too many login attempts; try again in 15 minutes.', true);
   }
 }
 function requireSameOrigin(req, res, next) {
   const expected = process.env.APP_ORIGIN || `${req.protocol}://${req.get('host')}`;
   if (req.get('origin') !== expected || !req.is('application/json') || req.get('Sec-Fetch-Site') === 'cross-site') {
-    return res.status(403).json({ error: '請從本站後台操作。' });
+    return res.status(403).json({ error: '請從本站後台操作 / Use this site to make the change.' });
   }
   next();
 }
@@ -104,7 +104,7 @@ async function sessionFor(req) {
 async function requireAdmin(req, res, next) {
   try {
     req.adminSession = await sessionFor(req);
-    if (!req.adminSession) return res.status(401).json({ error: '登入已失效，請重新登入。' });
+    if (!req.adminSession) return res.status(401).json({ error: '登入已失效，請重新登入 / Session expired; sign in again.' });
     next();
   } catch (err) { next(err); }
 }
@@ -112,7 +112,7 @@ function requireCsrf(req, res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   requireSameOrigin(req, res, () => {
     if (!secureEqual(req.get('X-CSRF-Token'), req.adminSession.csrf_token)) {
-      return res.status(403).json({ error: '操作驗證已失效，請重新整理。' });
+      return res.status(403).json({ error: '操作驗證已失效，請重新整理 / Request verification expired; refresh the page.' });
     }
     next();
   });

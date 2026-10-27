@@ -30,21 +30,21 @@
     options.credentials = 'same-origin';
     var res = await fetch(path, options);
     var data = await res.json().catch(function () { return {}; });
-    if (res.status === 401) { location.replace('/admin/login'); throw new Error('請重新登入。'); }
-    if (!res.ok) { var err = new Error(data.error || '連線失敗，請稍後再試。'); err.details = data; throw err; }
+    if (res.status === 401) { location.replace('/admin/login'); throw new Error('請重新登入 / Sign in again.'); }
+    if (!res.ok) { var err = new Error(data.error || '連線失敗，請稍後再試 / Connection failed; try again.'); err.details = data; throw err; }
     return data;
   }
 
   function load(m) {
     if (m !== undefined) monday = m;
     $('loading').style.display = 'block';
-    $('loading').textContent = '載入中…';
+    $('loading').textContent = '載入中 / Loading…';
     api('/api/admin/week' + (monday ? '?monday=' + encodeURIComponent(monday) : ''))
       .then(function (data) { week = data; monday = data.monday; render(); ['prev','this','next','addNew'].forEach(function (id) { $(id).disabled = false; });
         var today = data.days.find(function (d) { return d.isToday; });
         if (today && !$('reportFrom').value) { $('reportFrom').value = today.date; $('reportTo').value = today.date; }
       })
-      .catch(function (err) { $('loading').textContent = err.message || '載入失敗'; });
+      .catch(function (err) { $('loading').textContent = err.message || '載入失敗 / Loading failed.'; });
   }
 
   function render() {
@@ -54,7 +54,7 @@
     var html = '<tr><th class="slotcol">時段 / Time slot</th>';
     visibleDays.forEach(function (entry) { var d = entry.day;
       html += '<th class="' + (d.isToday ? 'today' : '') + '">' + esc(d.weekday) + ' ' + esc(d.dayLabel) +
-        (d.closed ? '（公休）' : '') + (d.isToday ? ' ●' : '') + '</th>';
+        (d.closed ? '（公休 / Closed）' : '') + (d.isToday ? ' ●' : '') + '</th>';
     });
     html += '</tr>';
 
@@ -90,27 +90,27 @@
     if (cell.groups === 0) {
       head = '<span class="cnt">—</span>';
     } else if (cell.overCapacity) {
-      head = '<span class="cnt">' + cell.totalPax + ' 人</span><span class="whole">舊資料超過上限，請調整</span>';
+      head = '<span class="cnt">' + cell.totalPax + ' 人 / guests</span><span class="whole">舊資料超過上限，請調整 / Legacy booking exceeds capacity</span>';
     } else {
       head = '<span class="cnt">' + cell.totalPax + ' / ' + week.maxPax + '</span>' +
-        '<span>' + cell.groups + ' 組</span>' +
-        (cell.full ? '<span style="color:var(--err)">已滿</span>' : '');
+        '<span>' + cell.groups + ' 組 / groups</span>' +
+        (cell.full ? '<span style="color:var(--err)">已滿 / Full</span>' : '');
     }
     var out = '<div class="cellhead' + (cell.full ? ' full' : '') + '">' + head +
-      (!cell.bookable ? '' : '<button class="add" data-d="' + di + '" data-s="' + si + '" title="手動新增">＋</button>') + '</div>';
+      (!cell.bookable ? '' : '<button class="add" data-d="' + di + '" data-s="' + si + '" title="手動新增 / Add booking">＋</button>') + '</div>';
 
     if (cell.bookings.length === 0) return out + '<div class="empty">' +
-      (cell.groups ? '由重疊的舊時段預約占用' : '無預約') + '</div>';
+      (cell.groups ? '由重疊的舊時段預約占用 / Occupied by overlapping legacy booking' : '無預約 / No bookings') + '</div>';
 
     cell.bookings.forEach(function (b, i) {
       var bad = b.mailFailed;
       out += '<div class="chip' + (bad ? ' warn' : '') + '" data-d="' + di + '" data-s="' + si + '" data-i="' + i + '">' +
         '<div class="nm">' + esc(b.name) + ' <span class="cnt">x' + b.pax + '</span><span class="tag">' + esc(statusLabel(b.status)) + '</span>' +
-          (b.firstTime === '是' ? '<span class="tag first">初次</span>' : '') +
+          (b.firstTime === '是' ? '<span class="tag first">初次 / First</span>' : '') +
           (b.source !== 'WEB' ? '<span class="tag">' + esc(sourceLabel(b.source)) + '</span>' : '') +
-          (b.mailFailed ? '<span class="tag err">信未寄出</span>' : (b.email && b.mailStatus === 'NOT_REQUESTED' ? '<span class="tag">尚未寄信</span>' : '')) +
+          (b.mailFailed ? '<span class="tag err">信未寄出 / Email failed</span>' : (b.email && b.mailStatus === 'NOT_REQUESTED' ? '<span class="tag">尚未寄信 / Email not sent</span>' : '')) +
         '</div>' +
-        '<div class="meta">' + (b.line ? 'LINE ' + esc(b.line) + ' · ' : '') + esc(b.email || '無 Email') +
+        '<div class="meta">' + (b.line ? 'LINE ' + esc(b.line) + ' · ' : '') + esc(b.email || '無 Email / No email') +
           (b.referral ? ' · 來自 ' + esc(b.referral) : '') + '</div>' +
         (b.note ? '<div class="meta">備註 / Note: ' + esc(b.note) + '</div>' : '') +
         '</div>';
@@ -137,7 +137,7 @@
   function openModal() {
     $('mMsg').className = 'mmsg';
     submission = null;
-    $('mSave').textContent = '儲存';
+    $('mSave').textContent = '儲存 / Save';
     $('mask').className = 'mask on';
     $('modal').className = 'modal on';
   }
@@ -310,17 +310,17 @@
     $('mCancelBooking').disabled = on;
     $('mResend').disabled = on;
     $('mClose').disabled = on;
-    if (on) $('mSave').textContent = '處理中…';
+    if (on) $('mSave').textContent = '處理中 / Saving…';
   }
 
   $('mSave').addEventListener('click', function () {
     var p = payload();
-    if (!p.name) return showMMsg('請填寫預約人。');
-    if (!p.date) return showMMsg('請選擇日期。');
-    if (!p.email) return showMMsg('請填寫 Email，確認信會寄到這個信箱。');
+    if (!p.name) return showMMsg('請填寫預約人 / Enter the booking contact.');
+    if (!p.date) return showMMsg('請選擇日期 / Select a visit date.');
+    if (!p.email) return showMMsg('請填寫 Email，確認信會寄到這個信箱 / Enter an email address for confirmation.');
     if (editing && !p.changeReason) return showMMsg('請填寫修改原因 / A change reason is required.');
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email)) return showMMsg('請填寫正確的 Email。');
-    if (!Number.isInteger(p.pax) || p.pax < 1 || p.pax > 12) return showMMsg('人數請填 1 至 12 的整數。');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email)) return showMMsg('請填寫正確的 Email / Enter a valid email address.');
+    if (!Number.isInteger(p.pax) || p.pax < 1 || p.pax > 12) return showMMsg('人數請填 1 至 12 的整數 / Guests must be a whole number from 1 to 12.');
     var fingerprint = JSON.stringify(p);
     if (!submission || submission.fingerprint !== fingerprint) submission = { fingerprint: fingerprint, id: crypto.randomUUID() };
     p.requestId = submission.id;

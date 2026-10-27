@@ -43,7 +43,7 @@ router.post('/', async (req, res, next) => {
     const events = req.body?.events;
     if (!Array.isArray(events) || events.length > 100 || events.some(event =>
       !event || typeof event !== 'object' || Array.isArray(event) || typeof event.type !== 'string' || event.type.length > 80)) {
-      throw userError('Webhook 格式不正確。');
+      throw userError('Webhook 格式不正確 / Invalid webhook payload.');
     }
     for (const event of events) await handleEvent(event);
     res.sendStatus(200);

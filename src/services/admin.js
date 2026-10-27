@@ -33,7 +33,7 @@ function publicBooking(b) {
 
 /** 一週的預約總覽（週一 ~ 週日） */
 async function getWeekData(mondayStr) {
-  if (!dt.isValidDateStr(mondayStr)) throw userError('日期格式不正確。');
+  if (!dt.isValidDateStr(mondayStr)) throw userError('日期格式不正確 / Invalid date.');
   const monday = dt.mondayOf(mondayStr);
   const today = dt.todayStr();
   const sunday = dt.addDaysStr(monday, 6);

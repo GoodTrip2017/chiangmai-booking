@@ -97,7 +97,7 @@ async function capacityCheck(db, dateStr, slot, pax, excludeId, options = {}) {
 
 /** 前台：取某一天六個時段的即時狀態 */
 async function getAvailability(dateStr) {
-  if (!dt.isValidDateStr(dateStr)) throw userError('日期格式不正確。');
+  if (!dt.isValidDateStr(dateStr)) throw userError('日期格式不正確 / Invalid date.');
   const rules = await rulesService.dayRules(pool, dateStr);
 
   const result = {
