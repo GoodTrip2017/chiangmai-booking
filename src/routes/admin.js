@@ -12,6 +12,7 @@ const tracking = require('../services/tracking');
 const QRCode = require('qrcode');
 const customers = require('../services/customers');
 const notificationPolicy = require('../services/notificationPolicy');
+const audit = require('../services/audit');
 
 const router = express.Router();
 const actorFor = req => ({ type: req.adminSession.role, id: req.adminSession.account_id || 'environment-admin' });
@@ -33,7 +34,12 @@ router.get('/notification-settings', auth.requireRole('ADMIN'), async (req, res,
   catch (err) { next(err); }
 });
 router.put('/notification-settings/:eventType', auth.requireRole('ADMIN'), async (req, res, next) => {
-  try { res.json(await notificationPolicy.updatePolicy(req.params.eventType, req.body)); }
+  try {
+    const result = await notificationPolicy.updatePolicy(req.params.eventType, req.body);
+    await audit.record(actorFor(req), 'NOTIFICATION_POLICY_UPDATED', req.params.eventType,
+      { enabled: result.enabled, reminderMinutes: result.reminder_minutes });
+    res.json(result);
+  }
   catch (err) { next(err); }
 });
 router.post('/notification-settings/:eventType/preview', auth.requireRole('ADMIN'), async (req, res, next) => {
@@ -52,11 +58,11 @@ router.get('/discovery-sources', async (req, res, next) => {
   catch (err) { next(err); }
 });
 router.post('/discovery-sources', auth.requireRole('ADMIN'), async (req, res, next) => {
-  try { res.status(201).json(await discovery.createSource(req.body)); }
+  try { const result = await discovery.createSource(req.body); await audit.record(actorFor(req), 'DISCOVERY_SOURCE_CREATED', result.id); res.status(201).json(result); }
   catch (err) { next(err); }
 });
 router.put('/discovery-sources/:id', auth.requireRole('ADMIN'), async (req, res, next) => {
-  try { res.json(await discovery.updateSource(req.params.id, req.body)); }
+  try { const result = await discovery.updateSource(req.params.id, req.body); await audit.record(actorFor(req), 'DISCOVERY_SOURCE_UPDATED', req.params.id); res.json(result); }
   catch (err) { next(err); }
 });
 
@@ -68,10 +74,10 @@ router.get('/tracking-links', auth.requireRole('ADMIN'), async (req, res, next) 
   } catch (err) { next(err); }
 });
 router.post('/tracking-links', auth.requireRole('ADMIN'), async (req, res, next) => {
-  try { res.status(201).json(await tracking.createTracking(req.body)); } catch (err) { next(err); }
+  try { const result = await tracking.createTracking(req.body); await audit.record(actorFor(req), 'TRACKING_LINK_CREATED', result.code); res.status(201).json(result); } catch (err) { next(err); }
 });
 router.patch('/tracking-links/:code', auth.requireRole('ADMIN'), async (req, res, next) => {
-  try { res.json(await tracking.updateTracking(req.params.code, req.body)); } catch (err) { next(err); }
+  try { const result = await tracking.updateTracking(req.params.code, req.body); await audit.record(actorFor(req), 'TRACKING_LINK_UPDATED', req.params.code); res.json(result); } catch (err) { next(err); }
 });
 router.get('/tracking-links/:code/qr.svg', auth.requireRole('ADMIN'), async (req, res, next) => {
   try {
@@ -100,6 +106,9 @@ router.get('/bookings', async (req, res, next) => {
 router.get('/bookings.csv', auth.requireRole('ADMIN'), async (req, res, next) => {
   try {
     const csv = await reporting.exportBookingsCsv(req.query);
+    const filter = reporting.filters(req.query);
+    await audit.record(actorFor(req), 'BOOKINGS_CSV_EXPORTED', '',
+      { from: filter.from, to: filter.to, basis: filter.basis, status: filter.status, discovery: filter.discovery });
     res.set({ 'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': 'attachment; filename="chiangmai-bookings.csv"',
       'Cache-Control': 'no-store' });
@@ -130,6 +139,7 @@ router.get('/availability-settings', auth.requireRole('ADMIN'), async (req, res,
 router.put('/availability-settings', auth.requireRole('ADMIN'), async (req, res, next) => {
   try {
     const result = await rules.updateSettings(req.body);
+    if (result.ok) await audit.record(actorFor(req), 'AVAILABILITY_SETTINGS_UPDATED');
     res.status(result.ok ? 200 : 409).json(result);
   } catch (err) { next(err); }
 });
@@ -143,10 +153,10 @@ router.get('/availability-exceptions', auth.requireRole('ADMIN'), async (req, re
   } catch (err) { next(err); }
 });
 router.put('/availability-exceptions/:date', auth.requireRole('ADMIN'), async (req, res, next) => {
-  try { const result = await rules.upsertException({ ...req.body, date: req.params.date }); res.status(result.ok ? 200 : 409).json(result); } catch (err) { next(err); }
+  try { const result = await rules.upsertException({ ...req.body, date: req.params.date }); if (result.ok) await audit.record(actorFor(req), 'AVAILABILITY_EXCEPTION_UPDATED', req.params.date); res.status(result.ok ? 200 : 409).json(result); } catch (err) { next(err); }
 });
 router.put('/slot-overrides/:date/:slot', auth.requireRole('ADMIN'), async (req, res, next) => {
-  try { const result = await rules.upsertSlotOverride({ ...req.body, date: req.params.date, slot: req.params.slot }); res.status(result.ok ? 200 : 409).json(result); } catch (err) { next(err); }
+  try { const result = await rules.upsertSlotOverride({ ...req.body, date: req.params.date, slot: req.params.slot }); if (result.ok) await audit.record(actorFor(req), 'SLOT_OVERRIDE_UPDATED', req.params.date + '/' + req.params.slot); res.status(result.ok ? 200 : 409).json(result); } catch (err) { next(err); }
 });
 
 router.post('/bookings', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
@@ -182,7 +192,9 @@ router.patch('/bookings/:id/administration', auth.requireRole('ADMIN','STAFF'), 
 
 router.post('/bookings/:id/resend-mail', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
   try {
-    res.json(await booking.resendConfirmation(req.params.id));
+    const result = await booking.resendConfirmation(req.params.id);
+    await audit.record(actorFor(req), 'CONFIRMATION_MAIL_RESENT', req.params.id, { mailStatus: result.mailStatus });
+    res.json(result);
   } catch (err) { next(err); }
 });
 
@@ -193,10 +205,13 @@ router.get('/accounts', auth.requireRole('ADMIN'), async (req, res, next) => {
   } catch (err) { next(err); }
 });
 router.post('/accounts', auth.requireRole('ADMIN'), async (req, res, next) => {
-  try { res.status(201).json(await auth.createAccount(req.body)); } catch (err) { next(err); }
+  try { const result = await auth.createAccount(req.body); await audit.record(actorFor(req), 'STAFF_ACCOUNT_CREATED', result.id, { role: result.role }); res.status(201).json(result); } catch (err) { next(err); }
 });
 router.patch('/accounts/:id', auth.requireRole('ADMIN'), async (req, res, next) => {
-  try { res.json(await auth.setAccountActive(req.params.id, req.body?.active)); } catch (err) { next(err); }
+  try { const result = await auth.setAccountActive(req.params.id, req.body?.active); await audit.record(actorFor(req), 'STAFF_ACCOUNT_ACTIVE_CHANGED', result.id, { active: result.active }); res.json(result); } catch (err) { next(err); }
+});
+router.get('/system-events', auth.requireRole('ADMIN'), async (req, res, next) => {
+  try { res.json({ items: await audit.recent() }); } catch (err) { next(err); }
 });
 
 module.exports = router;

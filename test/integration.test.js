@@ -56,7 +56,7 @@ before(async () => {
   process.env.APP_ORIGIN = origin;
 });
 beforeEach(async () => {
-  await pool.query('TRUNCATE bookings, booking_events, notification_events, admin_sessions, staff_accounts, admin_login_limits, request_limits, availability_exceptions, slot_overrides, tracking_links, customers');
+  await pool.query('TRUNCATE bookings, booking_events, notification_events, system_events, admin_sessions, staff_accounts, admin_login_limits, request_limits, availability_exceptions, slot_overrides, tracking_links, customers');
   await pool.query("UPDATE availability_settings SET open_time='14:00',close_time='23:00',service_minutes=90,interval_minutes=90,max_pax=12,closed_weekdays=ARRAY[2],max_advance_days=NULL,cutoff_minutes=0,finish_before_close=true WHERE id=1");
 });
 after(async () => {
@@ -127,6 +127,7 @@ test('門市與分析帳號在伺服器端分權；停用帳號立即使工作�
   assert.match(exported.headers.get('content-type'), /text\/csv/);
   assert.match(exported.data, /Asia\/Bangkok/);
   assert.match(exported.data, /測試預約/);
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM system_events WHERE action='BOOKINGS_CSV_EXPORTED'")).rows[0].n, 1);
   assert.equal((await request('/api/admin/accounts/' + analyst.data.id, { ...administrator, method: 'PATCH', body: { active: false } })).status, 200);
   assert.equal((await request('/api/admin/analytics?from=' + form.date, analystSession)).status, 401);
 });
@@ -179,6 +180,12 @@ test('LINE 雙語範本、預覽權限與提醒排程取消', async () => {
     assert.equal(reminders.rows.length, 1);
     assert.equal(reminders.rows[0].status, 'QUEUED');
     assert.equal(reminders.rows[0].scheduled_at.toISOString(), '2098-12-31T07:00:00.000Z');
+    const notificationPolicy = require('../src/services/notificationPolicy');
+    await notificationPolicy.updatePolicy('REMINDER', { enabled: true, templateZh: '新提醒 {{name}}',
+      templateEn: 'Updated reminder {{date}}', reminderMinutes: 60 });
+    const moved = (await pool.query("SELECT scheduled_at,message_preview FROM notification_events WHERE booking_id=$1 AND event_type='REMINDER'", [saved.id])).rows[0];
+    assert.equal(moved.scheduled_at.toISOString(), '2099-01-01T06:00:00.000Z');
+    assert.match(moved.message_preview, /Updated reminder/);
     await line.cancelReminder(pool, saved.id);
     assert.equal((await pool.query("SELECT status FROM notification_events WHERE booking_id=$1 AND event_type='REMINDER'", [saved.id])).rows[0].status, 'SKIPPED');
   } finally {

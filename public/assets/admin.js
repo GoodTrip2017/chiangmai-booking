@@ -551,6 +551,16 @@
     }).catch(function (err) { $('notificationMessage').textContent = err.message; });
   }
   function loadAccounts() {
+    api('/api/admin/system-events').then(function (data) {
+      $('systemEventRows').replaceChildren();
+      data.items.forEach(function (event) {
+        var tr = document.createElement('tr');
+        [formatBangkok(event.created_at), event.actor_id, event.action, event.target || '—'].forEach(function (value) {
+          var td = document.createElement('td'); td.textContent = value; tr.appendChild(td);
+        });
+        $('systemEventRows').appendChild(tr);
+      });
+    }).catch(function (err) { $('accountsMessage').textContent = err.message; });
     api('/api/admin/accounts').then(function (data) {
       $('accountRows').replaceChildren();
       data.accounts.forEach(function (account) {

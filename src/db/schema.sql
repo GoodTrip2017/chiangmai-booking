@@ -183,6 +183,17 @@ CREATE TABLE IF NOT EXISTS booking_events (
 );
 CREATE INDEX IF NOT EXISTS idx_booking_events_booking ON booking_events (booking_id, id);
 
+CREATE TABLE IF NOT EXISTS system_events (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  actor_type TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  target TEXT NOT NULL DEFAULT '',
+  details JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_system_events_created ON system_events (created_at DESC, id DESC);
+
 CREATE TABLE IF NOT EXISTS notification_events (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   booking_id UUID REFERENCES bookings(id),

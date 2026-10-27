@@ -1,5 +1,6 @@
 const { pool } = require('../db');
 const { userError } = require('../util/errors');
+const dt = require('../util/datetime');
 
 const EVENTS = Object.freeze(['BOOKING_CONFIRMED', 'BOOKING_UPDATED', 'BOOKING_CANCELLED', 'REMINDER']);
 const VARIABLES = Object.freeze(['booking_id', 'name', 'date', 'time', 'guests', 'email', 'line', 'note', 'previous_date', 'previous_time']);
@@ -45,11 +46,41 @@ async function updatePolicy(eventType, input) {
   const en = validateTemplate(input.templateEn);
   const minutes = input.reminderMinutes;
   if (!Number.isSafeInteger(minutes) || minutes < 30 || minutes > 10080) throw userError('提醒時間須為 30 至 10080 分鐘 / Invalid reminder lead time.');
-  const { rows } = await pool.query(
-    'UPDATE notification_settings SET enabled=$2,template_zh=$3,template_en=$4,reminder_minutes=$5,updated_at=now() WHERE event_type=$1 RETURNING *',
-    [eventType, input.enabled, zh, en, minutes]
-  );
-  return rows[0];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      'UPDATE notification_settings SET enabled=$2,template_zh=$3,template_en=$4,reminder_minutes=$5,updated_at=now() WHERE event_type=$1 RETURNING *',
+      [eventType, input.enabled, zh, en, minutes]
+    );
+    if (eventType === 'REMINDER') await reconcileReminders(client, rows[0]);
+    await client.query('COMMIT');
+    return rows[0];
+  } catch (err) { await client.query('ROLLBACK'); throw err; }
+  finally { client.release(); }
+}
+
+async function reconcileReminders(client, setting) {
+  if (!setting.enabled || !process.env.LINE_CHANNEL_ACCESS_TOKEN || !process.env.LINE_GROUP_ID) {
+    await client.query("UPDATE notification_events SET status='SKIPPED',failure_reason='POLICY_DISABLED' WHERE event_type='REMINDER' AND status IN ('QUEUED','RETRY')");
+    return;
+  }
+  const { rows } = await client.query("SELECT * FROM bookings WHERE status IN ('PENDING','CONFIRMED') AND date::date >= (now() AT TIME ZONE 'Asia/Bangkok')::date ORDER BY date,slot,id");
+  for (const booking of rows) {
+    const sendAt = new Date(dt.toUtcMs(booking.date, booking.slot.slice(0, 5)) - setting.reminder_minutes * 60000);
+    if (sendAt.getTime() <= Date.now()) continue;
+    const text = preview(setting, booking);
+    if (text.length > 5000) continue;
+    await client.query(
+      `INSERT INTO notification_events (booking_id,event_type,recipient_kind,recipient_id,idempotency_key,status,
+        failure_reason,message_preview,scheduled_at) VALUES ($1,'REMINDER','LINE_GROUP',$2,$3,'QUEUED','',$4,$5)
+       ON CONFLICT (idempotency_key) DO UPDATE SET scheduled_at=EXCLUDED.scheduled_at,
+         message_preview=EXCLUDED.message_preview,recipient_id=EXCLUDED.recipient_id,
+         status='QUEUED',failure_reason=''
+       WHERE notification_events.status IN ('QUEUED','RETRY','SKIPPED')`,
+      [booking.id, process.env.LINE_GROUP_ID, `line-group/${booking.id}/${booking.revision}/REMINDER`, text, sendAt]
+    );
+  }
 }
 
 function preview(policy, booking, previous) {
