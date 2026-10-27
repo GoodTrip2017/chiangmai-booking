@@ -3,7 +3,31 @@
 
   var availabilityVersion = 0;
   var submission = null;
+  var tracking = { firstTouchSource: '', firstTouchMedium: '', firstTouchCampaign: '', trackingCode: '' };
   var $ = function (id) { return document.getElementById(id); };
+
+  try {
+    if (window.location && typeof URLSearchParams !== 'undefined') {
+      var params = new URLSearchParams(window.location.search || '');
+      var current = {
+        firstTouchSource: (params.get('utm_source') || '').slice(0, 80),
+        firstTouchMedium: (params.get('utm_medium') || '').slice(0, 80),
+        firstTouchCampaign: (params.get('utm_campaign') || '').slice(0, 80)
+      };
+      var stored = window.sessionStorage && window.sessionStorage.getItem('booking-first-touch');
+      if (stored) {
+        var saved = JSON.parse(stored);
+        ['firstTouchSource','firstTouchMedium','firstTouchCampaign'].forEach(function (key) {
+          if (typeof saved[key] === 'string') tracking[key] = saved[key].slice(0, 80);
+        });
+      }
+      else if (current.firstTouchSource || current.firstTouchMedium || current.firstTouchCampaign) {
+        Object.assign(tracking, current);
+        if (window.sessionStorage) window.sessionStorage.setItem('booking-first-touch', JSON.stringify(current));
+      }
+      tracking.trackingCode = (params.get('ref') || '').slice(0, 40);
+    }
+  } catch (err) { /* Storage may be unavailable; booking still works. */ }
 
   // API helper：非 2xx 時丟出後端的 error 訊息
   async function api(path, options) {
@@ -194,7 +218,11 @@
       line: $('line').value.trim(),
       email: $('email').value.trim(),
       discoverySourceId: $('discoverySource').value,
-      discoveryDetail: $('discoveryDetailWrap').hidden ? '' : $('discoveryDetail').value.trim()
+      discoveryDetail: $('discoveryDetailWrap').hidden ? '' : $('discoveryDetail').value.trim(),
+      firstTouchSource: tracking.firstTouchSource,
+      firstTouchMedium: tracking.firstTouchMedium,
+      firstTouchCampaign: tracking.firstTouchCampaign,
+      trackingCode: tracking.trackingCode
     };
 
     if (!form.name) return showMsg('請填寫預約人（綽號或本名）。');

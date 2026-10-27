@@ -44,6 +44,7 @@ async function listBookings(query = {}, role = 'ADMIN') {
     `SELECT b.id,b.created_at,b.updated_at,b.revision,b.source,b.entry_source,b.name,b.pax,b.actual_pax,
       b.date,b.slot,b.email,b.line,b.status,b.referral,b.discovery_source_id,b.discovery_detail,
       b.note,b.internal_note,b.cancel_reason,b.no_show_note,b.mail_status,b.assigned_staff_id,
+      b.first_touch_source,b.first_touch_medium,b.first_touch_campaign,b.partner_code,b.campaign_code,
       d.label_zh AS discovery_zh,d.label_en AS discovery_en
      FROM bookings b LEFT JOIN discovery_sources d ON d.id=b.discovery_source_id
      WHERE ${w.clause} ORDER BY b.date DESC,b.slot DESC,b.created_at DESC,b.id DESC
@@ -101,8 +102,23 @@ async function analytics(query = {}) {
      FROM bookings b LEFT JOIN discovery_sources d ON d.id=b.discovery_source_id
      WHERE ${w.clause} GROUP BY d.id,d.label_zh,d.label_en ORDER BY bookings DESC,id`, w.values
   );
+  const { rows: entries } = await pool.query(
+    `SELECT COALESCE(NULLIF(b.entry_source,''),'UNKNOWN') AS source,count(*)::int AS bookings,
+      COALESCE(sum(b.pax),0)::int AS booked_guests FROM bookings b WHERE ${w.clause}
+     GROUP BY 1 ORDER BY bookings DESC`, w.values
+  );
+  const { rows: tracked } = await pool.query(
+    `SELECT COALESCE(NULLIF(b.first_touch_source,''),'UNKNOWN') AS source,
+      COALESCE(NULLIF(b.first_touch_medium,''),'UNKNOWN') AS medium,
+      COALESCE(NULLIF(b.first_touch_campaign,''),'UNKNOWN') AS campaign,
+      COALESCE(NULLIF(b.partner_code,''),NULLIF(b.campaign_code,''),'UNKNOWN') AS code,
+      count(*)::int AS bookings,COALESCE(sum(b.pax),0)::int AS booked_guests,
+      count(*) FILTER (WHERE b.checked_in_at IS NOT NULL)::int AS checked_in_bookings,
+      (sum(b.actual_pax) FILTER (WHERE b.checked_in_at IS NOT NULL))::int AS actual_guests
+     FROM bookings b WHERE ${w.clause} GROUP BY 1,2,3,4 ORDER BY bookings DESC`, w.values
+  );
   return {
-    filters: f, summary: summary[0], trend, discovery,
+    filters: f, summary: summary[0], trend, discovery, entries, tracked,
     definitions: {
       bookings: '預約筆數 / Booking orders: number of booking records in the chosen date basis.',
       booked_guests: '預約人數 / Booked guests: sum of booked group sizes; cancellations are included unless filtered out.',
@@ -110,6 +126,7 @@ async function analytics(query = {}) {
       actual_guests: '實際到店人數 / Actual guests: sum of recorded check-in counts; unknown values stay null.',
       cancellations: '取消筆數 / Cancellations: currently cancelled records, measured by the selected date basis.',
       no_shows: '未到筆數 / No-shows: staff-marked no-shows only; unresolved past bookings remain separate.',
+      attribution: '得知管道由客人自行填寫；入口由系統寫入；首次可辨識 UTM 僅為同一瀏覽器工作階段的連結參數，不代表跨裝置的完整歸因。 / Discovery is self-reported, entry is system-recorded, and first-touch UTM is limited to the current browser session.',
     },
   };
 }

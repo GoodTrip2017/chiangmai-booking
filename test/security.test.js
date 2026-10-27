@@ -73,7 +73,7 @@ before(async () => {
   await restartApp();
 });
 beforeEach(async () => {
-  await pool.query('TRUNCATE bookings, booking_events, notification_events, admin_sessions, staff_accounts, admin_login_limits, availability_exceptions, slot_overrides');
+  await pool.query('TRUNCATE bookings, booking_events, notification_events, admin_sessions, staff_accounts, admin_login_limits, availability_exceptions, slot_overrides, tracking_links');
   await pool.query("UPDATE availability_settings SET open_time='14:00',close_time='23:00',service_minutes=90,interval_minutes=90,max_pax=12,closed_weekdays=ARRAY[2],max_advance_days=NULL,cutoff_minutes=0,finish_before_close=true WHERE id=1");
   await pool.query('TRUNCATE line_group_candidates');
   if ((await pool.query("SELECT to_regclass('request_limits') AS table_name")).rows[0].table_name) await pool.query('TRUNCATE request_limits');

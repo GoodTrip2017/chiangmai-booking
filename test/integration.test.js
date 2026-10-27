@@ -56,7 +56,7 @@ before(async () => {
   process.env.APP_ORIGIN = origin;
 });
 beforeEach(async () => {
-  await pool.query('TRUNCATE bookings, booking_events, notification_events, admin_sessions, staff_accounts, admin_login_limits, request_limits, availability_exceptions, slot_overrides');
+  await pool.query('TRUNCATE bookings, booking_events, notification_events, admin_sessions, staff_accounts, admin_login_limits, request_limits, availability_exceptions, slot_overrides, tracking_links');
   await pool.query("UPDATE availability_settings SET open_time='14:00',close_time='23:00',service_minutes=90,interval_minutes=90,max_pax=12,closed_weekdays=ARRAY[2],max_advance_days=NULL,cutoff_minutes=0,finish_before_close=true WHERE id=1");
 });
 after(async () => {
@@ -170,7 +170,7 @@ test('切換 90 分鐘時段時保留舊預約，顯示後台並阻止重疊超�
   assert.ok(week.data.slotDefs.some(def => def.slot === '14:30-16:30' && def.legacy));
   assert.ok(week.data.days.some(day => day.slots.some(slot => slot.bookings.some(b => b.name === '舊預約甲'))));
   await booking.updateBooking({ ...form, id: a.rows[0].id, slot: '14:30-16:30', pax: 9 });
-  await assert.rejects(booking.updateBooking({ ...form, id: a.rows[0].id, slot: '14:30-16:30', date: '2099-01-02' }), { status: 400 });
+  await assert.rejects(booking.updateBooking({ ...form, id: a.rows[0].id, slot: '14:30-16:30', date: '2099-01-02' }), { status: 409 });
   await booking.createManualBooking({ ...form, slot: '15:30-17:00', pax: 2 });
   await assert.rejects(booking.createManualBooking({ ...form, slot: '15:30-17:00', pax: 1 }), { status: 409 });
 });
@@ -286,6 +286,29 @@ test('營業設定可產生重疊時段；關店異動先列出受影響預約�
   assert.equal((await request('/api/availability?date=' + tuesday)).data.closed, false);
   const special = await booking.createManualBooking({ ...form, date: tuesday, pax: 1 });
   assert.ok(special.id);
+});
+test('客人填寫來源、預約入口及首次 UTM 分開保存；合作代碼可產生 QR', async () => {
+  const administrator = await login();
+  const created = await request('/api/admin/tracking-links', { ...administrator, method: 'POST', body: {
+    code: 'hotel-nimman', name: 'Nimman Hotel', kind: 'PARTNER',
+    utmSource: 'hotel', utmMedium: 'qr', utmCampaign: 'front-desk',
+  } });
+  assert.equal(created.status, 201);
+  const qr = await request('/api/admin/tracking-links/hotel-nimman/qr.svg', administrator);
+  assert.equal(qr.status, 200);
+  assert.match(qr.headers.get('content-type'), /image\/svg\+xml/);
+  assert.match(qr.data, /<svg/);
+  const web = await request('/api/bookings', { method: 'POST', body: {
+    ...form, referral: '', discoverySourceId: 'google-maps', trackingCode: 'hotel-nimman',
+    firstTouchSource: 'hotel', firstTouchMedium: 'qr', firstTouchCampaign: 'front-desk',
+  } });
+  assert.equal(web.status, 200);
+  const { rows } = await pool.query('SELECT discovery_source_id,entry_source,first_touch_source,first_touch_medium,partner_code FROM bookings');
+  assert.deepEqual(rows[0], { discovery_source_id: 'google-maps', entry_source: 'WEB',
+    first_touch_source: 'hotel', first_touch_medium: 'qr', partner_code: 'hotel-nimman' });
+  const report = await request('/api/admin/analytics?from=' + form.date, administrator);
+  assert.equal(report.data.discovery.find(row => row.id === 'google-maps').bookings, 1);
+  assert.equal(report.data.tracked.find(row => row.code === 'hotel-nimman').bookings, 1);
 });
 test('錯誤不洩漏資料庫細節，資料庫不可用健康檢查回 503', async () => {
   assert.equal((await request('/api/availability?date=invalid')).status, 400);

@@ -110,6 +110,7 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS first_touch_source TEXT NOT NULL D
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS first_touch_medium TEXT NOT NULL DEFAULT '';
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS first_touch_campaign TEXT NOT NULL DEFAULT '';
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS partner_code TEXT NOT NULL DEFAULT '';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS campaign_code TEXT NOT NULL DEFAULT '';
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS actual_pax INTEGER CHECK (actual_pax >= 0);
@@ -142,6 +143,18 @@ UPDATE bookings SET confirmed_at = created_at WHERE status = 'CONFIRMED' AND con
 CREATE INDEX IF NOT EXISTS idx_bookings_discovery ON bookings (discovery_source_id, date);
 CREATE INDEX IF NOT EXISTS idx_bookings_created ON bookings (created_at);
 CREATE INDEX IF NOT EXISTS idx_bookings_status_date ON bookings (status, date);
+
+CREATE TABLE IF NOT EXISTS tracking_links (
+  code TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('PARTNER','CAMPAIGN','QR')),
+  utm_source TEXT NOT NULL DEFAULT '',
+  utm_medium TEXT NOT NULL DEFAULT '',
+  utm_campaign TEXT NOT NULL DEFAULT '',
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_bookings_partner_code ON bookings (partner_code, date);
 
 CREATE TABLE IF NOT EXISTS booking_events (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

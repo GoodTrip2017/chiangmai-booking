@@ -341,6 +341,23 @@
         });
         $('sourceRows').appendChild(tr);
       });
+      $('entryRows').replaceChildren();
+      data.entries.forEach(function (entry) {
+        var tr = document.createElement('tr');
+        [entry.source, entry.bookings, entry.booked_guests].forEach(function (value) {
+          var td = document.createElement('td'); td.textContent = value; tr.appendChild(td);
+        });
+        $('entryRows').appendChild(tr);
+      });
+      $('trackingRows').replaceChildren();
+      data.tracked.forEach(function (item) {
+        var tr = document.createElement('tr');
+        [item.source + ' / ' + item.medium + ' / ' + item.campaign + ' / ' + item.code,
+          item.bookings, item.booked_guests, item.checked_in_bookings].forEach(function (value) {
+          var td = document.createElement('td'); td.textContent = value; tr.appendChild(td);
+        });
+        $('trackingRows').appendChild(tr);
+      });
       loadReportBookings();
     }).catch(function (err) { $('reportMessage').textContent = err.message; });
   }
@@ -464,6 +481,7 @@
       .catch(showAvailabilityError);
   });
   function loadSourceOptions() {
+    loadTrackingLinks();
     api('/api/admin/discovery-sources').then(function (data) {
       $('sourceOptionsRows').replaceChildren();
       data.sources.forEach(function (source) {
@@ -494,6 +512,43 @@
       labelZh: $('sourceZh').value.trim(), labelEn: $('sourceEn').value.trim(), sortOrder: Number($('sourceOrder').value) }) })
       .then(function () { $('sourceZh').value = ''; $('sourceEn').value = ''; $('sourcesMessage').textContent = '來源已新增 / Source added.'; loadSourceOptions(); loadDiscoverySources(); })
       .catch(function (err) { $('sourcesMessage').textContent = err.message; });
+  });
+  function loadTrackingLinks() {
+    api('/api/admin/tracking-links').then(function (data) {
+      $('trackingLinkRows').replaceChildren();
+      data.items.forEach(function (item) {
+        var tr = document.createElement('tr');
+        [item.code, item.name, item.kind, item.url, item.active ? '啟用 / Active' : '停用 / Disabled'].forEach(function (value) {
+          var td = document.createElement('td'); td.textContent = value; td.style.overflowWrap = 'anywhere'; tr.appendChild(td);
+        });
+        var action = document.createElement('td');
+        var copy = document.createElement('button'); copy.type = 'button'; copy.textContent = '複製連結 / Copy link';
+        copy.addEventListener('click', function () {
+          if (!navigator.clipboard) { $('trackingMessage').textContent = '請直接選取網址複製 / Please select and copy the URL.'; return; }
+          navigator.clipboard.writeText(item.url).then(function () { $('trackingMessage').textContent = '連結已複製 / Link copied.'; })
+            .catch(function () { $('trackingMessage').textContent = '請直接選取網址複製 / Please select and copy the URL.'; });
+        });
+        var toggle = document.createElement('button'); toggle.type = 'button';
+        toggle.textContent = item.active ? '停用 / Disable' : '啟用 / Enable';
+        toggle.addEventListener('click', function () {
+          api('/api/admin/tracking-links/' + encodeURIComponent(item.code), { method: 'PATCH', body: JSON.stringify({ name: item.name, active: !item.active }) })
+            .then(loadTrackingLinks).catch(function (err) { $('trackingMessage').textContent = err.message; });
+        });
+        var qr = document.createElement('a');
+        qr.href = '/api/admin/tracking-links/' + encodeURIComponent(item.code) + '/qr.svg';
+        qr.textContent = '下載 QR / Download QR'; qr.download = 'booking-' + item.code + '.svg';
+        qr.style.display = 'block'; qr.style.marginTop = '8px';
+        action.append(copy, toggle, qr); tr.appendChild(action); $('trackingLinkRows').appendChild(tr);
+      });
+    }).catch(function (err) { $('trackingMessage').textContent = err.message; });
+  }
+  $('createTracking').addEventListener('click', function () {
+    var body = { code: $('trackingCode').value.trim(), name: $('trackingName').value.trim(), kind: $('trackingKind').value,
+      utmSource: $('trackingUtmSource').value.trim(), utmMedium: $('trackingUtmMedium').value.trim(),
+      utmCampaign: $('trackingUtmCampaign').value.trim() };
+    api('/api/admin/tracking-links', { method: 'POST', body: JSON.stringify(body) })
+      .then(function () { $('trackingMessage').textContent = '追蹤連結已建立 / Tracking link created.'; loadTrackingLinks(); })
+      .catch(function (err) { $('trackingMessage').textContent = err.message; });
   });
   function loadLineGroups() {
     $('lineStatus').textContent = '讀取中…';

@@ -14,6 +14,7 @@ const { sendConfirmation } = require('./mailer');
 const { buildBookingMessage, buildUpdateMessage, buildCancelMessage, enqueueGroup, processPending } = require('./lineNotify');
 const { resolveSource } = require('./discovery');
 const { recordEvent } = require('./lifecycle');
+const { resolveTracking } = require('./tracking');
 
 /** 表單欄位驗證，回傳整理過的資料或丟出錯誤 */
 function validateForm(form, opts = {}) {
@@ -36,6 +37,10 @@ function validateForm(form, opts = {}) {
   const referral = textField('referral');
   const discoverySourceId = textField('discoverySourceId');
   const discoveryDetail = textField('discoveryDetail');
+  const firstTouchSource = textField('firstTouchSource');
+  const firstTouchMedium = textField('firstTouchMedium');
+  const firstTouchCampaign = textField('firstTouchCampaign');
+  const trackingCode = textField('trackingCode').toLowerCase();
 
   if (!name) throw userError('請填寫預約人（綽號或本名）。');
   if (name.length > 60) throw userError('預約人名稱過長。');
@@ -59,11 +64,15 @@ function validateForm(form, opts = {}) {
   if (referral && !discoverySourceId && !REFERRAL_OPTIONS.includes(referral)) throw userError('「從哪邊知道我們的」選項不正確。');
   if (discoverySourceId.length > 80 || !/^[a-z0-9-]*$/.test(discoverySourceId)) throw userError('得知管道 ID 格式不正確 / Invalid source ID.');
   if (discoveryDetail.length > 120) throw userError('得知管道補充最多 120 字 / Source detail is too long.');
+  if ([firstTouchSource, firstTouchMedium, firstTouchCampaign].some(value => value.length > 80) || trackingCode.length > 40) {
+    throw userError('追蹤參數過長 / Tracking parameter is too long.');
+  }
 
   const note = textField('note');
   if (note.length > 300) throw userError('備註過長（最多 300 字）。');
 
-  return { name, pax, date: dateStr, slot, firstTime, line, email, referral, discoverySourceId, discoveryDetail, note };
+  return { name, pax, date: dateStr, slot, firstTime, line, email, referral, discoverySourceId, discoveryDetail,
+    firstTouchSource, firstTouchMedium, firstTouchCampaign, trackingCode, note };
 }
 
 
@@ -93,10 +102,11 @@ async function insertBooking(data, source, requestId) {
     if (prior.rows.length) {
       const saved = prior.rows[0];
       // 舊請求不能讀到店員後續修正的個資，也不能把已取消預約顯示為成功。
-      const columns = { firstTime: 'first_time', discoverySourceId: 'discovery_source_id', discoveryDetail: 'discovery_detail' };
+      const columns = { firstTime: 'first_time', discoverySourceId: 'discovery_source_id', discoveryDetail: 'discovery_detail',
+        firstTouchSource: 'first_touch_source', firstTouchMedium: 'first_touch_medium', firstTouchCampaign: 'first_touch_campaign' };
       const unchanged = Object.entries(data).every(([field, value]) =>
         (field === 'referral' && data.discoverySourceId) ||
-        (field === 'discoverySourceId' && !value) || saved[columns[field] || field] === value);
+        (field === 'discoverySourceId' && !value) || field === 'trackingCode' || saved[columns[field] || field] === value);
       if (saved.request_hash !== hash || saved.status !== STATUS.CONFIRMED || !unchanged) {
         throw userError('這次預約資料已變更，請透過 LINE 與店員確認目前的預約狀態。', 409);
       }
@@ -104,15 +114,19 @@ async function insertBooking(data, source, requestId) {
       return { booking: prior.rows[0], replayed: true };
     }
     const discovery = await resolveSource(client, data, { optional: source !== 'WEB' });
+    const tracking = await resolveTracking(client, data);
     await lockSlots(client, [[data.date, data.slot]]);
     const check = await capacityCheck(client, data.date, data.slot, data.pax, null, { allowPast: source !== 'WEB' });
     if (!check.ok) throw userError(check.reason, 409);
     const { rows } = await client.query(
       `INSERT INTO bookings (source, name, pax, date, slot, first_time, line, email, referral,
-        discovery_source_id, discovery_detail, entry_source, status, note, request_key, request_hash, confirmed_at, capacity_at_booking)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now(),$17) RETURNING *`,
+        discovery_source_id, discovery_detail, entry_source, first_touch_source, first_touch_medium,
+        first_touch_campaign, partner_code, campaign_code, status, note, request_key, request_hash,
+        confirmed_at, capacity_at_booking)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,now(),$22) RETURNING *`,
       [source, data.name, data.pax, data.date, data.slot, data.firstTime, data.line,
        data.email, data.referral || discovery.label, discovery.id, data.discoveryDetail, source,
+       data.firstTouchSource, data.firstTouchMedium, data.firstTouchCampaign, tracking.partnerCode, tracking.campaignCode,
        STATUS.CONFIRMED, data.note, key, hash, check.state.maxPax]
     );
     await recordEvent(client, rows[0].id, 'CREATED', null, rows[0], '', source === 'WEB' ? 'CUSTOMER' : 'ADMIN');

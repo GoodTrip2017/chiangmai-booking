@@ -137,6 +137,18 @@
   </div>
   <p id="sourcesMessage" role="status"></p>
   <div class="report-scroll"><table class="report-table"><thead><tr><th>中文 / Chinese</th><th>英文 / English</th><th>排序 / Order</th><th>啟用 / Active</th><th>操作 / Action</th></tr></thead><tbody id="sourceOptionsRows"></tbody></table></div>
+  <h2 style="margin-top:32px">合作與活動追蹤連結 / Tracking links</h2>
+  <div class="report-filters">
+    <label>代碼 / Code<input id="trackingCode" type="text" maxlength="40" placeholder="hotel-example"></label>
+    <label>名稱 / Name<input id="trackingName" type="text" maxlength="80"></label>
+    <label>類型 / Type<select id="trackingKind"><option value="PARTNER">合作 / Partner</option><option value="CAMPAIGN">活動 / Campaign</option><option value="QR">QR</option></select></label>
+    <label>UTM source<input id="trackingUtmSource" type="text" maxlength="80"></label>
+    <label>UTM medium<input id="trackingUtmMedium" type="text" maxlength="80"></label>
+    <label>UTM campaign<input id="trackingUtmCampaign" type="text" maxlength="80"></label>
+    <button id="createTracking" type="button">建立連結 / Create link</button>
+  </div>
+  <p id="trackingMessage" role="status"></p>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>代碼 / Code</th><th>名稱 / Name</th><th>類型 / Type</th><th>網址 / URL</th><th>狀態 / Status</th><th>操作 / Action</th></tr></thead><tbody id="trackingLinkRows"></tbody></table></div>
 </section>
 
 <section id="availabilityPanel" class="report" hidden>
@@ -206,6 +218,11 @@
   <p class="report-note">實際人數只統計已報到並記錄的人數；未處理紀錄不會自動當作未到店。<br>Actual guests count recorded check-ins only. Unresolved bookings are not treated as no-shows.</p>
   <h2>得知管道 / Discovery sources</h2>
   <div class="report-scroll"><table class="report-table"><thead><tr><th>得知管道 / Source</th><th>預約筆數 / Bookings</th><th>預約人數 / Guests</th><th>到店筆數 / Checked in</th><th>實際人數 / Actual guests</th></tr></thead><tbody id="sourceRows"></tbody></table></div>
+  <h2>預約入口 / Booking entry</h2>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>入口 / Entry</th><th>預約筆數 / Bookings</th><th>預約人數 / Guests</th></tr></thead><tbody id="entryRows"></tbody></table></div>
+  <h2>追蹤來源與合作代碼 / Tracked links & partners</h2>
+  <p class="report-note">UTM 僅反映同一瀏覽器工作階段內最早可辨識的連結；跨裝置與未帶參數的來源仍屬未知。<br>UTM shows the first recognizable link in this browser session. Cross-device visits and untagged links remain unknown.</p>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>UTM / Code</th><th>預約筆數 / Bookings</th><th>預約人數 / Guests</th><th>到店筆數 / Checked in</th></tr></thead><tbody id="trackingRows"></tbody></table></div>
   <h2>預約清單 / Bookings</h2>
   <div class="report-filters"><label>編號、姓名或 Email / Search<input id="reportSearch" type="search" maxlength="120"></label><button id="searchBookings" type="button">搜尋 / Search</button></div>
   <div class="report-scroll"><table class="report-table"><thead><tr><th>編號 / ID</th><th>到店日期 / Visit date</th><th>預約人 / Contact</th><th>人數 / Guests</th><th>狀態 / Status</th><th>來源 / Source</th></tr></thead><tbody id="bookingRows"></tbody></table></div>

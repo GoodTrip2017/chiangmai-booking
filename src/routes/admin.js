@@ -8,6 +8,8 @@ const discovery = require('../services/discovery');
 const lifecycle = require('../services/lifecycle');
 const reporting = require('../services/reporting');
 const rules = require('../services/rules');
+const tracking = require('../services/tracking');
+const QRCode = require('qrcode');
 
 const router = express.Router();
 
@@ -35,6 +37,33 @@ router.post('/discovery-sources', auth.requireRole('ADMIN'), async (req, res, ne
 router.put('/discovery-sources/:id', auth.requireRole('ADMIN'), async (req, res, next) => {
   try { res.json(await discovery.updateSource(req.params.id, req.body)); }
   catch (err) { next(err); }
+});
+
+router.get('/tracking-links', auth.requireRole('ADMIN'), async (req, res, next) => {
+  try {
+    const origin = process.env.APP_ORIGIN || `${req.protocol}://${req.get('host')}`;
+    const items = await tracking.listTracking();
+    res.json({ items: items.map(item => ({ ...item, url: tracking.linkFor(item, origin) })) });
+  } catch (err) { next(err); }
+});
+router.post('/tracking-links', auth.requireRole('ADMIN'), async (req, res, next) => {
+  try { res.status(201).json(await tracking.createTracking(req.body)); } catch (err) { next(err); }
+});
+router.patch('/tracking-links/:code', auth.requireRole('ADMIN'), async (req, res, next) => {
+  try { res.json(await tracking.updateTracking(req.params.code, req.body)); } catch (err) { next(err); }
+});
+router.get('/tracking-links/:code/qr.svg', auth.requireRole('ADMIN'), async (req, res, next) => {
+  try {
+    const items = await tracking.listTracking();
+    const item = items.find(row => row.code === req.params.code);
+    if (!item) throw require('../util/errors').userError('找不到追蹤代碼 / Tracking code not found.', 404);
+    const origin = process.env.APP_ORIGIN || `${req.protocol}://${req.get('host')}`;
+    const svg = await QRCode.toString(tracking.linkFor(item, origin), { type: 'svg', margin: 4, width: 512, errorCorrectionLevel: 'M' });
+    res.set({ 'Content-Type': 'image/svg+xml; charset=utf-8',
+      'Content-Disposition': `attachment; filename="booking-${item.code}.svg"`,
+      'X-Content-Type-Options': 'nosniff' });
+    res.send(svg);
+  } catch (err) { next(err); }
 });
 
 router.get('/week', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
