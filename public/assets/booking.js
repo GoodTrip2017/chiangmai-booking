@@ -348,9 +348,10 @@
     if (state.loading || !state.reviewedForm) return;
     var form = state.reviewedForm;
 
-    var fingerprint = JSON.stringify(form);
+    // 去重鍵只看表單內容，不含 requestId；重試時沿用同一個 requestId，後端才能辨識是同一次送出。
+    var fingerprint = JSON.stringify(Object.assign({}, form, { requestId: undefined }));
     if (!submission || submission.fingerprint !== fingerprint) submission = { fingerprint: fingerprint, id: crypto.randomUUID() };
-    form.requestId = submission.id;
+    var payload = Object.assign({}, form, { requestId: submission.id });
     state.loading = true;
     $('reviewSubmit').disabled = true;
     $('reviewSubmit').textContent = t('送出中…', 'Sending…');
@@ -358,7 +359,7 @@
     api('/api/bookings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form)
+      body: JSON.stringify(payload)
     })
       .then(onDone)
       .catch(function (err) {

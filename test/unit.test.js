@@ -216,11 +216,49 @@ test('確認信在設定 APP_ORIGIN 且預約有 token 時附自助取消連結�
   const prior = process.env.APP_ORIGIN;
   process.env.APP_ORIGIN = 'https://booking.example.invalid';
   try {
-    const expected = 'https://booking.example.invalid/cancel.html?booking=11111111-1111-4111-8111-111111111111&token=' + 'ab'.repeat(16);
+    const expected = 'https://booking.example.invalid/cancel.html#booking=11111111-1111-4111-8111-111111111111&token=' + 'ab'.repeat(16);
     assert.ok(mailer.buildConfirmationText(booking).includes(expected));
     assert.ok(mailer.buildConfirmationHtml(booking).includes('href="' + expected.replace(/&/g, '&amp;') + '"'));
     assert.doesNotMatch(mailer.buildConfirmationText({ ...booking, cancel_token: null }), /cancel\.html/);
     delete process.env.APP_ORIGIN;
     assert.doesNotMatch(mailer.buildConfirmationText(booking), /cancel\.html/);
   } finally { if (prior === undefined) delete process.env.APP_ORIGIN; else process.env.APP_ORIGIN = prior; }
+});
+test('前台重試送出沿用同一個 requestId，不會建立第二筆預約', async () => {
+  const nodes = new Map();
+  function element() {
+    return { children: [], style: {}, handlers: {}, hidden: false, value: '', className: '', disabled: false,
+      addEventListener(type, fn) { this.handlers[type] = fn; }, setAttribute() {}, scrollIntoView() {},
+      replaceChildren(...c) { this.children = c; }, appendChild(c) { this.children.push(c); }, append(...c) { this.children.push(...c); },
+      set textContent(v) { this.text = String(v); }, get textContent() { return this.text; } };
+  }
+  const doc = { getElementById(id) { if (!nodes.has(id)) nodes.set(id, element()); return nodes.get(id); }, createElement: element };
+  const bodies = []; let attempt = 0;
+  const ctx = { document: doc, window: { scrollTo() {} }, crypto: { randomUUID: () => 'request-' + (++attempt) },
+    fetch: async (path, options) => {
+      if (path === '/api/bookings') {
+        bodies.push(JSON.parse(options.body));
+        if (bodies.length === 1) throw new Error('timeout');
+        return { ok: true, json: async () => ({ ok: true, mailStatus: 'ACCEPTED', summary: { bookingId: 'b', name: 'A', email: 'a@example.invalid', pax: 1, dateLabel: 'd', slotLabel: 's', deadline: 't', graceMinutes: 10 } }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    } };
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync('public/assets/booking.js', 'utf8'), ctx);
+  const reviewed = { name: 'A', pax: 1, date: '2099-01-01', slot: '14:00-15:30', firstTime: '否', line: '', email: 'a@example.invalid',
+    discoverySourceId: 'instagram', discoveryDetail: '', firstTouchSource: '', firstTouchMedium: '', firstTouchCampaign: '', trackingCode: '' };
+  ctx.state.reviewedForm = reviewed;
+  const click = nodes.get('reviewSubmit').handlers.click;
+  click(); await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(bodies.length, 1);
+  assert.equal(ctx.state.loading, false, 'failed submit must release the form');
+  click(); await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[0].requestId, 'request-1');
+  assert.equal(bodies[1].requestId, 'request-1', 'retry must reuse the same requestId');
+  assert.equal(reviewed.requestId, undefined, 'reviewed form must not be mutated');
+  ctx.state.reviewedForm = { ...reviewed, pax: 2 };
+  ctx.state.loading = false;
+  click(); await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(bodies[2].requestId, 'request-2', 'a changed form gets a new requestId');
 });

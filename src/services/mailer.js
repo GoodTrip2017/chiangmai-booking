@@ -15,11 +15,11 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-/** 自助取消連結；只有在設定正式網址且預約有 token 時才附上。 */
+/** 自助取消連結；只有在設定正式網址且預約有 token 時才附上。參數放在 # 之後，瀏覽器不會把它送到伺服器或寫進存取紀錄。 */
 function cancelUrl(booking) {
   const origin = process.env.APP_ORIGIN;
   if (!origin || !booking.cancel_token) return '';
-  return `${origin}/cancel.html?booking=${encodeURIComponent(booking.id)}&token=${encodeURIComponent(booking.cancel_token)}`;
+  return `${origin}/cancel.html#booking=${encodeURIComponent(booking.id)}&token=${encodeURIComponent(booking.cancel_token)}`;
 }
 
 function mailSubject(booking) {

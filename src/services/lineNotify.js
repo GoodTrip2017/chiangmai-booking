@@ -109,7 +109,9 @@ async function scheduleReminder(client, booking) {
   );
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 async function previewManual(bookingId, eventType) {
+  if (typeof bookingId !== 'string' || !UUID.test(bookingId)) throw userError('預約編號格式不正確 / Invalid booking ID.');
   if (!policy.EVENTS.includes(eventType)) throw userError('通知事件不正確 / Invalid notification event.');
   const { rows } = await pool.query('SELECT * FROM bookings WHERE id=$1', [bookingId]);
   const booking = rows[0];
@@ -126,7 +128,8 @@ async function previewManual(bookingId, eventType) {
 }
 
 async function resendManual(bookingId, eventType, requestId) {
-  if (typeof requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
+  if (typeof bookingId !== 'string' || !UUID.test(bookingId)) throw userError('預約編號格式不正確 / Invalid booking ID.');
+  if (typeof requestId !== 'string' || !UUID.test(requestId)) {
     throw userError('請求編號不正確 / Invalid request ID.');
   }
   const key = `line-group-manual/${bookingId}/${eventType}/${requestId}`;
