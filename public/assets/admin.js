@@ -53,13 +53,13 @@
       .filter(function (entry) { return calendarView !== 'day' || entry.day.date === calendarDay; });
     var html = '<tr><th class="slotcol">時段 / Time slot</th>';
     visibleDays.forEach(function (entry) { var d = entry.day;
-      html += '<th class="' + (d.isToday ? 'today' : '') + '">' + d.weekday + ' ' + d.dayLabel +
+      html += '<th class="' + (d.isToday ? 'today' : '') + '">' + esc(d.weekday) + ' ' + esc(d.dayLabel) +
         (d.closed ? '（公休）' : '') + (d.isToday ? ' ●' : '') + '</th>';
     });
     html += '</tr>';
 
     week.slotDefs.forEach(function (sd, si) {
-      html += '<tr><td class="slotcol">' + (sd.legacy ? '舊時段 ' : '') + sd.slot + '</td>';
+      html += '<tr><td class="slotcol">' + (sd.legacy ? '舊時段 ' : '') + esc(sd.slot) + '</td>';
       visibleDays.forEach(function (entry) { var d = entry.day, di = entry.index;
         if (d.closed && d.slots[si].bookings.length === 0) { html += '<td class="closed">公休 / Closed</td>'; return; }
         html += '<td>' + cellHtml(d, d.slots[si], di, si, sd.legacy) + '</td>';
@@ -123,14 +123,15 @@
   }
 
   // ---------------- Modal
-  function slotOptions(selected) {
+  function setSlotOptions(selected) {
     var options = week.slotDefs.filter(function (s) { return !s.legacy; }).map(function (s) {
-      return '<option value="' + s.slot + '"' + (s.slot === selected ? ' selected' : '') + '>' + s.slot + '</option>';
-    }).join('');
+      return new Option(s.slot, s.slot);
+    });
     if (week.slotDefs.some(function (s) { return s.legacy && s.slot === selected; })) {
-      options += '<option value="' + selected + '" selected>舊時段 ' + selected + '</option>';
+      options.push(new Option('舊時段 / Legacy slot ' + selected, selected));
     }
-    return options;
+    $('fSlot').replaceChildren(...options);
+    $('fSlot').value = selected || (options[0] && options[0].value) || '';
   }
 
   function openModal() {
@@ -152,7 +153,7 @@
     $('fName').value = '';
     $('fDate').value = dateStr || week.days[0].date;
     $('fPax').value = 1;
-    $('fSlot').innerHTML = slotOptions(slot || week.slotDefs[0].slot);
+    setSlotOptions(slot || week.slotDefs[0].slot);
     $('fFirst').value = '否';
     $('fSource').value = 'WALK_IN';
     $('fLine').value = '';
@@ -180,7 +181,7 @@
     $('fName').value = b.name;
     $('fDate').value = b.date;
     $('fPax').value = b.pax;
-    $('fSlot').innerHTML = slotOptions(b.slot);
+    setSlotOptions(b.slot);
     $('fFirst').value = b.firstTime === '是' ? '是' : '否';
     $('fSource').value = b.source || 'WEB';
     $('fSource').disabled = true;
