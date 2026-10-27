@@ -96,6 +96,10 @@
   .report-table td button { text-align: left; }
   .report-scroll { overflow-x: auto; }
   .report-note { color: var(--muted); line-height: 1.6; }
+  .trend-row { display: grid; grid-template-columns: 120px minmax(80px,1fr) 90px; gap: 10px; align-items: center; margin: 8px 0; font-size: 13px; }
+  .trend-bar { background: var(--accent); min-width: 2px; height: 12px; border-radius: 3px; }
+  .trend-track { background: var(--card2); border-radius: 3px; overflow: hidden; }
+  @media (max-width: 560px) { .trend-row { grid-template-columns: 85px minmax(45px,1fr) 60px; font-size: 12px; } }
 </style>
 </head>
 <body>
@@ -220,12 +224,16 @@
     <label>開始日期 / From<input id="reportFrom" type="date"></label>
     <label>結束日期 / To<input id="reportTo" type="date"></label>
     <label>日期基準 / Date basis<select id="reportBasis"><option value="visit">預約到店日 / Visit date</option><option value="created">預約建立日 / Created date</option></select></label>
+    <label>趨勢分組 / Trend group<select id="trendGroup"><option value="day">每日 / Daily</option><option value="week">每週 / Weekly</option><option value="month">每月 / Monthly</option></select></label>
     <label>狀態 / Status<select id="reportStatus"><option value="">全部 / All</option><option value="PENDING">待確認 / Pending</option><option value="CONFIRMED">已確認 / Confirmed</option><option value="CHECKED_IN">已到店 / Checked in</option><option value="COMPLETED">已完成 / Completed</option><option value="CANCELLED">已取消 / Cancelled</option><option value="NO_SHOW">未到店 / No-show</option></select></label>
     <button id="reportRefresh" type="button">查詢 / Apply</button>
     <button id="exportBookings" type="button" hidden>匯出預約 CSV / Export bookings CSV</button>
   </div>
   <p id="reportMessage" role="status"></p>
   <div id="metrics" class="metrics"></div>
+  <p id="previousComparison" class="report-note"></p>
+  <h2>預約趨勢 / Booking trend</h2>
+  <div id="bookingTrend" role="img" aria-label="預約趨勢 / Booking trend"></div>
   <p class="report-note">實際人數只統計已報到並記錄的人數；未處理紀錄不會自動當作未到店。<br>Actual guests count recorded check-ins only. Unresolved bookings are not treated as no-shows.</p>
   <h2>得知管道 / Discovery sources</h2>
   <div class="report-scroll"><table class="report-table"><thead><tr><th>得知管道 / Source</th><th>預約筆數 / Bookings</th><th>預約人數 / Guests</th><th>到店筆數 / Checked in</th><th>實際人數 / Actual guests</th></tr></thead><tbody id="sourceRows"></tbody></table></div>

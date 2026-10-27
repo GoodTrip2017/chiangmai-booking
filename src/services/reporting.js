@@ -74,8 +74,10 @@ async function analytics(query = {}) {
   const f = filters(query);
   const w = where(f);
   const basisExpr = f.basis === 'created' ? "(b.created_at AT TIME ZONE 'Asia/Bangkok')::date" : 'b.date::date';
-  const { rows: summary } = await pool.query(
-    `SELECT count(*)::int AS bookings,
+  const trendGroup = query.trendGroup || 'day';
+  if (!['day', 'week', 'month'].includes(trendGroup)) throw userError('趨勢分組不正確 / Invalid trend grouping.');
+  const dueExpr = "((b.date::date + split_part(b.slot,'-',1)::time) AT TIME ZONE 'Asia/Bangkok') <= now()";
+  const summarySql = clause => `SELECT count(*)::int AS bookings,
       COALESCE(sum(pax),0)::int AS booked_guests,
       count(*) FILTER (WHERE checked_in_at IS NOT NULL)::int AS checked_in_bookings,
       (sum(b.actual_pax) FILTER (WHERE b.checked_in_at IS NOT NULL))::int AS actual_guests,
@@ -84,11 +86,21 @@ async function analytics(query = {}) {
       count(*) FILTER (WHERE status='NO_SHOW')::int AS no_shows,
       count(*) FILTER (WHERE discovery_source_id IS NULL)::int AS unknown_discovery,
       count(*) FILTER (WHERE checked_in_at IS NOT NULL AND actual_pax IS NULL)::int AS missing_actual_guests,
-      count(*) FILTER (WHERE status IN ('PENDING','CONFIRMED') AND date::date < (now() AT TIME ZONE 'Asia/Bangkok')::date)::int AS overdue_unresolved
-     FROM bookings b WHERE ${w.clause}`, w.values
-  );
+      count(*) FILTER (WHERE status IN ('PENDING','CONFIRMED') AND ${dueExpr})::int AS overdue_unresolved,
+      count(*) FILTER (WHERE ${dueExpr} AND status IN ('CHECKED_IN','COMPLETED','CANCELLED','NO_SHOW'))::int AS decided_due,
+      count(*) FILTER (WHERE ${dueExpr} AND status IN ('CHECKED_IN','COMPLETED','NO_SHOW'))::int AS attendance_due,
+      count(*) FILTER (WHERE ${dueExpr} AND status='CANCELLED')::int AS cancelled_due,
+      count(*) FILTER (WHERE ${dueExpr} AND status='NO_SHOW')::int AS no_show_due
+     FROM bookings b WHERE ${clause}`;
+  const { rows: summary } = await pool.query(summarySql(w.clause), w.values);
+  const days = Math.round((Date.parse(f.to) - Date.parse(f.from)) / 86400000) + 1;
+  const previousTo = new Date(Date.parse(f.from) - 86400000).toISOString().slice(0, 10);
+  const previousFrom = new Date(Date.parse(f.from) - days * 86400000).toISOString().slice(0, 10);
+  const previousFilter = { ...f, from: previousFrom, to: previousTo };
+  const previousWhere = where(previousFilter);
+  const { rows: previous } = await pool.query(summarySql(previousWhere.clause), previousWhere.values);
   const { rows: trend } = await pool.query(
-    `SELECT ${basisExpr} AS day,count(*)::int AS bookings,COALESCE(sum(pax),0)::int AS booked_guests,
+    `SELECT date_trunc('${trendGroup}',${basisExpr})::date AS day,count(*)::int AS bookings,COALESCE(sum(pax),0)::int AS booked_guests,
       count(*) FILTER (WHERE checked_in_at IS NOT NULL)::int AS checked_in_bookings,
       (sum(b.actual_pax) FILTER (WHERE b.checked_in_at IS NOT NULL))::int AS actual_guests
      FROM bookings b WHERE ${w.clause} GROUP BY day ORDER BY day`, w.values
@@ -127,7 +139,12 @@ async function analytics(query = {}) {
      FROM bookings b LEFT JOIN first_visit ON first_visit.customer_id=b.customer_id WHERE ${w.clause}`, w.values
   );
   return {
-    filters: f, summary: { ...summary[0], ...visitors[0] }, trend, discovery, entries, tracked,
+    filters: { ...f, trendGroup }, previous: { from: previousFrom, to: previousTo, summary: previous[0] },
+    summary: { ...summary[0], ...visitors[0],
+      cancellation_rate: summary[0].decided_due ? summary[0].cancelled_due / summary[0].decided_due : null,
+      no_show_rate: summary[0].attendance_due ? summary[0].no_show_due / summary[0].attendance_due : null,
+      average_party_size: summary[0].bookings ? summary[0].booked_guests / summary[0].bookings : null },
+    trend, discovery, entries, tracked,
     definitions: {
       bookings: '預約筆數 / Booking orders: number of booking records in the chosen date basis.',
       booked_guests: '預約人數 / Booked guests: sum of booked group sizes; cancellations are included unless filtered out.',
@@ -135,6 +152,8 @@ async function analytics(query = {}) {
       actual_guests: '實際到店人數 / Actual guests: sum of recorded check-in counts; unknown values stay null.',
       cancellations: '取消筆數 / Cancellations: currently cancelled records, measured by the selected date basis.',
       no_shows: '未到筆數 / No-shows: staff-marked no-shows only; unresolved past bookings remain separate.',
+      cancellation_rate: '取消率 / Cancellation rate: due cancelled bookings divided by due bookings with a decided result (checked in, completed, cancelled or no-show). Future and unresolved bookings are excluded.',
+      no_show_rate: '未到率 / No-show rate: due staff-marked no-shows divided by due attendance-eligible decided bookings (checked in, completed or no-show). Cancelled, future and unresolved bookings are excluded.',
       attribution: '得知管道由客人自行填寫；入口由系統寫入；首次可辨識 UTM 僅為同一瀏覽器工作階段的連結參數，不代表跨裝置的完整歸因。 / Discovery is self-reported, entry is system-recorded, and first-touch UTM is limited to the current browser session.',
       first_recorded_visitors: '可追溯期間首次到店的預約者 / First recorded visitors: unique email-linked contacts whose earliest recorded check-in is in this period; this may not be their true first visit.',
       returning_visitors: '回訪預約者 / Returning visitors: unique email-linked contacts checked in after an earlier recorded check-in.',

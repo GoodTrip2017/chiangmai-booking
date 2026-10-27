@@ -361,7 +361,8 @@
     if (visible) loadReport(); else if (mode === 'accounts') loadAccounts(); else if (mode === 'availability') loadAvailability(); else if (mode === 'sources') loadSourceOptions(); else if (mode === 'customers') loadCustomers(); else load();
   }
   function reportQuery() {
-    var p = new URLSearchParams({ from: $('reportFrom').value, to: $('reportTo').value, basis: $('reportBasis').value });
+    var p = new URLSearchParams({ from: $('reportFrom').value, to: $('reportTo').value,
+      basis: $('reportBasis').value, trendGroup: $('trendGroup').value });
     if ($('reportStatus').value) p.set('status', $('reportStatus').value);
     return p;
   }
@@ -383,7 +384,26 @@
        ['未到 / No-show', data.summary.no_shows], ['已逾時未處理 / Unresolved', data.summary.overdue_unresolved],
        ['未知來源 / Unknown source', data.summary.unknown_discovery],
        ['首次記錄到店 / First recorded visitors', data.summary.first_recorded_visitors],
-       ['回訪預約者 / Returning visitors', data.summary.returning_visitors]].forEach(function (pair) { putMetric(pair[0], pair[1]); });
+       ['回訪預約者 / Returning visitors', data.summary.returning_visitors],
+       ['取消率 / Cancellation rate', data.summary.cancellation_rate === null ? null : (data.summary.cancellation_rate * 100).toFixed(1) + '% (' + data.summary.cancelled_due + '/' + data.summary.decided_due + ')'],
+       ['未到率 / No-show rate', data.summary.no_show_rate === null ? null : (data.summary.no_show_rate * 100).toFixed(1) + '% (' + data.summary.no_show_due + '/' + data.summary.attendance_due + ')'],
+       ['平均每筆人數 / Average party size', data.summary.average_party_size === null ? null : data.summary.average_party_size.toFixed(2)]
+      ].forEach(function (pair) { putMetric(pair[0], pair[1]); });
+      $('previousComparison').textContent = '前一相同長度期間 / Previous equal period: ' + data.previous.from + ' – ' + data.previous.to +
+        ' · 預約 / Bookings ' + data.previous.summary.bookings + ' · 人數 / Guests ' + data.previous.summary.booked_guests +
+        '。取消率分母為已到期且結果明確的預約；未到率排除取消。 / Rates include due, decided bookings only; no-show rate excludes cancellations.';
+      $('bookingTrend').replaceChildren();
+      var maximum = Math.max(1, ...data.trend.map(function (item) { return item.bookings; }));
+      if (!data.trend.length) $('bookingTrend').textContent = '此區間沒有資料 / No data in this period.';
+      data.trend.forEach(function (item) {
+        var row = document.createElement('div'); row.className = 'trend-row';
+        var day = document.createElement('span'); day.textContent = item.day.slice(0, 10);
+        var track = document.createElement('div'); track.className = 'trend-track';
+        var bar = document.createElement('div'); bar.className = 'trend-bar';
+        bar.style.width = Math.max(2, item.bookings / maximum * 100) + '%'; track.appendChild(bar);
+        var count = document.createElement('span'); count.textContent = item.bookings + ' 筆 / orders';
+        row.append(day, track, count); $('bookingTrend').appendChild(row);
+      });
       $('sourceRows').replaceChildren();
       data.discovery.forEach(function (source) {
         var tr = document.createElement('tr');

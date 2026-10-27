@@ -286,6 +286,27 @@ test('未到店必須經店員標記且只能在預約時間開始後', async ()
   const marked = await lifecycle.changeStatus(old.rows[0].id, { status: 'NO_SHOW', revision: 1, reason: 'staff checked' });
   assert.equal(marked.booking.status, 'NO_SHOW');
 });
+test('已到期結果的取消率與未到率使用不同分母，零分母保留未知', async () => {
+  const empty = await reporting.analytics({ from: '2026-01-05', to: '2026-01-05' });
+  assert.equal(empty.summary.cancellation_rate, null);
+  assert.equal(empty.summary.no_show_rate, null);
+  await pool.query(`INSERT INTO bookings(name,pax,date,slot,email,status,checked_in_at,actual_pax)
+    VALUES ('arrived',2,'2026-01-05','14:00-15:30','arrived@example.invalid','COMPLETED',now(),2)`);
+  await pool.query(`INSERT INTO bookings(name,pax,date,slot,email,status,cancelled_at)
+    VALUES ('cancelled',1,'2026-01-05','14:00-15:30','cancelled@example.invalid','CANCELLED',now())`);
+  await pool.query(`INSERT INTO bookings(name,pax,date,slot,email,status,no_show_at)
+    VALUES ('absent',1,'2026-01-05','14:00-15:30','absent@example.invalid','NO_SHOW',now())`);
+  await pool.query(`INSERT INTO bookings(name,pax,date,slot,email,status)
+    VALUES ('unresolved',1,'2026-01-05','14:00-15:30','unresolved@example.invalid','CONFIRMED')`);
+  const report = await reporting.analytics({ from: '2026-01-05', to: '2026-01-05', trendGroup: 'week' });
+  assert.equal(report.summary.decided_due, 3);
+  assert.equal(report.summary.attendance_due, 2);
+  assert.equal(report.summary.overdue_unresolved, 1);
+  assert.equal(report.summary.cancellation_rate, 1 / 3);
+  assert.equal(report.summary.no_show_rate, 1 / 2);
+  assert.equal(report.trend.length, 1);
+  assert.equal(report.previous.from, '2026-01-04');
+});
 test('營業設定可產生重疊時段；關店異動先列出受影響預約且不靜默取消', async () => {
   const rules = require('../src/services/rules');
   const first = await booking.createManualBooking({ ...form, pax: 10 });
