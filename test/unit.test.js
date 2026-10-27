@@ -262,3 +262,29 @@ test('前台重試送出沿用同一個 requestId，不會建立第二筆預約'
   click(); await new Promise(resolve => setTimeout(resolve, 20));
   assert.equal(bodies[2].requestId, 'request-2', 'a changed form gets a new requestId');
 });
+test('後台顯示語言只拆「中文 / English」格式的字串，其他內容原樣保留', () => {
+  const { pickHalf } = require('../public/assets/admin-lang.js');
+  assert.equal(pickHalf('預約後台 / Booking admin', 'zh'), '預約後台');
+  assert.equal(pickHalf('預約後台 / Booking admin', 'en'), 'Booking admin');
+  assert.equal(pickHalf('預約後台 / Booking admin', 'both'), '預約後台 / Booking admin');
+  assert.equal(pickHalf('← 上一週 / Prev', 'en'), 'Prev');
+  assert.equal(pickHalf('下一週 / Next →', 'zh'), '下一週');
+  assert.equal(pickHalf('剩餘 3 位 / 3 places left', 'en'), '3 places left');
+  assert.equal(pickHalf('UTM / Code', 'zh'), 'UTM / Code');
+  assert.equal(pickHalf('0 / 12', 'en'), '0 / 12');
+  assert.equal(pickHalf('Email', 'zh'), 'Email');
+  assert.equal(pickHalf('2026年10月26日（週一） ~ 2026年11月1日（週日）', 'en'), '2026年10月26日（週一） ~ 2026年11月1日（週日）');
+  assert.equal(pickHalf('a / b / c 中', 'en'), 'a / b / c 中');
+  assert.equal(pickHalf('第一行 / First line\n第二行 / Second line', 'en'), 'First line\nSecond line');
+  assert.equal(pickHalf('王小明 / 王大同', 'en'), '王小明 / 王大同');
+  const th = { 'Booking admin': 'ระบบจองหลังบ้าน', 'Prev': '← สัปดาห์ก่อน' };
+  assert.equal(pickHalf('預約後台 / Booking admin', 'th', th), 'ระบบจองหลังบ้าน');
+  assert.equal(pickHalf('← 上一週 / Prev', 'th', th), '← สัปดาห์ก่อน');
+  assert.equal(pickHalf('未知 / Unknown', 'th', th), 'Unknown', 'missing Thai falls back to English');
+  assert.equal(pickHalf('預約後台 / constructor', 'th', th), 'constructor', 'inherited names must not leak');
+  const dictionary = fs.readFileSync('public/assets/admin-lang-th.js', 'utf8');
+  const sandbox = { window: {} }; vm.createContext(sandbox); vm.runInContext(dictionary, sandbox);
+  const entries = Object.entries(sandbox.window.ADMIN_LANG_TH);
+  assert.ok(entries.length >= 300, 'Thai dictionary should cover the admin strings');
+  for (const [key, value] of entries) { assert.ok(!/[\u4e00-\u9fff]/.test(key), key); assert.ok(typeof value === 'string' && value.trim(), key); }
+});

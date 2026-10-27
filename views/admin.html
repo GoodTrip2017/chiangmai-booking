@@ -22,6 +22,10 @@
     position: sticky; top: 0; z-index: 5;
   }
   header h1 { font-size: 16px; margin: 0; margin-right: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+  /* 顯示語言切換：只影響畫面文字，不影響資料。 */
+  .lang-switch { display: inline-flex; gap: 4px; align-items: center; }
+  .lang-switch .lang-btn { padding: 5px 10px; font-size: 12.5px; border-radius: 999px; color: var(--muted); background: transparent; border: 1px solid var(--line); }
+  .lang-switch .lang-btn.on { color: #10240a; background: var(--accent); border-color: var(--accent); font-weight: 700; }
   header h1 img { height: 30px; }
   .section-title { color: var(--muted); font-weight: 400; font-size: 14px; }
   .section-title::before { content: '·'; margin-right: 10px; color: var(--line); }
@@ -158,6 +162,12 @@
 <header>
   <button id="menuToggle" class="icon-btn" type="button" aria-label="開啟選單 / Open menu" aria-expanded="false" aria-controls="sideMenu">⋯</button>
   <h1><img src="/logo.png" alt="">預約後台 / Booking admin<span id="sectionTitle" class="section-title">預約日曆 / Calendar</span></h1>
+  <div class="lang-switch" id="adminLang" role="group" aria-label="顯示語言 / Display language" data-no-i18n>
+    <button type="button" class="lang-btn" data-lang="both">中／EN</button>
+    <button type="button" class="lang-btn" data-lang="zh">中文</button>
+    <button type="button" class="lang-btn" data-lang="en">English</button>
+    <button type="button" class="lang-btn" data-lang="th">ไทย</button>
+  </div>
   <button id="prev" disabled>← 上一週 / Prev</button>
   <button id="this" disabled>本週 / This week</button>
   <button id="next" disabled>下一週 / Next →</button>
@@ -457,7 +467,7 @@
       <select id="manualNotificationType"><option value="BOOKING_CONFIRMED">預約確認 / Booking confirmed</option><option value="BOOKING_UPDATED">預約修改 / Booking updated</option><option value="BOOKING_CANCELLED">預約取消 / Booking cancelled</option><option value="REMINDER">行前提醒 / Reminder</option></select>
       <button id="previewManualNotification" type="button">預覽對象與內容 / Preview recipient and message</button>
       <p id="manualNotificationRecipient" class="report-note"></p>
-      <pre id="manualNotificationText" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+      <pre id="manualNotificationText" data-no-i18n style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
       <button id="sendManualNotification" type="button" disabled>送至工作群組 / Send to staff group</button>
     </div>
     <h3>通知紀錄（LINE 群組與客人 Email） / Notification history</h3>
@@ -476,5 +486,7 @@
 </div>
 
 <script src="/assets/admin.js" defer></script>
+<script src="/assets/admin-lang-th.js" defer></script>
+<script src="/assets/admin-lang.js" defer></script>
 </body>
 </html>
