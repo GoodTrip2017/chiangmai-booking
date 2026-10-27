@@ -346,6 +346,15 @@
     <input type="text" id="fStatusReason" maxlength="300">
     <div class="acts" id="statusActions"></div>
   </div>
+  <section id="correctionPanel" hidden>
+    <h3>管理員狀態更正 / Administrator correction</h3>
+    <p class="report-note">更正會保留原狀態、操作者與原因。恢復有效預約前會重新檢查容量。<br>Corrections retain the previous state, actor and reason. Capacity is checked before reopening a booking.</p>
+    <label for="correctionStatus">更正為 / Correct to</label>
+    <select id="correctionStatus"></select>
+    <label for="correctionReason">更正原因 / Correction reason</label>
+    <input id="correctionReason" type="text" maxlength="300">
+    <button id="saveCorrection" type="button">更正狀態 / Correct status</button>
+  </section>
   <section id="bookingDetailPanel" hidden>
     <h3>內部管理 / Internal management</h3>
     <label for="fAssignee">負責人員 / Assigned staff</label>

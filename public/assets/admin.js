@@ -162,6 +162,7 @@
     $('mCancelBooking').style.display = 'none';
     $('mResend').style.display = 'none';
     $('statusPanel').style.display = 'none';
+    $('correctionPanel').hidden = true;
     $('bookingDetailPanel').hidden = true;
     openModal();
   }
@@ -192,6 +193,12 @@
     $('fActualPax').value = b.actualPax === null || b.actualPax === undefined ? b.pax : b.actualPax;
     $('fStatusReason').value = '';
     renderStatusActions(b);
+    var correctionTargets = { CHECKED_IN: ['CONFIRMED'], COMPLETED: ['CHECKED_IN'],
+      CANCELLED: ['CONFIRMED', 'CHECKED_IN'], NO_SHOW: ['CONFIRMED', 'CHECKED_IN'] }[b.status] || [];
+    $('correctionPanel').hidden = role !== 'ADMIN' || !correctionTargets.length;
+    $('correctionStatus').replaceChildren();
+    correctionTargets.forEach(function (target) { $('correctionStatus').appendChild(new Option(statusLabel(target), target)); });
+    $('correctionReason').value = '';
     $('bookingDetailPanel').hidden = false;
     $('bookingNotifications').textContent = '載入中 / Loading…';
     $('bookingHistory').textContent = '載入中 / Loading…';
@@ -529,6 +536,19 @@
       $('saveAdministration').disabled = false;
       closeModal(); load();
     }).catch(function (err) { $('saveAdministration').disabled = false; showMMsg(err.message); });
+  });
+  $('saveCorrection').addEventListener('click', function () {
+    if (!editing || role !== 'ADMIN') return;
+    var reason = $('correctionReason').value.trim();
+    if (!reason) return showMMsg('請填寫更正原因 / A correction reason is required.');
+    var status = $('correctionStatus').value;
+    if (!confirm('確定將此預約更正為「' + statusLabel(status) + '」？\nThe previous status will remain in history.')) return;
+    $('saveCorrection').disabled = true;
+    api('/api/admin/bookings/' + encodeURIComponent(editing.id) + '/correct-status', { method: 'POST',
+      body: JSON.stringify({ revision: editing.revision, status: status,
+        actualPax: status === 'CHECKED_IN' ? Number($('fActualPax').value) : undefined, reason: reason }) })
+      .then(function () { $('saveCorrection').disabled = false; closeModal(); load(); })
+      .catch(function (err) { $('saveCorrection').disabled = false; showMMsg(err.message); });
   });
   $('exportBookings').addEventListener('click', async function () {
     var query = reportQuery(); query.set('search', $('reportSearch').value.trim());

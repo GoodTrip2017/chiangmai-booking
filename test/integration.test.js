@@ -323,12 +323,26 @@ test('報到、部分到店、結案與版本衝突均保留歷程；統計不�
   const history = await reporting.bookingDetail(made.id);
   assert.deepEqual(history.history.map(item => item.event_type), ['STATUS_CHANGED','STATUS_CHANGED','CREATED']);
 });
+test('超出原預約人數的報到僅管理員可核准且留下原因', async () => {
+  const made = await booking.createManualBooking({ ...form, pax: 2 });
+  await assert.rejects(lifecycle.changeStatus(made.id, { status: 'CHECKED_IN', revision: 1, actualPax: 3, reason: 'extra companion' },
+    { type: 'STAFF', id: 'staff' }), { status: 403 });
+  const checked = await lifecycle.changeStatus(made.id, { status: 'CHECKED_IN', revision: 1, actualPax: 3, reason: 'manager approved' });
+  assert.equal(checked.booking.actual_pax, 3);
+  assert.equal((await reporting.bookingDetail(made.id)).history[0].reason, 'manager approved');
+});
 test('未到店必須經店員標記且只能在預約時間開始後', async () => {
   const future = await booking.createManualBooking(form);
   await assert.rejects(lifecycle.changeStatus(future.id, { status: 'NO_SHOW', revision: 1 }), { status: 409 });
   const old = await pool.query("INSERT INTO bookings(name,pax,date,slot,email) VALUES ('past',1,'2026-01-05','14:00-15:30',$1) RETURNING *", [form.email]);
   const marked = await lifecycle.changeStatus(old.rows[0].id, { status: 'NO_SHOW', revision: 1, reason: 'staff checked' });
   assert.equal(marked.booking.status, 'NO_SHOW');
+  await assert.rejects(lifecycle.correctStatus(old.rows[0].id, { status: 'CHECKED_IN', revision: 2, actualPax: 1, reason: 'record corrected' }, { type: 'STAFF', id: 'staff' }), { status: 403 });
+  const corrected = await lifecycle.correctStatus(old.rows[0].id, { status: 'CHECKED_IN', revision: 2, actualPax: 1, reason: 'staff found arrival record' });
+  assert.equal(corrected.booking.status, 'CHECKED_IN');
+  assert.equal(corrected.booking.actual_pax, 1);
+  assert.equal(corrected.booking.no_show_at, null);
+  assert.equal((await reporting.bookingDetail(old.rows[0].id)).history[0].event_type, 'STATUS_CORRECTED');
 });
 test('已到期結果的取消率與未到率使用不同分母，零分母保留未知', async () => {
   const empty = await reporting.analytics({ from: '2026-01-05', to: '2026-01-05' });

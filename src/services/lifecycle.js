@@ -60,6 +60,8 @@ async function changeStatus(id, body = {}, actor = 'ADMIN') {
       guests = actualPax === undefined ? before.pax : actualPax;
       if (!Number.isSafeInteger(guests) || guests < 1 || guests > CONFIG.MAX_PAX) throw userError('實際到店人數須為 1 至 12 / Actual guests must be between 1 and 12.');
       if (guests > before.pax) {
+        const role = typeof actor === 'string' ? actor : actor?.type;
+        if (role !== 'ADMIN') throw userError('超出預約人數僅限管理員處理 / Only an administrator may approve extra guests.', 403);
         await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`booking-date:${before.date}`]);
         const capacity = await capacityCheck(client, before.date, before.slot, guests, before.id, { allowPast: true, allowLegacySlot: before.slot });
         if (!capacity.ok) throw userError(capacity.reason, 409);
@@ -125,4 +127,56 @@ async function updateAdministration(id, body = {}, actor = 'ADMIN') {
   finally { client.release(); }
 }
 
-module.exports = { changeStatus, updateAdministration, recordEvent, TRANSITIONS };
+async function correctStatus(id, body = {}, actor = 'ADMIN') {
+  if (typeof id !== 'string' || !UUID.test(id)) throw userError('預約編號格式不正確 / Invalid booking ID.');
+  const role = typeof actor === 'string' ? actor : actor?.type;
+  if (role !== 'ADMIN') throw userError('僅管理員可更正結案狀態 / Administrator access required.', 403);
+  const expectedRevision = version(body.revision);
+  const reason = clean(body.reason);
+  if (!reason) throw userError('請填寫更正原因 / A correction reason is required.');
+  const target = body.status;
+  const allowed = {
+    [STATUS.CHECKED_IN]: [STATUS.CONFIRMED],
+    [STATUS.COMPLETED]: [STATUS.CHECKED_IN],
+    [STATUS.CANCELLED]: [STATUS.CONFIRMED, STATUS.CHECKED_IN],
+    [STATUS.NO_SHOW]: [STATUS.CONFIRMED, STATUS.CHECKED_IN],
+  };
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT * FROM bookings WHERE id=$1 FOR UPDATE', [id]);
+    const before = rows[0];
+    if (!before) throw userError('找不到這筆預約 / Booking not found.', 404);
+    if (before.revision !== expectedRevision) throw userError('預約已由其他人修改，請重新整理 / Booking changed; refresh and try again.', 409);
+    if (!allowed[before.status]?.includes(target)) throw userError('不允許這項狀態更正 / This correction is not allowed.', 409);
+    const actual = target === STATUS.CHECKED_IN ? (body.actualPax ?? before.actual_pax ?? before.pax) : null;
+    if (target === STATUS.CHECKED_IN && (!Number.isSafeInteger(actual) || actual < 1 || actual > CONFIG.MAX_PAX)) {
+      throw userError('實際人數須為 1 至 12 / Actual guests must be 1 to 12.');
+    }
+    if ([STATUS.CANCELLED, STATUS.NO_SHOW].includes(before.status)) {
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`booking-date:${before.date}`]);
+      const capacity = await capacityCheck(client, before.date, before.slot, Math.max(before.pax, actual || 0), id,
+        { allowPast: true, allowLegacySlot: before.slot });
+      if (!capacity.ok) throw userError(capacity.reason, 409);
+    }
+    const { rows: updated } = await client.query(
+      `UPDATE bookings SET status=$2,actual_pax=$3,
+        checked_in_at=CASE WHEN $2='CONFIRMED' THEN NULL ELSE COALESCE(checked_in_at,now()) END,
+        completed_at=NULL,cancelled_at=NULL,no_show_at=NULL,
+        confirmed_at=CASE WHEN $2='CONFIRMED' THEN COALESCE(confirmed_at,now()) ELSE confirmed_at END,
+        revision=revision+1,updated_at=now() WHERE id=$1 RETURNING *`,
+      [id, target, actual]
+    );
+    await recordEvent(client, id, 'STATUS_CORRECTED', before, updated[0], reason, actor);
+    if ([STATUS.CANCELLED, STATUS.NO_SHOW].includes(before.status)) {
+      await enqueueGroup(client, updated[0], 'BOOKING_UPDATED', before);
+      if (target === STATUS.CONFIRMED) await scheduleReminder(client, updated[0]);
+    }
+    await client.query('COMMIT');
+    void processPending().catch(err => console.error('LINE 通知處理失敗：', err.code || err.name));
+    return { ok: true, booking: updated[0] };
+  } catch (err) { await client.query('ROLLBACK'); throw err; }
+  finally { client.release(); }
+}
+
+module.exports = { changeStatus, correctStatus, updateAdministration, recordEvent, TRANSITIONS };

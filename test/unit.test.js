@@ -94,6 +94,11 @@ test('新時段扣除重疊舊預約，但不合計彼此不重疊的舊預約',
   check = await capacityCheck(db([{ slot: '14:30-16:30', pax: 12 }]), date, '17:00-18:30', 12);
   assert.equal(check.ok, true);
 });
+test('報到時增加的實際同行人數也占用後續重疊容量', async () => {
+  const booking = { slot: form.slot, pax: 2, actual_pax: 4, capacity_pax: 4 };
+  assert.equal((await capacityCheck(mockAvailabilityDb([booking]), form.date, form.slot, 8)).ok, true);
+  assert.equal((await capacityCheck(mockAvailabilityDb([booking]), form.date, form.slot, 9)).ok, false);
+});
 function mockAvailabilityDb(bookings) {
   return { query: async (sql) => {
     if (sql.includes('FROM availability_settings')) return { rows: [{ open_time:'14:00', close_time:'23:00', service_minutes:90,

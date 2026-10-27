@@ -192,6 +192,10 @@ router.patch('/bookings/:id/administration', auth.requireRole('ADMIN','STAFF'), 
   try { res.json(await lifecycle.updateAdministration(req.params.id, req.body, actorFor(req))); }
   catch (err) { next(err); }
 });
+router.post('/bookings/:id/correct-status', auth.requireRole('ADMIN'), async (req, res, next) => {
+  try { res.json(await lifecycle.correctStatus(req.params.id, req.body, actorFor(req))); }
+  catch (err) { next(err); }
+});
 
 router.post('/bookings/:id/resend-mail', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
   try {

@@ -11,7 +11,7 @@ const rulesService = require('./rules');
 /** 讀取某日所有已確認預約。容量須包含與目標時段重疊的舊預約。 */
 async function confirmedIn(db, dateStr, slot, excludeId) {
   const params = [dateStr];
-  let sql = `SELECT * FROM bookings WHERE status = ANY($2::text[]) AND date = $1`;
+  let sql = `SELECT *, GREATEST(pax,COALESCE(actual_pax,pax)) AS capacity_pax FROM bookings WHERE status = ANY($2::text[]) AND date = $1`;
   params.push([STATUS.PENDING, STATUS.CONFIRMED, STATUS.CHECKED_IN, STATUS.COMPLETED]);
   if (excludeId) {
     params.push(excludeId);
@@ -42,7 +42,7 @@ async function slotState(db, dateStr, slot, excludeId) {
       const def = dt.getSlotDef(b.slot);
       return def.start <= point && point < def.end;
     });
-    const pax = active.reduce((sum, b) => sum + b.pax, 0);
+    const pax = active.reduce((sum, b) => sum + (b.capacity_pax ?? b.pax), 0);
     if (pax > totalPax) { totalPax = pax; groups = active.length; }
   }
   const maxPax = activeSlot?.maxPax ?? rules.settings.max_pax;
@@ -75,7 +75,7 @@ async function capacityCheck(db, dateStr, slot, pax, excludeId, options = {}) {
     const inUse = overlapping.filter(row => {
       const def = dt.getSlotDef(row.slot);
       return def.start <= point && point < def.end;
-    }).reduce((sum, row) => sum + row.pax, 0);
+    }).reduce((sum, row) => sum + (row.capacity_pax ?? row.pax), 0);
     const caps = [state.maxPax, ...rules.slots.filter(row => row.start <= point && point < row.end)
       .map(row => row.blocked ? 0 : row.maxPax)];
     const cap = Math.min(...caps);
