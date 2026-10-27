@@ -99,6 +99,16 @@ test('報到時增加的實際同行人數也占用後續重疊容量', async ()
   assert.equal((await capacityCheck(mockAvailabilityDb([booking]), form.date, form.slot, 8)).ok, true);
   assert.equal((await capacityCheck(mockAvailabilityDb([booking]), form.date, form.slot, 9)).ok, false);
 });
+test('縮小營運容量前會列出實際到店人數高於預約人數的受影響預約', async () => {
+  const db = { query: async sql => ({ rows: sql.includes('FROM bookings')
+    ? [{ id: 'affected', date: form.date, slot: form.slot, pax: 2, actual_pax: 4, status: 'CHECKED_IN' }]
+    : [] }) };
+  const settings = { open_time: '14:00', close_time: '23:00', service_minutes: 90, interval_minutes: 90,
+    max_pax: 3, closed_weekdays: [2], max_advance_days: null, cutoff_minutes: 0, finish_before_close: true };
+  const affected = await require('../src/services/rules').affectedBookings(db, settings);
+  assert.equal(affected.length, 1);
+  assert.equal(affected[0].reason, 'CAPACITY_REDUCED');
+});
 function mockAvailabilityDb(bookings) {
   return { query: async (sql) => {
     if (sql.includes('FROM availability_settings')) return { rows: [{ open_time:'14:00', close_time:'23:00', service_minutes:90,

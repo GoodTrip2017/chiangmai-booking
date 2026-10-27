@@ -81,7 +81,7 @@ function isBookableTime(rules, date, slot, { allowPast = false } = {}) {
 
 async function affectedBookings(db, proposedSettings) {
   const { rows } = await db.query(
-    "SELECT id,date,slot,pax,status FROM bookings WHERE date >= $1 AND status IN ('PENDING','CONFIRMED','CHECKED_IN') ORDER BY date,slot,id",
+    "SELECT id,date,slot,pax,actual_pax,status FROM bookings WHERE date >= $1 AND status IN ('PENDING','CONFIRMED','CHECKED_IN') ORDER BY date,slot,id",
     [dt.todayStr()]
   );
   const days = new Map();
@@ -103,7 +103,7 @@ async function affectedBookings(db, proposedSettings) {
         const occupancy = byDate.get(row.date).filter(other => {
           const interval = dt.getSlotDef(other.slot);
           return interval && interval.start <= point && point < interval.end;
-        }).reduce((sum, other) => sum + other.pax, 0);
+        }).reduce((sum, other) => sum + Math.max(other.pax, other.actual_pax || 0), 0);
         const maxPax = Math.min(slot.maxPax, ...rules.slots.filter(item => item.start <= point && point < item.end)
           .map(item => item.blocked ? 0 : item.maxPax));
         if (occupancy > maxPax) { reason = 'CAPACITY_REDUCED'; break; }
