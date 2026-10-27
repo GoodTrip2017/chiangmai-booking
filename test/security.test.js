@@ -86,16 +86,27 @@ after(async () => {
 
 test('SEC-01: every admin endpoint rejects anonymous/forged credentials and never returns customer data', async () => {
   const b = await booking.createManualBooking(form);
-  const paths = [['GET','/admin'],['GET','/api/admin/week'],['GET','/api/admin/session'],['POST','/api/admin/bookings'],['PUT',`/api/admin/bookings/${b.id}`],['POST',`/api/admin/bookings/${b.id}/cancel`],['POST',`/api/admin/bookings/${b.id}/resend-mail`],['POST','/api/admin/logout']];
+  const paths = [['GET','/admin'],['GET','/api/admin/week'],['GET','/api/admin/session'],
+    ['GET','/api/admin/overview'],['GET','/api/admin/calendar?month=2099-01'],
+    ['GET','/api/admin/bookings.csv'],['GET','/api/admin/analytics.csv'],['GET','/api/admin/notification-settings'],
+    ['GET','/api/admin/system-events'],['GET','/api/admin/customers'],
+    ['GET',`/api/admin/bookings/${b.id}/notification-preview?eventType=REMINDER`],
+    ['POST','/api/admin/bookings'],['PUT',`/api/admin/bookings/${b.id}`],
+    ['POST',`/api/admin/bookings/${b.id}/cancel`],['POST',`/api/admin/bookings/${b.id}/correct-status`],
+    ['PATCH',`/api/admin/bookings/${b.id}/administration`],['POST',`/api/admin/bookings/${b.id}/resend-notification`],
+    ['POST',`/api/admin/bookings/${b.id}/resend-mail`],['POST','/api/admin/logout']];
   for (const [method,path] of paths) for (const cookie of ['', 'admin_session=' + 'a'.repeat(64), '__Host-admin_session=' + 'b'.repeat(64)]) {
-    const r = await request(path + '?token=legacy', { method, cookie, body: method === 'GET' ? undefined : form, headers: { 'X-Admin-Token':'legacy', Authorization:'Bearer legacy' } });
+    const r = await request(path + (path.includes('?') ? '&' : '?') + 'token=legacy', { method, cookie, body: method === 'GET' ? undefined : form, headers: { 'X-Admin-Token':'legacy', Authorization:'Bearer legacy' } });
     assert.ok([401,303].includes(r.status), path + ': ' + r.status); assert.ok(!r.text.includes(form.email));
   }
   assert.equal((await pool.query('SELECT count(*)::int AS n FROM bookings WHERE status=\'CONFIRMED\'')).rows[0].n, 1);
 });
 test('SEC-02: origin, content type, absent/mismatched/session-swapped CSRF cannot change bookings', async () => {
   const a = await login(), b = await login(), saved = await booking.createManualBooking(form);
-  const targets = [['POST','/api/admin/bookings'],['PUT',`/api/admin/bookings/${saved.id}`],['POST',`/api/admin/bookings/${saved.id}/cancel`],['POST',`/api/admin/bookings/${saved.id}/resend-mail`],['POST','/api/admin/logout']];
+  const targets = [['POST','/api/admin/bookings'],['PUT',`/api/admin/bookings/${saved.id}`],
+    ['POST',`/api/admin/bookings/${saved.id}/cancel`],['POST',`/api/admin/bookings/${saved.id}/correct-status`],
+    ['PATCH',`/api/admin/bookings/${saved.id}/administration`],['POST',`/api/admin/bookings/${saved.id}/resend-notification`],
+    ['PUT','/api/admin/notification-settings/REMINDER'],['POST',`/api/admin/bookings/${saved.id}/resend-mail`],['POST','/api/admin/logout']];
   const variants = [{ csrf:'' },{ csrf:'x'.repeat(64) },{ csrf:b.csrf },{ headers:{ Origin:'https://attacker.invalid' } },{ headers:{ Origin:'' } },{ headers:{ Origin:'null' } },{ headers:{ 'Content-Type':'text/plain' } },{ headers:{ 'Sec-Fetch-Site':'cross-site' } }];
   for (const variation of variants) for (const [method,path] of targets) {
     const r = await request(path, { ...a, method, body:form, ...variation });
