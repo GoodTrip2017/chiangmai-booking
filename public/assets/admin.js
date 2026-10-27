@@ -423,6 +423,9 @@
     var number = document.createElement('strong'); number.textContent = value === null ? '—' : String(value);
     item.append(caption, number); $('metrics').appendChild(item);
   }
+  function percentWithCounts(rate, numerator, denominator) {
+    return rate === null ? '—' : (rate * 100).toFixed(1) + '% (' + numerator + '/' + denominator + ')';
+  }
   function loadReport() {
     if (!$('reportFrom').value || !$('reportTo').value) return;
     reportPage = 1;
@@ -459,7 +462,11 @@
       $('sourceRows').replaceChildren();
       data.discovery.forEach(function (source) {
         var tr = document.createElement('tr');
-        [source.label_zh + ' / ' + source.label_en, source.bookings, source.booked_guests, source.checked_in_bookings, source.actual_guests === null ? '—' : source.actual_guests].forEach(function (value) {
+        [source.label_zh + ' / ' + source.label_en, source.bookings,
+          percentWithCounts(source.share, source.bookings, data.summary.bookings), source.booked_guests,
+          source.checked_in_bookings, source.actual_guests === null ? '—' : source.actual_guests,
+          percentWithCounts(source.cancellation_rate, source.cancelled_due, source.decided_due),
+          percentWithCounts(source.no_show_rate, source.no_show_due, source.attendance_due)].forEach(function (value) {
           var td = document.createElement('td'); td.textContent = value; tr.appendChild(td);
         });
         $('sourceRows').appendChild(tr);
@@ -476,7 +483,10 @@
       data.tracked.forEach(function (item) {
         var tr = document.createElement('tr');
         [item.source + ' / ' + item.medium + ' / ' + item.campaign + ' / ' + item.code,
-          item.bookings, item.booked_guests, item.checked_in_bookings].forEach(function (value) {
+          item.bookings, percentWithCounts(item.share, item.bookings, data.summary.bookings),
+          item.booked_guests, item.checked_in_bookings,
+          percentWithCounts(item.cancellation_rate, item.cancelled_due, item.decided_due),
+          percentWithCounts(item.no_show_rate, item.no_show_due, item.attendance_due)].forEach(function (value) {
           var td = document.createElement('td'); td.textContent = value; tr.appendChild(td);
         });
         $('trackingRows').appendChild(tr);

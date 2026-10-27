@@ -181,7 +181,11 @@ async function analytics(query = {}) {
       COALESCE(d.label_en,'Unknown') AS label_en,count(*)::int AS bookings,
       COALESCE(sum(b.pax),0)::int AS booked_guests,
       count(*) FILTER (WHERE b.checked_in_at IS NOT NULL)::int AS checked_in_bookings,
-      (sum(b.actual_pax) FILTER (WHERE b.checked_in_at IS NOT NULL))::int AS actual_guests
+      (sum(b.actual_pax) FILTER (WHERE b.checked_in_at IS NOT NULL))::int AS actual_guests,
+      count(*) FILTER (WHERE ${dueExpr} AND b.status IN ('CHECKED_IN','COMPLETED','CANCELLED','NO_SHOW'))::int AS decided_due,
+      count(*) FILTER (WHERE ${dueExpr} AND b.status IN ('CHECKED_IN','COMPLETED','NO_SHOW'))::int AS attendance_due,
+      count(*) FILTER (WHERE ${dueExpr} AND b.status='CANCELLED')::int AS cancelled_due,
+      count(*) FILTER (WHERE ${dueExpr} AND b.status='NO_SHOW')::int AS no_show_due
      FROM bookings b LEFT JOIN discovery_sources d ON d.id=b.discovery_source_id
      WHERE ${w.clause} GROUP BY d.id,d.label_zh,d.label_en ORDER BY bookings DESC,id`, w.values
   );
@@ -197,7 +201,11 @@ async function analytics(query = {}) {
       COALESCE(NULLIF(b.partner_code,''),NULLIF(b.campaign_code,''),'UNKNOWN') AS code,
       count(*)::int AS bookings,COALESCE(sum(b.pax),0)::int AS booked_guests,
       count(*) FILTER (WHERE b.checked_in_at IS NOT NULL)::int AS checked_in_bookings,
-      (sum(b.actual_pax) FILTER (WHERE b.checked_in_at IS NOT NULL))::int AS actual_guests
+      (sum(b.actual_pax) FILTER (WHERE b.checked_in_at IS NOT NULL))::int AS actual_guests,
+      count(*) FILTER (WHERE ${dueExpr} AND b.status IN ('CHECKED_IN','COMPLETED','CANCELLED','NO_SHOW'))::int AS decided_due,
+      count(*) FILTER (WHERE ${dueExpr} AND b.status IN ('CHECKED_IN','COMPLETED','NO_SHOW'))::int AS attendance_due,
+      count(*) FILTER (WHERE ${dueExpr} AND b.status='CANCELLED')::int AS cancelled_due,
+      count(*) FILTER (WHERE ${dueExpr} AND b.status='NO_SHOW')::int AS no_show_due
      FROM bookings b WHERE ${w.clause} GROUP BY 1,2,3,4 ORDER BY bookings DESC`, w.values
   );
   const { rows: visitors } = await pool.query(
@@ -216,7 +224,14 @@ async function analytics(query = {}) {
       cancellation_rate: summary[0].decided_due ? summary[0].cancelled_due / summary[0].decided_due : null,
       no_show_rate: summary[0].attendance_due ? summary[0].no_show_due / summary[0].attendance_due : null,
       average_party_size: summary[0].bookings ? summary[0].booked_guests / summary[0].bookings : null },
-    trend, discovery, entries, tracked, cohorts,
+    trend, discovery: discovery.map(row => ({ ...row,
+      share: summary[0].bookings ? row.bookings / summary[0].bookings : null,
+      cancellation_rate: row.decided_due ? row.cancelled_due / row.decided_due : null,
+      no_show_rate: row.attendance_due ? row.no_show_due / row.attendance_due : null })),
+    entries, tracked: tracked.map(row => ({ ...row,
+      share: summary[0].bookings ? row.bookings / summary[0].bookings : null,
+      cancellation_rate: row.decided_due ? row.cancelled_due / row.decided_due : null,
+      no_show_rate: row.attendance_due ? row.no_show_due / row.attendance_due : null })), cohorts,
     definitions: {
       bookings: '預約筆數 / Booking orders: number of booking records in the chosen date basis.',
       booked_guests: '預約人數 / Booked guests: sum of booked group sizes; cancellations are included unless filtered out.',

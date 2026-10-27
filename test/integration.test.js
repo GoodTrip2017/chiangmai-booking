@@ -371,6 +371,9 @@ test('已到期結果的取消率與未到率使用不同分母，零分母保�
   assert.equal(report.summary.overdue_unresolved, 1);
   assert.equal(report.summary.cancellation_rate, 1 / 3);
   assert.equal(report.summary.no_show_rate, 1 / 2);
+  assert.equal(report.discovery[0].bookings, report.summary.bookings);
+  assert.equal(report.discovery[0].cancellation_rate, report.summary.cancellation_rate);
+  assert.equal(report.discovery[0].no_show_rate, report.summary.no_show_rate);
   assert.equal(report.trend.length, 1);
   assert.equal(report.previous.from, '2026-01-04');
 });
