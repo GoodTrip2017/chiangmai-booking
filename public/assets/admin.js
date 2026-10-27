@@ -573,6 +573,51 @@
         });
         $('cohortRows').appendChild(tr);
       });
+      $('operationsDefinition').textContent = data.operations.definition;
+      var heat = $('heatmapTable'); heat.replaceChildren();
+      var times = Array.from(new Set(data.operations.heatmap.map(function (x) { return x.start_time; }))).sort();
+      var header = document.createElement('tr');
+      ['星期 / Day'].concat(times).forEach(function (value) { var th = document.createElement('th'); th.textContent = value; header.appendChild(th); });
+      heat.appendChild(header);
+      var peak = Math.max(1, ...data.operations.heatmap.map(function (x) { return x.bookings; }));
+      var weekdays = ['週一 / Mon','週二 / Tue','週三 / Wed','週四 / Thu','週五 / Fri','週六 / Sat','週日 / Sun'];
+      weekdays.forEach(function (label, dayIndex) {
+        var row = document.createElement('tr'), head = document.createElement('th'); head.textContent = label; row.appendChild(head);
+        times.forEach(function (time) {
+          var record = data.operations.heatmap.find(function (x) { return x.weekday === dayIndex + 1 && x.start_time === time; });
+          var cell = document.createElement('td'); var count = record ? record.bookings : 0;
+          cell.textContent = count + ' 筆 / bookings';
+          cell.style.background = 'rgba(198,170,120,' + (count ? (0.12 + count / peak * 0.4).toFixed(2) : '0') + ')';
+          row.appendChild(cell);
+        }); heat.appendChild(row);
+      });
+      $('partyRows').replaceChildren();
+      data.operations.partySize.forEach(function (item) {
+        var row = document.createElement('tr'); [item.group_size, item.bookings, item.booked_guests].forEach(function (value) {
+          var cell = document.createElement('td'); cell.textContent = value; row.appendChild(cell);
+        }); $('partyRows').appendChild(row);
+      });
+      $('leadRows').replaceChildren();
+      var leadLabels = { BACKDATED: '後台補登過去日期 / Backdated', SAME_DAY: '當日 / Same day',
+        '1-3': '1–3 天 / days', '4-7': '4–7 天 / days', '8+': '8 天以上 / 8+ days' };
+      data.operations.leadTime.forEach(function (item) {
+        var row = document.createElement('tr'); [leadLabels[item.lead_bucket] || item.lead_bucket, item.bookings].forEach(function (value) {
+          var cell = document.createElement('td'); cell.textContent = value; row.appendChild(cell);
+        }); $('leadRows').appendChild(row);
+      });
+      $('rescheduleSummary').textContent = '改期事件 / Reschedule events: ' + data.operations.reschedules.events +
+        '；涉及預約 / Changed bookings: ' + data.operations.reschedules.changed_bookings;
+      $('cancellationRows').replaceChildren();
+      if (role === 'ANALYST') {
+        var restrictedRow = document.createElement('tr'), restricted = document.createElement('td');
+        restricted.colSpan = 2; restricted.textContent = '取消原因可能包含個資，唯讀分析角色不顯示。 / Cancellation notes may contain personal data and are hidden from analysts.';
+        restrictedRow.appendChild(restricted); $('cancellationRows').appendChild(restrictedRow);
+      }
+      data.operations.cancellationReasons.forEach(function (item) {
+        var row = document.createElement('tr'); [item.reason, item.bookings].forEach(function (value) {
+          var cell = document.createElement('td'); cell.textContent = value; row.appendChild(cell);
+        }); $('cancellationRows').appendChild(row);
+      });
       loadReportBookings();
     }).catch(function (err) { $('reportMessage').textContent = err.message; });
   }

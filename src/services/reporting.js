@@ -155,7 +155,40 @@ async function returnCohorts(from, to) {
   return { rows, total, definition: '以 Email 對應的預約聯絡人、可追溯期間首次記錄報到日分組；30/60/90 天分母只含已過完整觀察期的人。同行者未個別識別。 / Cohorts use the first recorded check-in of an email-linked booking contact. Denominators include only contacts with a complete 30/60/90-day observation window; companions are not individually identified.' };
 }
 
-async function analytics(query = {}) {
+async function operationsAnalysis(w, role) {
+  const [heatmap, partySize, leadTime, cancellationReasons, reschedules] = await Promise.all([
+    pool.query(
+      `SELECT extract(isodow FROM b.date::date)::int AS weekday,split_part(b.slot,'-',1) AS start_time,
+        count(*)::int AS bookings,COALESCE(sum(b.pax),0)::int AS booked_guests,
+        (sum(b.actual_pax) FILTER (WHERE b.checked_in_at IS NOT NULL))::int AS actual_guests,
+        count(*) FILTER (WHERE b.status='NO_SHOW')::int AS no_shows
+       FROM bookings b WHERE ${w.clause} GROUP BY 1,2 ORDER BY 1,2`, w.values),
+    pool.query(
+      `SELECT CASE WHEN b.pax=1 THEN '1' WHEN b.pax=2 THEN '2' WHEN b.pax BETWEEN 3 AND 4 THEN '3-4' ELSE '5+' END AS group_size,
+        count(*)::int AS bookings,COALESCE(sum(b.pax),0)::int AS booked_guests
+       FROM bookings b WHERE ${w.clause} GROUP BY 1 ORDER BY min(b.pax)`, w.values),
+    pool.query(
+      `SELECT CASE WHEN b.date::date < (b.created_at AT TIME ZONE 'Asia/Bangkok')::date THEN 'BACKDATED'
+         WHEN b.date::date = (b.created_at AT TIME ZONE 'Asia/Bangkok')::date THEN 'SAME_DAY'
+         WHEN b.date::date - (b.created_at AT TIME ZONE 'Asia/Bangkok')::date BETWEEN 1 AND 3 THEN '1-3'
+         WHEN b.date::date - (b.created_at AT TIME ZONE 'Asia/Bangkok')::date BETWEEN 4 AND 7 THEN '4-7'
+         ELSE '8+' END AS lead_bucket,count(*)::int AS bookings
+       FROM bookings b WHERE ${w.clause} GROUP BY 1 ORDER BY 1`, w.values),
+    pool.query(
+      `SELECT COALESCE(NULLIF(b.cancel_reason,''),'UNKNOWN') AS reason,count(*)::int AS bookings
+       FROM bookings b WHERE ${w.clause} AND b.status='CANCELLED'
+       GROUP BY 1 ORDER BY bookings DESC,reason`, w.values),
+    pool.query(
+      `SELECT count(*)::int AS events,count(DISTINCT b.id)::int AS changed_bookings
+       FROM booking_events e JOIN bookings b ON b.id=e.booking_id
+       WHERE ${w.clause} AND e.event_type='RESCHEDULED'`, w.values),
+  ]);
+  return { heatmap: heatmap.rows, partySize: partySize.rows, leadTime: leadTime.rows,
+    cancellationReasons: role === 'ANALYST' ? [] : cancellationReasons.rows, reschedules: reschedules.rows[0],
+    definition: '時段熱度依到店星期與開始時間分組；預約建立提前天數以清邁日期相減。後台補登過去日期另列 BACKDATED。改期次數來自事件紀錄，舊資料未記錄的改期無法補算。歷史完整容量快照尚不足，故不呈現不可靠的容量使用率。 / Slot demand groups visit weekday and start time. Lead days use Bangkok dates; backdated manual entries are separate. Reschedules use recorded events only. Historical capacity utilization is withheld until complete snapshots exist.' };
+}
+
+async function analytics(query = {}, role = 'ADMIN') {
   const f = filters(query);
   const w = where(f);
   const basisExpr = f.basis === 'created' ? "(b.created_at AT TIME ZONE 'Asia/Bangkok')::date" : 'b.date::date';
@@ -232,6 +265,7 @@ async function analytics(query = {}) {
      FROM bookings b LEFT JOIN first_visit ON first_visit.customer_id=b.customer_id WHERE ${w.clause}`, w.values
   );
   const cohorts = await returnCohorts(f.from, f.to);
+  const operations = await operationsAnalysis(w, role);
   return {
     filters: { ...f, trendGroup }, previous: { from: previousFrom, to: previousTo, summary: previous[0] },
     summary: { ...summary[0], ...visitors[0],
@@ -245,7 +279,7 @@ async function analytics(query = {}) {
     entries, tracked: tracked.map(row => ({ ...row,
       share: summary[0].bookings ? row.bookings / summary[0].bookings : null,
       cancellation_rate: row.decided_due ? row.cancelled_due / row.decided_due : null,
-      no_show_rate: row.attendance_due ? row.no_show_due / row.attendance_due : null })), cohorts,
+      no_show_rate: row.attendance_due ? row.no_show_due / row.attendance_due : null })), cohorts, operations,
     definitions: {
       bookings: '預約筆數 / Booking orders: number of booking records in the chosen date basis.',
       booked_guests: '預約人數 / Booked guests: sum of booked group sizes; cancellations are included unless filtered out.',

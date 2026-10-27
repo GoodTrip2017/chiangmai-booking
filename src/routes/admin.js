@@ -136,7 +136,7 @@ router.patch('/customers/:id/note', auth.requireRole('ADMIN','STAFF'), async (re
   catch (err) { next(err); }
 });
 router.get('/analytics', async (req, res, next) => {
-  try { res.json(await reporting.analytics(req.query)); } catch (err) { next(err); }
+  try { res.json(await reporting.analytics(req.query, req.adminSession.role)); } catch (err) { next(err); }
 });
 router.get('/overview', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
   try { res.json(await reporting.operationalOverview()); } catch (err) { next(err); }

@@ -375,6 +375,10 @@ test('已到期結果的取消率與未到率使用不同分母，零分母保�
   assert.equal(report.discovery[0].bookings, report.summary.bookings);
   assert.equal(report.discovery[0].cancellation_rate, report.summary.cancellation_rate);
   assert.equal(report.discovery[0].no_show_rate, report.summary.no_show_rate);
+  assert.equal(report.operations.heatmap.reduce((sum, row) => sum + row.bookings, 0), report.summary.bookings);
+  assert.equal(report.operations.partySize.reduce((sum, row) => sum + row.bookings, 0), report.summary.bookings);
+  assert.equal(report.operations.leadTime.reduce((sum, row) => sum + row.bookings, 0), report.summary.bookings);
+  assert.deepEqual((await reporting.analytics({ from: '2026-01-05', to: '2026-01-05' }, 'ANALYST')).operations.cancellationReasons, []);
   assert.equal(report.trend.length, 1);
   assert.equal(report.previous.from, '2026-01-04');
 });
