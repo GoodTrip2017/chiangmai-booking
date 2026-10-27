@@ -96,6 +96,17 @@
   .report-table td button { text-align: left; }
   .report-scroll { overflow-x: auto; }
   .report-note { color: var(--muted); line-height: 1.6; }
+  .calendar-controls { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 24px; align-items: center; }
+  .calendar-controls[hidden], .month-grid[hidden] { display: none; }
+  .calendar-controls input { color: var(--text); background: var(--card); border: 1px solid var(--line); padding: 7px; border-radius: 6px; }
+  .month-grid { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 6px; max-width: 1200px; margin: 0 auto; padding: 0 24px 30px; }
+  .month-grid > * { min-height: 90px; border: 1px solid var(--line); border-radius: 7px; padding: 8px; background: var(--card); color: var(--text); }
+  .month-grid .weekday { min-height: 28px; text-align: center; background: none; border: 0; color: var(--muted); }
+  .month-grid .blank { visibility: hidden; }
+  .month-grid .day { cursor: pointer; text-align: left; font: inherit; }
+  .month-grid .day strong { display: block; color: var(--accent); }
+  .month-grid .day span { display: block; font-size: 12px; color: var(--muted); }
+  @media (max-width: 620px) { .month-grid { gap: 3px; padding: 0 8px 20px; } .month-grid > * { min-height: 78px; padding: 5px; font-size: 12px; } .month-grid .day span { font-size: 10px; } }
   .trend-row { display: grid; grid-template-columns: 120px minmax(80px,1fr) 90px; gap: 10px; align-items: center; margin: 8px 0; font-size: 13px; }
   .trend-bar { background: var(--accent); min-width: 2px; height: 12px; border-radius: 3px; }
   .trend-track { background: var(--card2); border-radius: 3px; overflow: hidden; }
@@ -278,6 +289,12 @@
 </section>
 
 <div id="loading">載入中…</div>
+<div id="calendarControls" class="calendar-controls">
+  <button id="calendarDayView" type="button">日 / Day</button><button id="calendarWeekView" type="button">週 / Week</button><button id="calendarMonthView" type="button">月 / Month</button>
+  <label>選擇日期 / Date <input id="calendarDate" type="date"></label>
+  <label>選擇月份 / Month <input id="calendarMonthInput" type="month"></label>
+</div>
+<div id="monthGrid" class="month-grid" hidden></div>
 <div class="scroll" id="scroll" style="display:none"><table id="grid"></table></div>
 
 <div class="mask" id="mask"></div>

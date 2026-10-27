@@ -112,6 +112,7 @@ test('門市與分析帳號在伺服器端分權；停用帳號立即使工作�
   assert.equal(analystLogin.status, 200);
   const analystSession = { cookie: analystLogin.headers.get('set-cookie').split(';')[0], csrf: analystLogin.data.csrfToken };
   assert.equal((await request('/api/admin/week', analystSession)).status, 403);
+  assert.equal((await request('/api/admin/calendar?month=2099-01', analystSession)).status, 403);
   assert.equal((await request('/api/admin/bookings/' + item.id, analystSession)).status, 403);
   assert.equal((await request('/api/admin/bookings/' + item.id + '/notification-preview?eventType=REMINDER', staffSession)).status, 403);
   assert.equal((await request('/api/admin/bookings', { ...analystSession, method: 'POST', body: form })).status, 403);
@@ -399,6 +400,16 @@ test('清單與報表共用安全的時段、追蹤來源及排序篩選', async
   assert.equal(filtered.summary.bookings, 0);
   await assert.rejects(reporting.listBookings({ from: form.date, sort: 'b.name;DROP TABLE bookings' }), { status: 400 });
   await assert.rejects(reporting.analytics({ from: form.date, slot: 'x\';DROP TABLE bookings;--' }), { status: 400 });
+});
+test('月曆依清邁到店日期彙總預約，拒絕不合法月份', async () => {
+  await booking.createManualBooking(form);
+  const session = await login();
+  const calendar = await request('/api/admin/calendar?month=2099-01', session);
+  assert.equal(calendar.status, 200);
+  const first = calendar.data.days.find(day => day.date === form.date);
+  assert.equal(first.active_bookings, 1);
+  assert.equal(first.booked_guests, 2);
+  assert.equal((await request('/api/admin/calendar?month=2099-13', session)).status, 400);
 });
 test('30/60/90 天回訪分母只含完成觀察期的聯絡人', async () => {
   const customerId = await require('../src/services/customers').ensureCustomer(pool, 'cohort@example.invalid');

@@ -9,6 +9,9 @@
   var reportPage = 1;
   var reportTotal = 0;
   var manualNotificationPreview = null;
+  var calendarView = 'week';
+  var calendarDay = '';
+  var todayBangkok = '';
 
 
   var $ = function (id) { return document.getElementById(id); };
@@ -45,9 +48,11 @@
   }
 
   function render() {
-    $('range').textContent = week.rangeLabel;
+    $('range').textContent = calendarView === 'day' ? calendarDay + ' · 日曆 / Day' : week.rangeLabel;
+    var visibleDays = week.days.map(function (day, index) { return { day: day, index: index }; })
+      .filter(function (entry) { return calendarView !== 'day' || entry.day.date === calendarDay; });
     var html = '<tr><th class="slotcol">時段 / Time slot</th>';
-    week.days.forEach(function (d) {
+    visibleDays.forEach(function (entry) { var d = entry.day;
       html += '<th class="' + (d.isToday ? 'today' : '') + '">' + d.weekday + ' ' + d.dayLabel +
         (d.closed ? '（公休）' : '') + (d.isToday ? ' ●' : '') + '</th>';
     });
@@ -55,7 +60,7 @@
 
     week.slotDefs.forEach(function (sd, si) {
       html += '<tr><td class="slotcol">' + (sd.legacy ? '舊時段 ' : '') + sd.slot + '</td>';
-      week.days.forEach(function (d, di) {
+      visibleDays.forEach(function (entry) { var d = entry.day, di = entry.index;
         if (d.closed && d.slots[si].bookings.length === 0) { html += '<td class="closed">公休 / Closed</td>'; return; }
         html += '<td>' + cellHtml(d, d.slots[si], di, si, sd.legacy) + '</td>';
       });
@@ -357,10 +362,32 @@
 
   $('mClose').addEventListener('click', closeModal);
   $('mask').addEventListener('click', function () { if (!$('mSave').disabled) closeModal(); });
-  $('prev').addEventListener('click', function () { load(week.prevMonday); });
-  $('next').addEventListener('click', function () { load(week.nextMonday); });
-  $('this').addEventListener('click', function () { load(week.thisMonday); });
-  $('reload').addEventListener('click', function () { load(); });
+  function shiftDay(days) {
+    var date = new Date(calendarDay + 'T00:00:00Z');
+    date.setUTCDate(date.getUTCDate() + days);
+    calendarDay = date.toISOString().slice(0, 10);
+    $('calendarDate').value = calendarDay; load(calendarDay);
+  }
+  $('prev').addEventListener('click', function () { if (calendarView === 'day') shiftDay(-1); else load(week.prevMonday); });
+  $('next').addEventListener('click', function () { if (calendarView === 'day') shiftDay(1); else load(week.nextMonday); });
+  $('this').addEventListener('click', function () {
+    if (calendarView === 'day') { calendarDay = todayBangkok; $('calendarDate').value = calendarDay; load(calendarDay); }
+    else load(week.thisMonday);
+  });
+  $('reload').addEventListener('click', function () { if (calendarView === 'month') loadMonth(); else load(calendarView === 'day' ? calendarDay : undefined); });
+  $('calendarDayView').addEventListener('click', function () {
+    calendarView = 'day'; calendarDay = $('calendarDate').value || $('reportFrom').value;
+    $('calendarDate').value = calendarDay; setReportMode('calendar');
+  });
+  $('calendarWeekView').addEventListener('click', function () { calendarView = 'week'; setReportMode('calendar'); });
+  $('calendarMonthView').addEventListener('click', function () {
+    calendarView = 'month'; $('calendarMonthInput').value = $('calendarMonthInput').value || $('reportFrom').value.slice(0, 7);
+    setReportMode('calendar');
+  });
+  $('calendarDate').addEventListener('change', function () {
+    calendarDay = $('calendarDate').value; calendarView = 'day'; setReportMode('calendar');
+  });
+  $('calendarMonthInput').addEventListener('change', function () { calendarView = 'month'; setReportMode('calendar'); });
   var reportMode = 'calendar';
   function setReportMode(mode) {
     reportMode = mode;
@@ -372,10 +399,46 @@
     $('sourcesPanel').hidden = mode !== 'sources';
     $('customersPanel').hidden = mode !== 'customers';
     $('notificationsPanel').hidden = mode !== 'notifications';
+    $('calendarControls').hidden = mode !== 'calendar' || role === 'ANALYST';
+    $('monthGrid').hidden = mode !== 'calendar' || calendarView !== 'month';
+    ['prev','next','this'].forEach(function (id) { $(id).hidden = role === 'ANALYST' || (mode === 'calendar' && calendarView === 'month'); });
     $('scroll').style.display = mode === 'calendar' ? 'block' : 'none';
     $('loading').style.display = mode === 'calendar' ? 'block' : 'none';
     $('reportTitle').textContent = mode === 'analytics' ? '數據分析 / Analytics' : '營運總覽 / Overview';
-    if (visible) loadReport(); else if (mode === 'overview') loadOverview(); else if (mode === 'accounts') loadAccounts(); else if (mode === 'availability') loadAvailability(); else if (mode === 'sources') loadSourceOptions(); else if (mode === 'customers') loadCustomers(); else if (mode === 'notifications') loadNotifications(); else load();
+    if (visible) loadReport(); else if (mode === 'overview') loadOverview(); else if (mode === 'accounts') loadAccounts(); else if (mode === 'availability') loadAvailability(); else if (mode === 'sources') loadSourceOptions(); else if (mode === 'customers') loadCustomers(); else if (mode === 'notifications') loadNotifications(); else if (calendarView === 'month') loadMonth(); else load(calendarView === 'day' ? calendarDay : undefined);
+  }
+  function loadMonth() {
+    var month = $('calendarMonthInput').value;
+    $('loading').style.display = 'block'; $('loading').textContent = '載入月份 / Loading month…';
+    $('scroll').style.display = 'none'; $('monthGrid').hidden = false;
+    api('/api/admin/calendar?month=' + encodeURIComponent(month)).then(function (data) {
+      $('loading').style.display = 'none'; $('range').textContent = month + ' · 月曆 / Month';
+      var grid = $('monthGrid'); grid.replaceChildren();
+      ['一 / Mon','二 / Tue','三 / Wed','四 / Thu','五 / Fri','六 / Sat','日 / Sun'].forEach(function (label) {
+        var head = document.createElement('div'); head.className = 'weekday'; head.textContent = label; grid.appendChild(head);
+      });
+      var offset = (new Date(data.first + 'T00:00:00Z').getUTCDay() + 6) % 7;
+      for (var blank = 0; blank < offset; blank++) {
+        var spacer = document.createElement('div'); spacer.className = 'blank'; grid.appendChild(spacer);
+      }
+      var byDate = new Map(data.days.map(function (item) { return [item.date, item]; }));
+      var count = Number(data.last.slice(8));
+      for (var day = 1; day <= count; day++) {
+        var date = month + '-' + String(day).padStart(2, '0');
+        var item = byDate.get(date);
+        var button = document.createElement('button'); button.type = 'button'; button.className = 'day';
+        var number = document.createElement('strong'); number.textContent = day;
+        var summary = document.createElement('span'); summary.textContent = item
+          ? item.active_bookings + ' 筆 / bookings · ' + item.booked_guests + ' 人 / guests'
+          : '0 筆 / bookings';
+        button.append(number, summary);
+        button.addEventListener('click', (function (selected) { return function () {
+          calendarDay = selected; $('calendarDate').value = selected; calendarView = 'day';
+          $('monthGrid').hidden = true; setReportMode('calendar');
+        }; })(date));
+        grid.appendChild(button);
+      }
+    }).catch(function (err) { $('loading').textContent = err.message; });
   }
   function loadOverview() {
     $('overviewMessage').textContent = '載入中 / Loading…';
@@ -933,6 +996,8 @@
   api('/api/admin/session').then(function (session) {
     csrfToken = session.csrfToken; role = session.role;
     $('reportFrom').value = session.today; $('reportTo').value = session.today;
+    todayBangkok = session.today;
+    $('calendarDate').value = session.today; $('calendarMonthInput').value = session.today.slice(0, 7); calendarDay = session.today;
     $('accountsTab').hidden = role !== 'ADMIN';
     $('notificationsTab').hidden = role !== 'ADMIN';
     $('exportBookings').hidden = role !== 'ADMIN';

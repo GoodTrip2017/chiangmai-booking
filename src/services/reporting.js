@@ -111,6 +111,20 @@ async function operationalOverview() {
     capacity_note: '各可預約起始時段剩餘名額相加；重疊時段共用同一接待容量。 / Sum of available places at each start time; overlapping visits share capacity.' };
 }
 
+async function calendarMonth(month) {
+  if (typeof month !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw userError('月份格式不正確 / Invalid month.');
+  const first = month + '-01';
+  const last = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
+  const { rows } = await pool.query(
+    `SELECT date,count(*) FILTER (WHERE status IN ('PENDING','CONFIRMED','CHECKED_IN','COMPLETED'))::int AS active_bookings,
+      COALESCE(sum(pax) FILTER (WHERE status IN ('PENDING','CONFIRMED','CHECKED_IN','COMPLETED')),0)::int AS booked_guests,
+      count(*) FILTER (WHERE status='PENDING')::int AS pending,
+      count(*) FILTER (WHERE status='CANCELLED')::int AS cancelled
+     FROM bookings WHERE date BETWEEN $1 AND $2 GROUP BY date ORDER BY date`, [first, last]
+  );
+  return { month, first, last, days: rows };
+}
+
 async function returnCohorts(from, to) {
   const sql = `WITH visits AS (
       SELECT customer_id,date::date AS visit_date FROM bookings
@@ -285,4 +299,4 @@ async function exportBookingsCsv(query = {}) {
   return '\ufeff' + lines.map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }
 
-module.exports = { filters, listBookings, bookingDetail, operationalOverview, analytics, csvCell, exportBookingsCsv };
+module.exports = { filters, listBookings, bookingDetail, operationalOverview, calendarMonth, analytics, csvCell, exportBookingsCsv };

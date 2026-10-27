@@ -137,6 +137,9 @@ router.get('/analytics', async (req, res, next) => {
 router.get('/overview', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
   try { res.json(await reporting.operationalOverview()); } catch (err) { next(err); }
 });
+router.get('/calendar', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
+  try { res.json(await reporting.calendarMonth(req.query.month)); } catch (err) { next(err); }
+});
 router.get('/availability-settings', auth.requireRole('ADMIN'), async (req, res, next) => {
   try { res.json({ settings: await rules.readSettings() }); } catch (err) { next(err); }
 });
