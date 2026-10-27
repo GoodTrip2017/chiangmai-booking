@@ -60,6 +60,7 @@ async function getWeekData(mondayStr) {
       date: dateStr,
       dayLabel: `${m}/${dayNum}`,
       weekday: dt.weekdayZh(dateStr),
+      weekdayEn: dt.weekdayEn(dateStr),
       closed: dayRuleList[d].closed,
       isToday: dateStr === today,
       slots: [],

@@ -8,6 +8,7 @@ const OFFSET_MS = CONFIG.TZ_OFFSET_MINUTES * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const WEEKDAY_ZH = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'];
+const WEEKDAY_EN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function pad2(n) {
   return String(n).padStart(2, '0');
@@ -46,6 +47,9 @@ function isoWeekday(dateStr) {
 
 function weekdayZh(dateStr) {
   return WEEKDAY_ZH[isoWeekday(dateStr) - 1];
+}
+function weekdayEn(dateStr) {
+  return WEEKDAY_EN[isoWeekday(dateStr) - 1];
 }
 
 function isClosedDay(dateStr) {
@@ -115,7 +119,7 @@ function formatShortBkk(date) {
 }
 
 module.exports = {
-  todayStr, isValidDateStr, isoWeekday, weekdayZh, isClosedDay, getSlotDef,
+  todayStr, isValidDateStr, isoWeekday, weekdayZh, weekdayEn, isClosedDay, getSlotDef,
   addDaysStr, mondayOf, isSlotPast, formatDateZh, formatTimeZh, slotLabelZh,
   graceDeadlineZh, formatShortBkk, toUtcMs,
 };

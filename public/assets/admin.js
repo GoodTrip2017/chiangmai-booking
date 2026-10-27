@@ -54,8 +54,9 @@
       .filter(function (entry) { return calendarView !== 'day' || entry.day.date === calendarDay; });
     var html = '<tr><th class="slotcol">時段 / Time slot</th>';
     visibleDays.forEach(function (entry) { var d = entry.day;
-      html += '<th class="' + (d.isToday ? 'today' : '') + '">' + esc(d.weekday) + ' ' + esc(d.dayLabel) +
-        (d.closed ? '（公休 / Closed）' : '') + (d.isToday ? ' ●' : '') + '</th>';
+      // 星期用「週一 / Mon」並排，各自包在 span 裡，顯示語言切換時才能正確只留一半。
+      html += '<th class="' + (d.isToday ? 'today' : '') + '"><span class="wd">' + esc(d.weekday) + ' / ' + esc(d.weekdayEn || '') + '</span> ' + esc(d.dayLabel) +
+        (d.closed ? '（<span>公休 / Closed</span>）' : '') + (d.isToday ? ' ●' : '') + '</th>';
     });
     html += '</tr>';
 
