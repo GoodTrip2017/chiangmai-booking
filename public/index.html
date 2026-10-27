@@ -83,6 +83,13 @@
     font-family: inherit;
   }
   input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-dark); outline-offset: 1px; }
+  /* iOS Safari 的日期欄位有自己的最小寬度，會凸出卡片；關掉系統外觀並限制在容器寬度內。 */
+  input[type=date] {
+    -webkit-appearance: none; appearance: none; display: block;
+    min-width: 0; max-width: 100%; min-height: 48px; text-align: left;
+  }
+  input[type=date]::-webkit-date-and-time-value { text-align: left; margin: 0; }
+  input[type=date]::-webkit-calendar-picker-indicator { opacity: .7; }
   .slots { display: grid; gap: 10px; margin-top: 6px; }
   .slot {
     display: flex; align-items: center; gap: 10px;
