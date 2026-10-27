@@ -586,7 +586,7 @@
         times.forEach(function (time) {
           var record = data.operations.heatmap.find(function (x) { return x.weekday === dayIndex + 1 && x.start_time === time; });
           var cell = document.createElement('td'); var count = record ? record.bookings : 0;
-          cell.textContent = count + ' 筆 / bookings';
+          cell.textContent = count + ' 筆 / bookings' + (record?.no_shows ? ' · ' + record.no_shows + ' 未到 / no-show' : '');
           cell.style.background = 'rgba(198,170,120,' + (count ? (0.12 + count / peak * 0.4).toFixed(2) : '0') + ')';
           row.appendChild(cell);
         }); heat.appendChild(row);
@@ -601,7 +601,8 @@
       var leadLabels = { BACKDATED: '後台補登過去日期 / Backdated', SAME_DAY: '當日 / Same day',
         '1-3': '1–3 天 / days', '4-7': '4–7 天 / days', '8+': '8 天以上 / 8+ days' };
       data.operations.leadTime.forEach(function (item) {
-        var row = document.createElement('tr'); [leadLabels[item.lead_bucket] || item.lead_bucket, item.bookings].forEach(function (value) {
+        var row = document.createElement('tr'); [leadLabels[item.lead_bucket] || item.lead_bucket,
+          item.bookings + (item.no_shows ? '（未到 ' + item.no_shows + ' / no-show）' : '')].forEach(function (value) {
           var cell = document.createElement('td'); cell.textContent = value; row.appendChild(cell);
         }); $('leadRows').appendChild(row);
       });
@@ -617,6 +618,20 @@
         var row = document.createElement('tr'); [item.reason, item.bookings].forEach(function (value) {
           var cell = document.createElement('td'); cell.textContent = value; row.appendChild(cell);
         }); $('cancellationRows').appendChild(row);
+      });
+      $('cancellationTimingRows').replaceChildren();
+      var cancellationLabels = { UNKNOWN: '未知 / Unknown', AFTER_VISIT_DATE: '到店日後 / After visit date',
+        SAME_DAY: '當日 / Same day', '1-3': '提前 1–3 天 / 1–3 days', '4+': '提前 4 天以上 / 4+ days' };
+      data.operations.cancellationTiming.forEach(function (item) {
+        var row = document.createElement('tr'); [cancellationLabels[item.lead_bucket] || item.lead_bucket, item.bookings].forEach(function (value) {
+          var cell = document.createElement('td'); cell.textContent = value; row.appendChild(cell);
+        }); $('cancellationTimingRows').appendChild(row);
+      });
+      $('noShowSourceRows').replaceChildren();
+      data.operations.noShowSources.forEach(function (item) {
+        var row = document.createElement('tr'); [item.label_zh + ' / ' + item.label_en, item.no_shows].forEach(function (value) {
+          var cell = document.createElement('td'); cell.textContent = value; row.appendChild(cell);
+        }); $('noShowSourceRows').appendChild(row);
       });
       loadReportBookings();
     }).catch(function (err) { $('reportMessage').textContent = err.message; });

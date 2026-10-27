@@ -156,7 +156,7 @@ async function returnCohorts(from, to) {
 }
 
 async function operationsAnalysis(w, role) {
-  const [heatmap, partySize, leadTime, cancellationReasons, reschedules] = await Promise.all([
+  const [heatmap, partySize, leadTime, cancellationReasons, cancellationTiming, noShowSources, reschedules] = await Promise.all([
     pool.query(
       `SELECT extract(isodow FROM b.date::date)::int AS weekday,split_part(b.slot,'-',1) AS start_time,
         count(*)::int AS bookings,COALESCE(sum(b.pax),0)::int AS booked_guests,
@@ -172,19 +172,34 @@ async function operationsAnalysis(w, role) {
          WHEN b.date::date = (b.created_at AT TIME ZONE 'Asia/Bangkok')::date THEN 'SAME_DAY'
          WHEN b.date::date - (b.created_at AT TIME ZONE 'Asia/Bangkok')::date BETWEEN 1 AND 3 THEN '1-3'
          WHEN b.date::date - (b.created_at AT TIME ZONE 'Asia/Bangkok')::date BETWEEN 4 AND 7 THEN '4-7'
-         ELSE '8+' END AS lead_bucket,count(*)::int AS bookings
+         ELSE '8+' END AS lead_bucket,count(*)::int AS bookings,
+         count(*) FILTER (WHERE b.status='NO_SHOW')::int AS no_shows
        FROM bookings b WHERE ${w.clause} GROUP BY 1 ORDER BY 1`, w.values),
     pool.query(
       `SELECT COALESCE(NULLIF(b.cancel_reason,''),'UNKNOWN') AS reason,count(*)::int AS bookings
        FROM bookings b WHERE ${w.clause} AND b.status='CANCELLED'
        GROUP BY 1 ORDER BY bookings DESC,reason`, w.values),
     pool.query(
+      `SELECT CASE WHEN b.cancelled_at IS NULL THEN 'UNKNOWN'
+         WHEN b.date::date < (b.cancelled_at AT TIME ZONE 'Asia/Bangkok')::date THEN 'AFTER_VISIT_DATE'
+         WHEN b.date::date = (b.cancelled_at AT TIME ZONE 'Asia/Bangkok')::date THEN 'SAME_DAY'
+         WHEN b.date::date - (b.cancelled_at AT TIME ZONE 'Asia/Bangkok')::date BETWEEN 1 AND 3 THEN '1-3'
+         ELSE '4+' END AS lead_bucket,count(*)::int AS bookings
+       FROM bookings b WHERE ${w.clause} AND b.status='CANCELLED' GROUP BY 1 ORDER BY 1`, w.values),
+    pool.query(
+      `SELECT COALESCE(d.label_zh,'未知') AS label_zh,COALESCE(d.label_en,'Unknown') AS label_en,
+         count(*)::int AS no_shows
+       FROM bookings b LEFT JOIN discovery_sources d ON d.id=b.discovery_source_id
+       WHERE ${w.clause} AND b.status='NO_SHOW' GROUP BY d.id,d.label_zh,d.label_en ORDER BY no_shows DESC`, w.values),
+    pool.query(
       `SELECT count(*)::int AS events,count(DISTINCT b.id)::int AS changed_bookings
        FROM booking_events e JOIN bookings b ON b.id=e.booking_id
        WHERE ${w.clause} AND e.event_type='RESCHEDULED'`, w.values),
   ]);
   return { heatmap: heatmap.rows, partySize: partySize.rows, leadTime: leadTime.rows,
-    cancellationReasons: role === 'ANALYST' ? [] : cancellationReasons.rows, reschedules: reschedules.rows[0],
+    cancellationReasons: role === 'ANALYST' ? [] : cancellationReasons.rows,
+    cancellationTiming: cancellationTiming.rows, noShowSources: noShowSources.rows,
+    reschedules: reschedules.rows[0],
     definition: '時段熱度依到店星期與開始時間分組；預約建立提前天數以清邁日期相減。後台補登過去日期另列 BACKDATED。改期次數來自事件紀錄，舊資料未記錄的改期無法補算。歷史完整容量快照尚不足，故不呈現不可靠的容量使用率。 / Slot demand groups visit weekday and start time. Lead days use Bangkok dates; backdated manual entries are separate. Reschedules use recorded events only. Historical capacity utilization is withheld until complete snapshots exist.' };
 }
 
