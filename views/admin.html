@@ -109,6 +109,7 @@
   <button id="calendarTab" type="button">預約日曆 / Calendar</button>
   <button id="analyticsTab" type="button">數據分析 / Analytics</button>
   <button id="accountsTab" type="button" hidden>人員權限 / Accounts</button>
+  <button id="availabilityTab" type="button" hidden>營業與容量 / Availability</button>
   <button id="lineGroups" type="button">LINE 群組設定</button>
   <button class="primary" id="addNew" disabled>＋ 手動新增</button>
   <button id="logout">登出</button>
@@ -122,6 +123,45 @@
     <button id="lineRefresh" type="button">重新讀取群組</button>
     <div id="lineGroupList"></div>
   </div>
+</section>
+
+<section id="availabilityPanel" class="report" hidden>
+  <h2>營業與容量 / Availability & Capacity</h2>
+  <p class="report-note">同一時間所有重疊預約合計不得超過設定容量，硬上限為 12 人。調整若影響既有預約，會先列出預約編號供確認；不會自動取消或改期。<br>Overlapping bookings share the same capacity, capped at 12 guests. Existing affected bookings are shown before applying changes.</p>
+  <div class="report-filters">
+    <label>開始營業 / Open<input id="settingOpen" type="time"></label>
+    <label>結束營業 / Close<input id="settingClose" type="time"></label>
+    <label>服務分鐘 / Service minutes<input id="settingService" type="number" min="15" max="240"></label>
+    <label>開始間隔分鐘 / Start interval<input id="settingInterval" type="number" min="15" max="240"></label>
+    <label>同時上限 / Capacity<input id="settingCapacity" type="number" min="1" max="12"></label>
+    <label>提前截止分鐘 / Cutoff minutes<input id="settingCutoff" type="number" min="0" max="1440"></label>
+    <label>最遠預約天數 / Maximum advance days<input id="settingAdvance" type="number" min="1" max="730" placeholder="不限 / Unlimited"></label>
+  </div>
+  <div class="report-filters" id="closedWeekdays"></div>
+  <label class="chk"><input id="settingFinish" type="checkbox" checked>完整服務須在打烊前結束 / Full service must finish by closing</label>
+  <label class="chk"><input id="settingAcknowledge" type="checkbox">已檢查受影響預約 / I reviewed affected bookings</label>
+  <p id="availabilityImpact" class="report-note" role="status"></p>
+  <button id="saveAvailability" type="button">儲存營業規則 / Save rules</button>
+  <h2 style="margin-top:32px">特定日期 / Date exception</h2>
+  <div class="report-filters">
+    <label>日期 / Date<input id="exceptionDate" type="date"></label>
+    <label>特殊開門 / Special open<input id="exceptionOpen" type="time"></label>
+    <label>特殊關門 / Special close<input id="exceptionClose" type="time"></label>
+    <label>特殊容量 / Capacity<input id="exceptionCapacity" type="number" min="1" max="12"></label>
+    <label>原因 / Reason<input id="exceptionReason" type="text" maxlength="200"></label>
+    <label class="chk"><input id="exceptionClosed" type="checkbox">停開 / Closed</label>
+    <button id="saveException" type="button">儲存日期設定 / Save date</button>
+  </div>
+  <h2>時段調整 / Slot override</h2>
+  <div class="report-filters">
+    <label>日期 / Date<input id="overrideDate" type="date"></label>
+    <label>時段 / Slot<input id="overrideSlot" type="text" placeholder="14:00-15:30"></label>
+    <label>容量 / Capacity<input id="overrideCapacity" type="number" min="0" max="12"></label>
+    <label>原因 / Reason<input id="overrideReason" type="text" maxlength="200"></label>
+    <label class="chk"><input id="overrideBlocked" type="checkbox">封鎖 / Block</label>
+    <button id="saveOverride" type="button">儲存時段設定 / Save slot</button>
+  </div>
+  <p id="availabilityMessage" role="status"></p>
 </section>
 
 <section id="accountsPanel" class="report" hidden>

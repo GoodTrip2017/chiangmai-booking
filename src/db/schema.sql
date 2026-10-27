@@ -177,6 +177,41 @@ CREATE INDEX IF NOT EXISTS idx_notification_events_schedule ON notification_even
 ALTER TABLE notification_events ADD COLUMN IF NOT EXISTS recipient_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE notification_events ADD COLUMN IF NOT EXISTS retry_key UUID NOT NULL DEFAULT gen_random_uuid();
 
+CREATE TABLE IF NOT EXISTS availability_settings (
+  id SMALLINT PRIMARY KEY CHECK (id = 1),
+  open_time TEXT NOT NULL DEFAULT '14:00',
+  close_time TEXT NOT NULL DEFAULT '23:00',
+  service_minutes INTEGER NOT NULL DEFAULT 90,
+  interval_minutes INTEGER NOT NULL DEFAULT 90,
+  max_pax INTEGER NOT NULL DEFAULT 12 CHECK (max_pax BETWEEN 1 AND 12),
+  closed_weekdays INTEGER[] NOT NULL DEFAULT ARRAY[2],
+  max_advance_days INTEGER,
+  cutoff_minutes INTEGER NOT NULL DEFAULT 0,
+  finish_before_close BOOLEAN NOT NULL DEFAULT true,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO availability_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS availability_exceptions (
+  date TEXT PRIMARY KEY,
+  closed BOOLEAN NOT NULL DEFAULT false,
+  open_time TEXT,
+  close_time TEXT,
+  max_pax INTEGER CHECK (max_pax BETWEEN 1 AND 12),
+  reason TEXT NOT NULL DEFAULT '',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS slot_overrides (
+  date TEXT NOT NULL,
+  slot TEXT NOT NULL,
+  max_pax INTEGER CHECK (max_pax BETWEEN 0 AND 12),
+  blocked BOOLEAN NOT NULL DEFAULT false,
+  reason TEXT NOT NULL DEFAULT '',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (date, slot)
+);
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS capacity_at_booking INTEGER;
+
 -- Keep existing two-state rows intact; new lifecycle states are added without rewriting history.
 CREATE INDEX IF NOT EXISTS idx_bookings_capacity_active ON bookings (date, slot)
   WHERE status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'COMPLETED');

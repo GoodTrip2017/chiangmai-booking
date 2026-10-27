@@ -55,7 +55,10 @@ before(async () => {
   origin = 'http://127.0.0.1:' + server.address().port;
   process.env.APP_ORIGIN = origin;
 });
-beforeEach(async () => { await pool.query('TRUNCATE bookings, booking_events, notification_events, admin_sessions, staff_accounts, admin_login_limits, request_limits'); });
+beforeEach(async () => {
+  await pool.query('TRUNCATE bookings, booking_events, notification_events, admin_sessions, staff_accounts, admin_login_limits, request_limits, availability_exceptions, slot_overrides');
+  await pool.query("UPDATE availability_settings SET open_time='14:00',close_time='23:00',service_minutes=90,interval_minutes=90,max_pax=12,closed_weekdays=ARRAY[2],max_advance_days=NULL,cutoff_minutes=0,finish_before_close=true WHERE id=1");
+});
 after(async () => {
   if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   await pool.end();
@@ -255,6 +258,25 @@ test('未到店必須經店員標記且只能在預約時間開始後', async ()
   const old = await pool.query("INSERT INTO bookings(name,pax,date,slot,email) VALUES ('past',1,'2026-01-05','14:00-15:30',$1) RETURNING *", [form.email]);
   const marked = await lifecycle.changeStatus(old.rows[0].id, { status: 'NO_SHOW', revision: 1, reason: 'staff checked' });
   assert.equal(marked.booking.status, 'NO_SHOW');
+});
+test('營業設定可產生重疊時段；關店異動先列出受影響預約且不靜默取消', async () => {
+  const rules = require('../src/services/rules');
+  const first = await booking.createManualBooking({ ...form, pax: 10 });
+  const settings = await rules.readSettings();
+  const staggered = await rules.updateSettings({ ...settings, interval_minutes: 60 });
+  assert.equal(staggered.ok, true);
+  const availability = await request('/api/availability?date=' + form.date);
+  assert.equal(availability.data.slots.find(item => item.slot === '15:00-16:30').maxPax, 2);
+  await assert.rejects(booking.createManualBooking({ ...form, slot: '15:00-16:30', pax: 3 }), { status: 409 });
+  const preview = await rules.upsertException({ date: form.date, closed: true, reason: 'staff holiday' });
+  assert.equal(preview.ok, false);
+  assert.equal(preview.affected[0].id, first.id);
+  assert.equal((await pool.query('SELECT status FROM bookings WHERE id=$1', [first.id])).rows[0].status, 'CONFIRMED');
+  const applied = await rules.upsertException({ date: form.date, closed: true, reason: 'staff holiday', acknowledgeAffected: true });
+  assert.equal(applied.ok, true);
+  assert.equal((await request('/api/availability?date=' + form.date)).data.closed, true);
+  await assert.rejects(booking.createManualBooking({ ...form, pax: 1 }), { status: 409 });
+  assert.equal((await pool.query('SELECT status FROM bookings WHERE id=$1', [first.id])).rows[0].status, 'CONFIRMED');
 });
 test('錯誤不洩漏資料庫細節，資料庫不可用健康檢查回 503', async () => {
   assert.equal((await request('/api/availability?date=invalid')).status, 400);

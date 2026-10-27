@@ -58,7 +58,7 @@ async function changeStatus(id, body = {}) {
       if (!Number.isSafeInteger(guests) || guests < 1 || guests > CONFIG.MAX_PAX) throw userError('實際到店人數須為 1 至 12 / Actual guests must be between 1 and 12.');
       if (guests > before.pax) {
         await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`booking-date:${before.date}`]);
-        const capacity = await capacityCheck(client, before.date, before.slot, guests, before.id);
+        const capacity = await capacityCheck(client, before.date, before.slot, guests, before.id, { allowPast: true, allowLegacySlot: before.slot });
         if (!capacity.ok) throw userError(capacity.reason, 409);
         if (!reason) throw userError('超出預約人數時請填寫原因 / Give a reason for extra guests.');
       }

@@ -25,7 +25,7 @@
     var res = await fetch(path, options);
     var data = await res.json().catch(function () { return {}; });
     if (res.status === 401) { location.replace('/admin/login'); throw new Error('請重新登入。'); }
-    if (!res.ok) throw new Error(data.error || '連線失敗，請稍後再試。');
+    if (!res.ok) { var err = new Error(data.error || '連線失敗，請稍後再試。'); err.details = data; throw err; }
     return data;
   }
 
@@ -53,7 +53,7 @@
     week.slotDefs.forEach(function (sd, si) {
       html += '<tr><td class="slotcol">' + (sd.legacy ? '舊時段 ' : '') + sd.slot + '</td>';
       week.days.forEach(function (d, di) {
-        if (d.closed) { html += '<td class="closed">公休</td>'; return; }
+        if (d.closed && d.slots[si].bookings.length === 0) { html += '<td class="closed">公休 / Closed</td>'; return; }
         html += '<td>' + cellHtml(d, d.slots[si], di, si, sd.legacy) + '</td>';
       });
       html += '</tr>';
@@ -61,7 +61,7 @@
 
     $('grid').innerHTML = html;
     $('loading').style.display = 'none';
-    $('scroll').style.display = 'block';
+    $('scroll').style.display = reportMode === 'calendar' ? 'block' : 'none';
 
     Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (el) {
       el.addEventListener('click', function () {
@@ -89,7 +89,7 @@
         (cell.full ? '<span style="color:var(--err)">已滿</span>' : '');
     }
     var out = '<div class="cellhead' + (cell.full ? ' full' : '') + '">' + head +
-      (legacy ? '' : '<button class="add" data-d="' + di + '" data-s="' + si + '" title="手動新增">＋</button>') + '</div>';
+      (!cell.bookable ? '' : '<button class="add" data-d="' + di + '" data-s="' + si + '" title="手動新增">＋</button>') + '</div>';
 
     if (cell.bookings.length === 0) return out + '<div class="empty">' +
       (cell.groups ? '由重疊的舊時段預約占用' : '無預約') + '</div>';
@@ -304,10 +304,11 @@
     var visible = mode === 'overview' || mode === 'analytics';
     $('reportPanel').hidden = !visible;
     $('accountsPanel').hidden = mode !== 'accounts';
+    $('availabilityPanel').hidden = mode !== 'availability';
     $('scroll').style.display = mode === 'calendar' ? 'block' : 'none';
     $('loading').style.display = mode === 'calendar' ? 'block' : 'none';
     $('reportTitle').textContent = mode === 'analytics' ? '數據分析 / Analytics' : '營運總覽 / Overview';
-    if (visible) loadReport(); else if (mode === 'accounts') loadAccounts(); else load();
+    if (visible) loadReport(); else if (mode === 'accounts') loadAccounts(); else if (mode === 'availability') loadAvailability(); else load();
   }
   function reportQuery() {
     var p = new URLSearchParams({ from: $('reportFrom').value, to: $('reportTo').value, basis: $('reportBasis').value });
@@ -374,6 +375,7 @@
   $('calendarTab').addEventListener('click', function () { setReportMode('calendar'); });
   $('analyticsTab').addEventListener('click', function () { setReportMode('analytics'); });
   $('accountsTab').addEventListener('click', function () { setReportMode('accounts'); });
+  $('availabilityTab').addEventListener('click', function () { setReportMode('availability'); });
   $('reportRefresh').addEventListener('click', loadReport);
   $('searchBookings').addEventListener('click', loadReportBookings);
   function loadAccounts() {
@@ -403,6 +405,61 @@
     api('/api/admin/accounts', { method: 'POST', body: JSON.stringify(body) })
       .then(function () { $('accountsMessage').textContent = '帳號已建立 / Account created.'; loadAccounts(); })
       .catch(function (err) { $('accountsMessage').textContent = err.message; });
+  });
+  function loadAvailability() {
+    api('/api/admin/availability-settings').then(function (data) {
+      var s = data.settings;
+      $('settingOpen').value = s.open_time; $('settingClose').value = s.close_time;
+      $('settingService').value = s.service_minutes; $('settingInterval').value = s.interval_minutes;
+      $('settingCapacity').value = s.max_pax; $('settingCutoff').value = s.cutoff_minutes;
+      $('settingAdvance').value = s.max_advance_days === null ? '' : s.max_advance_days;
+      $('settingFinish').checked = s.finish_before_close;
+      $('closedWeekdays').replaceChildren();
+      ['週一 / Mon','週二 / Tue','週三 / Wed','週四 / Thu','週五 / Fri','週六 / Sat','週日 / Sun'].forEach(function (label, index) {
+        var box = document.createElement('label'); box.className = 'chk';
+        var input = document.createElement('input'); input.type = 'checkbox'; input.value = index + 1;
+        input.checked = s.closed_weekdays.includes(index + 1); input.className = 'closed-weekday';
+        box.append(input, document.createTextNode('公休 / Closed ' + label)); $('closedWeekdays').appendChild(box);
+      });
+    }).catch(function (err) { $('availabilityMessage').textContent = err.message; });
+  }
+  function showAvailabilityError(err) {
+    if (err.details && err.details.affected && err.details.affected.length) {
+      $('availabilityImpact').textContent = '下列現有預約將受影響 / Existing bookings affected:\n' +
+        err.details.affected.map(function (b) { return b.date + ' ' + b.slot + ' · ' + b.id + ' · ' + b.reason; }).join('\n') +
+        '\n請先處理，再勾選「已檢查受影響預約」並重新儲存。 / Review them, check the acknowledgement, then save again.';
+      $('availabilityImpact').style.whiteSpace = 'pre-line';
+    } else $('availabilityMessage').textContent = err.message;
+  }
+  $('saveAvailability').addEventListener('click', function () {
+    var body = { open_time: $('settingOpen').value, close_time: $('settingClose').value,
+      service_minutes: Number($('settingService').value), interval_minutes: Number($('settingInterval').value),
+      max_pax: Number($('settingCapacity').value), cutoff_minutes: Number($('settingCutoff').value),
+      max_advance_days: $('settingAdvance').value === '' ? null : Number($('settingAdvance').value),
+      finish_before_close: $('settingFinish').checked,
+      closed_weekdays: Array.from(document.querySelectorAll('.closed-weekday')).filter(function (el) { return el.checked; }).map(function (el) { return Number(el.value); }),
+      acknowledgeAffected: $('settingAcknowledge').checked };
+    api('/api/admin/availability-settings', { method: 'PUT', body: JSON.stringify(body) })
+      .then(function () { $('availabilityImpact').textContent = ''; $('availabilityMessage').textContent = '營業規則已儲存 / Availability rules saved.'; setReportMode('calendar'); })
+      .catch(showAvailabilityError);
+  });
+  $('saveException').addEventListener('click', function () {
+    var date = $('exceptionDate').value;
+    var body = { closed: $('exceptionClosed').checked, open_time: $('exceptionOpen').value || null,
+      close_time: $('exceptionClose').value || null, max_pax: $('exceptionCapacity').value === '' ? null : Number($('exceptionCapacity').value),
+      reason: $('exceptionReason').value.trim(), acknowledgeAffected: $('settingAcknowledge').checked };
+    api('/api/admin/availability-exceptions/' + encodeURIComponent(date), { method: 'PUT', body: JSON.stringify(body) })
+      .then(function () { $('availabilityImpact').textContent = ''; $('availabilityMessage').textContent = '日期設定已儲存 / Date saved.'; setReportMode('calendar'); })
+      .catch(showAvailabilityError);
+  });
+  $('saveOverride').addEventListener('click', function () {
+    var date = $('overrideDate').value, slot = $('overrideSlot').value.trim();
+    var body = { blocked: $('overrideBlocked').checked,
+      max_pax: $('overrideCapacity').value === '' ? null : Number($('overrideCapacity').value),
+      reason: $('overrideReason').value.trim(), acknowledgeAffected: $('settingAcknowledge').checked };
+    api('/api/admin/slot-overrides/' + encodeURIComponent(date) + '/' + encodeURIComponent(slot), { method: 'PUT', body: JSON.stringify(body) })
+      .then(function () { $('availabilityImpact').textContent = ''; $('availabilityMessage').textContent = '時段設定已儲存 / Slot saved.'; setReportMode('calendar'); })
+      .catch(showAvailabilityError);
   });
   function loadLineGroups() {
     $('lineStatus').textContent = '讀取中…';
@@ -457,6 +514,7 @@
     csrfToken = session.csrfToken; role = session.role;
     $('reportFrom').value = session.today; $('reportTo').value = session.today;
     $('accountsTab').hidden = role !== 'ADMIN';
+    $('availabilityTab').hidden = role !== 'ADMIN';
     $('lineGroups').hidden = role !== 'ADMIN';
     ['prev','this','next','reload','calendarTab','addNew'].forEach(function (id) { if (role === 'ANALYST') $(id).hidden = true; });
     if (role === 'ANALYST') setReportMode('analytics'); else { loadDiscoverySources(); load(); }

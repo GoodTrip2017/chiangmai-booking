@@ -4,6 +4,7 @@ const { pool } = require('../db');
 const { CONFIG, SLOTS, LEGACY_SLOTS, STATUS } = require('../config');
 const dt = require('../util/datetime');
 const { slotState } = require('./availability');
+const { dayRules, readSettings } = require('./rules');
 
 function publicBooking(b) {
   return {
@@ -36,15 +37,20 @@ async function getWeekData(mondayStr) {
   const monday = dt.mondayOf(mondayStr);
   const today = dt.todayStr();
   const sunday = dt.addDaysStr(monday, 6);
-  const { rows: legacyRows } = await pool.query(
-    'SELECT DISTINCT slot FROM bookings WHERE status = ANY($1::text[]) AND date BETWEEN $2 AND $3 AND slot = ANY($4::text[])',
-    [[STATUS.PENDING, STATUS.CONFIRMED, STATUS.CHECKED_IN, STATUS.COMPLETED], monday, sunday, LEGACY_SLOTS.map(def => def.slot)]
+  const settings = await readSettings(pool);
+  const { rows: usedRows } = await pool.query(
+    'SELECT DISTINCT slot FROM bookings WHERE status = ANY($1::text[]) AND date BETWEEN $2 AND $3',
+    [[STATUS.PENDING, STATUS.CONFIRMED, STATUS.CHECKED_IN, STATUS.COMPLETED], monday, sunday]
   );
-  const usedLegacy = new Set(legacyRows.map(row => row.slot));
-  const defs = [
-    ...SLOTS.map(def => ({ ...def, legacy: false })),
-    ...LEGACY_SLOTS.filter(def => usedLegacy.has(def.slot)).map(def => ({ ...def, legacy: true })),
-  ];
+  const dayRuleList = [];
+  for (let d = 0; d < 7; d++) dayRuleList.push(await dayRules(pool, dt.addDaysStr(monday, d)));
+  const currentSlots = new Map(dayRuleList.flatMap(rule => rule.slots).map(slot => [slot.slot, slot]));
+  const definitions = new Map(currentSlots);
+  for (const row of usedRows) if (!definitions.has(row.slot)) {
+    const legacy = dt.getSlotDef(row.slot);
+    if (legacy) definitions.set(row.slot, legacy);
+  }
+  const defs = [...definitions.values()].map(def => ({ ...def, legacy: !currentSlots.has(def.slot) })).sort((a,b) => a.slot.localeCompare(b.slot));
 
   const days = [];
   for (let d = 0; d < 7; d++) {
@@ -54,7 +60,7 @@ async function getWeekData(mondayStr) {
       date: dateStr,
       dayLabel: `${m}/${dayNum}`,
       weekday: dt.weekdayZh(dateStr),
-      closed: dt.isClosedDay(dateStr),
+      closed: dayRuleList[d].closed,
       isToday: dateStr === today,
       slots: [],
     };
@@ -67,6 +73,7 @@ async function getWeekData(mondayStr) {
         remaining: st.remaining,
         overCapacity: st.overCapacity,
         full: st.groups > 0 && st.remaining <= 0,
+        bookable: !dayRuleList[d].closed && dayRuleList[d].slots.some(row => row.slot === def.slot && !row.blocked && row.maxPax > 0),
         bookings: st.bookings.map(publicBooking),
       });
     }
@@ -79,7 +86,7 @@ async function getWeekData(mondayStr) {
     nextMonday: dt.addDaysStr(monday, 7),
     thisMonday: dt.mondayOf(today),
     rangeLabel: `${dt.formatDateZh(monday)} ~ ${dt.formatDateZh(dt.addDaysStr(monday, 6))}`,
-    maxPax: CONFIG.MAX_PAX,
+    maxPax: settings.max_pax,
     slotDefs: defs.map((s) => ({ slot: s.slot, label: dt.slotLabelZh(s.slot), legacy: s.legacy })),
     days,
   };

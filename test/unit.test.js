@@ -21,13 +21,13 @@ test('日期、清邁時區與保留時間', () => {
     '14:00-15:30', '15:30-17:00', '17:00-18:30',
     '18:30-20:00', '20:00-21:30', '21:30-23:00',
   ]);
-  assert.throws(() => validateForm({ ...form, slot: '14:30-16:30' }), { status: 400 });
+  assert.throws(() => validateForm({ ...form, slot: 'invalid-slot' }), { status: 400 });
 });
-test('前後台表單均拒絕 13 人、60 人、非整數與週二', () => {
+test('前後台表單均拒絕 13 人、60 人與非整數；公休日由資料庫營業規則檢查', () => {
   for (const opts of [{}, { allowPast: true, emailOptional: true, referralOptional: true }]) {
     assert.equal(validateForm({ ...form, pax: 12 }, opts).pax, 12);
     for (const pax of [0, -1, 1.5, 13, 60, Infinity]) assert.throws(() => validateForm({ ...form, pax }, opts), { status: 400 });
-    assert.throws(() => validateForm({ ...form, date: '2026-09-15' }, opts));
+    assert.equal(validateForm({ ...form, date: '2026-09-15' }, { ...opts, allowPast: true }).date, '2026-09-15');
   }
 });
 test('Email 統一必填，後台或舊 emailOptional 選項也不能繞過', () => {
@@ -56,7 +56,7 @@ test('13 人以上提供 LINE 洽詢資訊，客人改回 12 人可恢復一般�
   assert.ok(fs.readFileSync('public/index.html', 'utf8').includes('透過 LINE 洽詢多人預約'));
 });
 test('第一組與多組共用同一個 12 人上限', async () => {
-  const check = (rows, pax) => capacityCheck({ query: async () => ({ rows }) }, form.date, form.slot, pax);
+  const check = (rows, pax) => capacityCheck(mockAvailabilityDb(rows), form.date, form.slot, pax);
   assert.equal((await check([], 12)).ok, true);
   assert.equal((await check([], 13)).ok, false);
   assert.equal((await check([], 60)).ok, false);
@@ -65,7 +65,7 @@ test('第一組與多組共用同一個 12 人上限', async () => {
   assert.equal((await check([{ pax: 13, slot: form.slot }], 1)).ok, false);
 });
 test('新時段扣除重疊舊預約，但不合計彼此不重疊的舊預約', async () => {
-  const db = rows => ({ query: async () => ({ rows }) });
+  const db = mockAvailabilityDb;
   const date = form.date;
   let check = await capacityCheck(db([{ slot: '14:30-16:30', pax: 10 }]), date, '14:00-15:30', 3);
   assert.equal(check.ok, false);
@@ -78,6 +78,14 @@ test('新時段扣除重疊舊預約，但不合計彼此不重疊的舊預約',
   check = await capacityCheck(db([{ slot: '14:30-16:30', pax: 12 }]), date, '17:00-18:30', 12);
   assert.equal(check.ok, true);
 });
+function mockAvailabilityDb(bookings) {
+  return { query: async (sql) => {
+    if (sql.includes('FROM availability_settings')) return { rows: [{ open_time:'14:00', close_time:'23:00', service_minutes:90,
+      interval_minutes:90, max_pax:12, closed_weekdays:[2], max_advance_days:null, cutoff_minutes:0, finish_before_close:true }] };
+    if (sql.includes('FROM availability_exceptions') || sql.includes('FROM slot_overrides')) return { rows: [] };
+    return { rows: bookings };
+  } };
+}
 test('確認信安全跳脫姓名，文案由店員處理逾時', () => {
   const booking = { ...form, name: '<img src=x onerror=alert(1)>' };
   const html = mailer.buildConfirmationHtml(booking);

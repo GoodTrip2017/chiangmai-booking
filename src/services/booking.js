@@ -46,8 +46,7 @@ function validateForm(form, opts = {}) {
     });
   }
   if (!dt.isValidDateStr(dateStr)) throw userError('請選擇預約日期。');
-  if (dt.isClosedDay(dateStr)) throw userError('每週二為固定公休日，請改選其他日期。');
-  if (!SLOTS.some(def => def.slot === slot) && opts.allowedLegacySlot !== slot) throw userError('請選擇預約時段。');
+  if (!dt.getSlotDef(slot)) throw userError('請選擇預約時段。');
   if (!opts.allowPast && dt.isSlotPast(dateStr, slot)) {
     throw userError('該時段已經開始或已過，請改選其他時段。');
   }
@@ -89,6 +88,7 @@ async function insertBooking(data, source, requestId) {
   try {
     await client.query('BEGIN');
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`request:${key}`]);
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['availability-settings']);
     const prior = await client.query('SELECT * FROM bookings WHERE request_key = $1', [key]);
     if (prior.rows.length) {
       const saved = prior.rows[0];
@@ -105,15 +105,15 @@ async function insertBooking(data, source, requestId) {
     }
     const discovery = await resolveSource(client, data, { optional: source !== 'WEB' });
     await lockSlots(client, [[data.date, data.slot]]);
-    const check = await capacityCheck(client, data.date, data.slot, data.pax, null);
+    const check = await capacityCheck(client, data.date, data.slot, data.pax, null, { allowPast: source !== 'WEB' });
     if (!check.ok) throw userError(check.reason, 409);
     const { rows } = await client.query(
       `INSERT INTO bookings (source, name, pax, date, slot, first_time, line, email, referral,
-        discovery_source_id, discovery_detail, entry_source, status, note, request_key, request_hash, confirmed_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now()) RETURNING *`,
+        discovery_source_id, discovery_detail, entry_source, status, note, request_key, request_hash, confirmed_at, capacity_at_booking)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now(),$17) RETURNING *`,
       [source, data.name, data.pax, data.date, data.slot, data.firstTime, data.line,
        data.email, data.referral || discovery.label, discovery.id, data.discoveryDetail, source,
-       STATUS.CONFIRMED, data.note, key, hash]
+       STATUS.CONFIRMED, data.note, key, hash, check.state.maxPax]
     );
     await recordEvent(client, rows[0].id, 'CREATED', null, rows[0], '', source === 'WEB' ? 'CUSTOMER' : 'ADMIN');
     await enqueueGroup(client, rows[0], 'BOOKING_CONFIRMED', buildBookingMessage(rows[0]));
@@ -176,6 +176,7 @@ async function updateBooking(payload) {
   let updated, previous;
   try {
     await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['availability-settings']);
     const { rows } = await client.query('SELECT * FROM bookings WHERE id = $1 FOR UPDATE', [id]);
     const booking = rows[0];
     if (!booking) throw userError('找不到這筆預約。', 404);
@@ -188,7 +189,7 @@ async function updateBooking(payload) {
       ? await resolveSource(client, data, { optional: true, currentId: booking.discovery_source_id })
       : { id: booking.discovery_source_id, label: booking.referral };
     await lockSlots(client, [[booking.date, booking.slot], [data.date, data.slot]]);
-    const check = await capacityCheck(client, data.date, data.slot, data.pax, id);
+    const check = await capacityCheck(client, data.date, data.slot, data.pax, id, { allowPast: true, allowLegacySlot: allowedLegacySlot });
     if (!check.ok) throw userError(check.reason, 409);
     const mailChanged = ['name', 'pax', 'date', 'slot', 'email'].some(field => booking[field] !== data[field]);
     const result = await client.query(
@@ -196,11 +197,12 @@ async function updateBooking(payload) {
        line=$6, email=$7, referral=$8, note=$9, mail_status=$10,
        discovery_source_id=$11, discovery_detail=$12, updated_at=now(), revision=revision+1,
        original_date=CASE WHEN date<>$3 AND original_date IS NULL THEN date ELSE original_date END,
-       original_slot=CASE WHEN slot<>$4 AND original_slot IS NULL THEN slot ELSE original_slot END
+       original_slot=CASE WHEN slot<>$4 AND original_slot IS NULL THEN slot ELSE original_slot END,
+       capacity_at_booking=CASE WHEN date<>$3 OR slot<>$4 THEN $14 ELSE capacity_at_booking END
        WHERE id=$13 RETURNING *`,
       [data.name, data.pax, data.date, data.slot, data.firstTime, data.line, data.email,
        data.referral || discovery.label, data.note, mailChanged ? 'NOT_REQUESTED' : booking.mail_status,
-       discovery.id, data.discoveryDetail, id]
+       discovery.id, data.discoveryDetail, id, check.state.maxPax]
     );
     updated = result.rows[0];
     previous = booking;

@@ -7,6 +7,7 @@ const { pool } = require('../db');
 const discovery = require('../services/discovery');
 const lifecycle = require('../services/lifecycle');
 const reporting = require('../services/reporting');
+const rules = require('../services/rules');
 
 const router = express.Router();
 
@@ -51,6 +52,31 @@ router.get('/bookings/:id', auth.requireRole('ADMIN','STAFF'), async (req, res, 
 });
 router.get('/analytics', async (req, res, next) => {
   try { res.json(await reporting.analytics(req.query)); } catch (err) { next(err); }
+});
+
+router.get('/availability-settings', auth.requireRole('ADMIN'), async (req, res, next) => {
+  try { res.json({ settings: await rules.readSettings() }); } catch (err) { next(err); }
+});
+router.put('/availability-settings', auth.requireRole('ADMIN'), async (req, res, next) => {
+  try {
+    const result = await rules.updateSettings(req.body);
+    res.status(result.ok ? 200 : 409).json(result);
+  } catch (err) { next(err); }
+});
+router.get('/availability-exceptions', auth.requireRole('ADMIN'), async (req, res, next) => {
+  try {
+    const [exceptions, overrides] = await Promise.all([
+      pool.query('SELECT * FROM availability_exceptions ORDER BY date DESC LIMIT 100'),
+      pool.query('SELECT * FROM slot_overrides ORDER BY date DESC,slot LIMIT 200'),
+    ]);
+    res.json({ exceptions: exceptions.rows, overrides: overrides.rows });
+  } catch (err) { next(err); }
+});
+router.put('/availability-exceptions/:date', auth.requireRole('ADMIN'), async (req, res, next) => {
+  try { const result = await rules.upsertException({ ...req.body, date: req.params.date }); res.status(result.ok ? 200 : 409).json(result); } catch (err) { next(err); }
+});
+router.put('/slot-overrides/:date/:slot', auth.requireRole('ADMIN'), async (req, res, next) => {
+  try { const result = await rules.upsertSlotOverride({ ...req.body, date: req.params.date, slot: req.params.slot }); res.status(result.ok ? 200 : 409).json(result); } catch (err) { next(err); }
 });
 
 router.post('/bookings', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
