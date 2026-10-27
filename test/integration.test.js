@@ -163,7 +163,7 @@ test('切換 90 分鐘時段時保留舊預約，顯示後台並阻止重疊超�
     '18:30-20:00', '20:00-21:30', '21:30-23:00',
   ]);
   assert.equal(availability.data.slots[1].maxPax, 2);
-  await assert.rejects(booking.createManualBooking({ ...form, slot: '14:30-16:30' }), { status: 400 });
+  await assert.rejects(booking.createManualBooking({ ...form, slot: '14:30-16:30' }), { status: 409 });
   await assert.rejects(booking.createManualBooking({ ...form, slot: '15:30-17:00', pax: 3 }), { status: 409 });
   const week = await request('/api/admin/week?monday=' + form.date, await login());
   assert.equal(week.status, 200);
@@ -268,6 +268,9 @@ test('營業設定可產生重疊時段；關店異動先列出受影響預約�
   const availability = await request('/api/availability?date=' + form.date);
   assert.equal(availability.data.slots.find(item => item.slot === '15:00-16:30').maxPax, 2);
   await assert.rejects(booking.createManualBooking({ ...form, slot: '15:00-16:30', pax: 3 }), { status: 409 });
+  const lowerCapacity = await rules.upsertSlotOverride({ date: form.date, slot: '15:00-16:30', max_pax: 8, blocked: false, reason: 'smaller room' });
+  assert.equal(lowerCapacity.ok, false);
+  assert.equal(lowerCapacity.affected[0].id, first.id);
   const preview = await rules.upsertException({ date: form.date, closed: true, reason: 'staff holiday' });
   assert.equal(preview.ok, false);
   assert.equal(preview.affected[0].id, first.id);
@@ -277,6 +280,12 @@ test('營業設定可產生重疊時段；關店異動先列出受影響預約�
   assert.equal((await request('/api/availability?date=' + form.date)).data.closed, true);
   await assert.rejects(booking.createManualBooking({ ...form, pax: 1 }), { status: 409 });
   assert.equal((await pool.query('SELECT status FROM bookings WHERE id=$1', [first.id])).rows[0].status, 'CONFIRMED');
+  const tuesday = '2099-01-06';
+  assert.equal((await request('/api/availability?date=' + tuesday)).data.closed, true);
+  assert.equal((await rules.upsertException({ date: tuesday, closed: false, reason: 'special opening' })).ok, true);
+  assert.equal((await request('/api/availability?date=' + tuesday)).data.closed, false);
+  const special = await booking.createManualBooking({ ...form, date: tuesday, pax: 1 });
+  assert.ok(special.id);
 });
 test('錯誤不洩漏資料庫細節，資料庫不可用健康檢查回 503', async () => {
   assert.equal((await request('/api/availability?date=invalid')).status, 400);

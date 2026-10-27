@@ -110,6 +110,7 @@
   <button id="analyticsTab" type="button">數據分析 / Analytics</button>
   <button id="accountsTab" type="button" hidden>人員權限 / Accounts</button>
   <button id="availabilityTab" type="button" hidden>營業與容量 / Availability</button>
+  <button id="sourcesTab" type="button" hidden>來源與合作 / Sources</button>
   <button id="lineGroups" type="button">LINE 群組設定</button>
   <button class="primary" id="addNew" disabled>＋ 手動新增</button>
   <button id="logout">登出</button>
@@ -123,6 +124,19 @@
     <button id="lineRefresh" type="button">重新讀取群組</button>
     <div id="lineGroupList"></div>
   </div>
+</section>
+
+<section id="sourcesPanel" class="report" hidden>
+  <h2>得知管道選項 / Discovery source options</h2>
+  <p class="report-note">選項使用固定 ID；改名、調整排序或停用不會刪除歷史統計。<br>Stable IDs preserve historical reporting after renaming, reordering, or deactivation.</p>
+  <div class="report-filters">
+    <label>中文名稱 / Chinese label<input id="sourceZh" type="text" maxlength="80"></label>
+    <label>英文名稱 / English label<input id="sourceEn" type="text" maxlength="80"></label>
+    <label>排序 / Order<input id="sourceOrder" type="number" min="-10000" max="10000" value="130"></label>
+    <button id="createSource" type="button">新增來源 / Add source</button>
+  </div>
+  <p id="sourcesMessage" role="status"></p>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>中文 / Chinese</th><th>英文 / English</th><th>排序 / Order</th><th>啟用 / Active</th><th>操作 / Action</th></tr></thead><tbody id="sourceOptionsRows"></tbody></table></div>
 </section>
 
 <section id="availabilityPanel" class="report" hidden>

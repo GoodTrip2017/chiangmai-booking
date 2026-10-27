@@ -64,13 +64,34 @@ async function capacityCheck(db, dateStr, slot, pax, excludeId, options = {}) {
   const bookable = rulesService.isBookableTime(rules, dateStr, slot, options);
   if (!bookable.ok && !(options.allowLegacySlot === slot && !rules.closed)) return { ok: false, reason: bookable.reason, state: null };
   const state = await slotState(db, dateStr, slot, excludeId);
-  if (Number.isInteger(pax) && pax >= 1 && state.totalPax + pax <= state.maxPax) return { ok: true, state };
+  const target = dt.getSlotDef(slot);
+  const overlapping = await confirmedIn(db, dateStr, slot, excludeId);
+  const points = [target.start,
+    ...overlapping.map(row => dt.getSlotDef(row.slot).start),
+    ...rules.slots.map(row => row.start)].filter(point => point >= target.start && point < target.end);
+  let limiting = null;
+  let minAvailable = state.maxPax;
+  for (const point of new Set(points)) {
+    const inUse = overlapping.filter(row => {
+      const def = dt.getSlotDef(row.slot);
+      return def.start <= point && point < def.end;
+    }).reduce((sum, row) => sum + row.pax, 0);
+    const caps = [state.maxPax, ...rules.slots.filter(row => row.start <= point && point < row.end)
+      .map(row => row.blocked ? 0 : row.maxPax)];
+    const cap = Math.min(...caps);
+    minAvailable = Math.min(minAvailable, cap - inUse);
+    if (inUse + pax > cap) { limiting = { inUse, cap }; break; }
+  }
+  state.effectiveRemaining = Math.max(0, minAvailable);
+  if (Number.isInteger(pax) && pax >= 1 && !limiting) return { ok: true, state };
+  const used = limiting?.inUse ?? state.totalPax;
+  const cap = limiting?.cap ?? state.maxPax;
   return {
     ok: false,
     state,
-    reason: `該時段已有 ${state.groups} 組預約、共 ${state.totalPax} 人。` +
-      `每個時段接待上限 ${state.maxPax} 人，目前只剩 ` +
-      `${state.remaining} 個位子，無法容納 ${pax} 人。`,
+    reason: `重疊時間已有 ${used} 人；同時接待上限 ${cap} 人，` +
+      `目前只剩 ${Math.max(0, cap - used)} 位，無法容納 ${pax} 人。 / ` +
+      `Only ${Math.max(0, cap - used)} places remain for this overlapping visit time.`,
   };
 }
 
@@ -93,6 +114,8 @@ async function getAvailability(dateStr) {
 
   for (const def of rules.slots) {
     const st = await slotState(pool, dateStr, def.slot);
+    const checked = await capacityCheck(pool, dateStr, def.slot, 1);
+    const remaining = checked.state?.effectiveRemaining ?? 0;
     const past = dt.isSlotPast(dateStr, def.slot);
     let status, statusText, maxPax;
 
@@ -102,14 +125,14 @@ async function getAvailability(dateStr) {
       status = 'PAST';
       statusText = '已過時間';
       maxPax = 0;
-    } else if (st.groups === 0) {
+    } else if (st.groups === 0 && remaining > 0) {
       status = 'OPEN';
       statusText = '可預約';
-      maxPax = st.remaining;
-    } else if (st.remaining > 0) {
+      maxPax = remaining;
+    } else if (remaining > 0) {
       status = 'PARTIAL';
-      statusText = `剩餘 ${st.remaining} 位`;
-      maxPax = st.remaining;
+      statusText = `剩餘 ${remaining} 位 / ${remaining} places left`;
+      maxPax = remaining;
     } else {
       status = 'FULL';
       statusText = '已滿';

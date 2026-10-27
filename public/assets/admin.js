@@ -305,10 +305,11 @@
     $('reportPanel').hidden = !visible;
     $('accountsPanel').hidden = mode !== 'accounts';
     $('availabilityPanel').hidden = mode !== 'availability';
+    $('sourcesPanel').hidden = mode !== 'sources';
     $('scroll').style.display = mode === 'calendar' ? 'block' : 'none';
     $('loading').style.display = mode === 'calendar' ? 'block' : 'none';
     $('reportTitle').textContent = mode === 'analytics' ? '數據分析 / Analytics' : '營運總覽 / Overview';
-    if (visible) loadReport(); else if (mode === 'accounts') loadAccounts(); else if (mode === 'availability') loadAvailability(); else load();
+    if (visible) loadReport(); else if (mode === 'accounts') loadAccounts(); else if (mode === 'availability') loadAvailability(); else if (mode === 'sources') loadSourceOptions(); else load();
   }
   function reportQuery() {
     var p = new URLSearchParams({ from: $('reportFrom').value, to: $('reportTo').value, basis: $('reportBasis').value });
@@ -376,6 +377,7 @@
   $('analyticsTab').addEventListener('click', function () { setReportMode('analytics'); });
   $('accountsTab').addEventListener('click', function () { setReportMode('accounts'); });
   $('availabilityTab').addEventListener('click', function () { setReportMode('availability'); });
+  $('sourcesTab').addEventListener('click', function () { setReportMode('sources'); });
   $('reportRefresh').addEventListener('click', loadReport);
   $('searchBookings').addEventListener('click', loadReportBookings);
   function loadAccounts() {
@@ -461,6 +463,38 @@
       .then(function () { $('availabilityImpact').textContent = ''; $('availabilityMessage').textContent = '時段設定已儲存 / Slot saved.'; setReportMode('calendar'); })
       .catch(showAvailabilityError);
   });
+  function loadSourceOptions() {
+    api('/api/admin/discovery-sources').then(function (data) {
+      $('sourceOptionsRows').replaceChildren();
+      data.sources.forEach(function (source) {
+        var tr = document.createElement('tr');
+        function field(value, type) {
+          var td = document.createElement('td'); var input = document.createElement('input');
+          input.type = type || 'text'; input.value = value; input.style.width = '100%';
+          input.style.minWidth = '90px'; input.style.background = 'var(--card2)'; input.style.color = 'var(--text)';
+          td.appendChild(input); tr.appendChild(td); return input;
+        }
+        var zh = field(source.labelZh), en = field(source.labelEn), order = field(source.sortOrder, 'number');
+        var activeCell = document.createElement('td'), active = document.createElement('input');
+        active.type = 'checkbox'; active.checked = source.active; activeCell.appendChild(active); tr.appendChild(activeCell);
+        var action = document.createElement('td'), save = document.createElement('button');
+        save.type = 'button'; save.textContent = '儲存 / Save';
+        save.addEventListener('click', function () {
+          api('/api/admin/discovery-sources/' + encodeURIComponent(source.id), { method: 'PUT', body: JSON.stringify({
+            labelZh: zh.value.trim(), labelEn: en.value.trim(), sortOrder: Number(order.value), active: active.checked }) })
+            .then(function () { $('sourcesMessage').textContent = '已儲存 / Saved.'; loadSourceOptions(); loadDiscoverySources(); })
+            .catch(function (err) { $('sourcesMessage').textContent = err.message; });
+        });
+        action.appendChild(save); tr.appendChild(action); $('sourceOptionsRows').appendChild(tr);
+      });
+    }).catch(function (err) { $('sourcesMessage').textContent = err.message; });
+  }
+  $('createSource').addEventListener('click', function () {
+    api('/api/admin/discovery-sources', { method: 'POST', body: JSON.stringify({
+      labelZh: $('sourceZh').value.trim(), labelEn: $('sourceEn').value.trim(), sortOrder: Number($('sourceOrder').value) }) })
+      .then(function () { $('sourceZh').value = ''; $('sourceEn').value = ''; $('sourcesMessage').textContent = '來源已新增 / Source added.'; loadSourceOptions(); loadDiscoverySources(); })
+      .catch(function (err) { $('sourcesMessage').textContent = err.message; });
+  });
   function loadLineGroups() {
     $('lineStatus').textContent = '讀取中…';
     api('/api/admin/line/groups').then(function (data) {
@@ -515,6 +549,7 @@
     $('reportFrom').value = session.today; $('reportTo').value = session.today;
     $('accountsTab').hidden = role !== 'ADMIN';
     $('availabilityTab').hidden = role !== 'ADMIN';
+    $('sourcesTab').hidden = role !== 'ADMIN';
     $('lineGroups').hidden = role !== 'ADMIN';
     ['prev','this','next','reload','calendarTab','addNew'].forEach(function (id) { if (role === 'ANALYST') $(id).hidden = true; });
     if (role === 'ANALYST') setReportMode('analytics'); else { loadDiscoverySources(); load(); }

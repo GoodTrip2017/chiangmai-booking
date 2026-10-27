@@ -16,6 +16,14 @@
   // 今天（清邁時間）當作日期欄位下限
   api('/api/config').then(function (cfg) {
     $('date').min = cfg.today;
+    $('publicHours').textContent = cfg.businessHours;
+    $('publicServiceMinutes').textContent = cfg.serviceMinutes + ' 分鐘 / minutes';
+    $('publicStartTime').textContent = cfg.startTime;
+    $('publicCapacity').textContent = '同一時段合計最多 ' + cfg.maxPax + ' 人 / ' + cfg.maxPax + ' guests total at a time';
+    var days = ['週一 / Mondays','週二 / Tuesdays','週三 / Wednesdays','週四 / Thursdays','週五 / Fridays','週六 / Saturdays','週日 / Sundays'];
+    var closed = cfg.closedWeekdays.map(function (n) { return days[n - 1]; });
+    $('publicClosedDays').textContent = closed.length ? closed.join('、') : '無固定公休 / No weekly closure';
+    $('dateClosedHint').textContent = closed.length ? '（' + closed.join('、') + ' 公休）' : '';
   }).catch(function () {});
 
   function showMsg(text, kind) {
@@ -26,7 +34,11 @@
   function clearMsg() { $('msg').className = 'msg'; }
 
   function updateGroupNotice() {
-    var largeGroup = Number($('pax').value) > 12;
+    var available = state.slot ? state.slotMax : 12;
+    var largeGroup = Number($('pax').value) > available;
+    $('groupPolicyText').textContent = state.slot
+      ? '所選時段目前最多可容納 ' + available + ' 人。若同行人數較多，請透過 LINE 與店員確認其他安排。 / This slot currently has room for ' + available + ' guests. Please contact us about a larger group.'
+      : '線上預約每個時段最多接待 12 人。超過 12 人的團體，請透過 LINE 私訊，由店員確認接待方式與時段。 / Please contact us on LINE for groups above 12.';
     $('groupNotice').className = 'msg info' + (largeGroup ? ' show' : '');
     $('go').disabled = state.loading || largeGroup;
     $('go').textContent = state.loading ? '送出中，請稍候…' : largeGroup ? '多人預約請先透過 LINE 聯絡' : '送出預約';
@@ -103,7 +115,9 @@
 
       var el = document.createElement('div');
       el.className = cls;
-      el.innerHTML = '<span class="t">' + s.slot + '</span><span class="s">' + s.statusText + '</span>';
+      var time = document.createElement('span'); time.className = 't'; time.textContent = s.slot;
+      var status = document.createElement('span'); status.className = 's'; status.textContent = s.statusText;
+      el.append(time, status);
       if (s.selectable) {
         el.addEventListener('click', function () { pickSlot(el, s); });
       }

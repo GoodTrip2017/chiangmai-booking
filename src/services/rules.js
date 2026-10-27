@@ -85,16 +85,31 @@ async function affectedBookings(db, proposedSettings) {
     [dt.todayStr()]
   );
   const days = new Map();
+  const byDate = new Map();
+  for (const row of rows) {
+    if (!byDate.has(row.date)) byDate.set(row.date, []);
+    byDate.get(row.date).push(row);
+  }
   const affected = [];
   for (const row of rows) {
     if (!days.has(row.date)) days.set(row.date, await dayRules(db, row.date, proposedSettings));
     const rules = days.get(row.date);
     const slot = rules.slots.find(item => item.slot === row.slot);
-    const overlappingPax = slot ? rows.filter(other => other.date === row.date &&
-      dt.getSlotDef(other.slot)?.start < slot.end && slot.start < dt.getSlotDef(other.slot)?.end)
-      .reduce((sum, other) => sum + other.pax, 0) : 0;
-    if (!slot || slot.blocked || overlappingPax > slot.maxPax) affected.push({ id: row.id, date: row.date, slot: row.slot, pax: row.pax,
-      reason: !slot ? 'SLOT_REMOVED' : slot.blocked ? 'BLOCKED' : 'CAPACITY_REDUCED' });
+    let reason = !slot ? 'SLOT_REMOVED' : slot.blocked ? 'BLOCKED' : '';
+    if (!reason) {
+      const points = [slot.start, ...byDate.get(row.date).map(other => dt.getSlotDef(other.slot)?.start),
+        ...rules.slots.map(item => item.start)].filter(point => point && point >= slot.start && point < slot.end);
+      for (const point of new Set(points)) {
+        const occupancy = byDate.get(row.date).filter(other => {
+          const interval = dt.getSlotDef(other.slot);
+          return interval && interval.start <= point && point < interval.end;
+        }).reduce((sum, other) => sum + other.pax, 0);
+        const maxPax = Math.min(slot.maxPax, ...rules.slots.filter(item => item.start <= point && point < item.end)
+          .map(item => item.blocked ? 0 : item.maxPax));
+        if (occupancy > maxPax) { reason = 'CAPACITY_REDUCED'; break; }
+      }
+    }
+    if (reason) affected.push({ id: row.id, date: row.date, slot: row.slot, pax: row.pax, reason });
   }
   return affected;
 }
