@@ -25,31 +25,30 @@ function buildConfirmationText(booking) {
   return [
     `${booking.name} 您好，`,
     '',
-    '感謝您的預約！我們已為您安排好專屬的飛行體驗。',
+    '感謝您的預約，您的到店時段已確認。 / Your visit time is confirmed.',
     '',
     '以下是您的預約詳細資訊：',
     '',
-    `• 活動名稱： ${CONFIG.EVENT_NAME}`,
-    `• 預約日期： ${dt.formatDateZh(booking.date)}`,
-    `• 預約時段： ${dt.slotLabelZh(booking.slot)} (GMT+7)`,
-    `• 到訪人數： ${booking.pax}`,
-    `• 地點： ${CONFIG.VENUE_NAME}`,
-    `• 地址： ${CONFIG.VENUE_ADDRESS}`,
-    `• 地圖連結： ${CONFIG.MAP_URL}`,
+    `• 預約編號 / Booking ID: ${booking.id}`,
+    `• 活動名稱 / Service: ${CONFIG.EVENT_NAME}`,
+    `• 預約日期 / Visit date: ${dt.formatDateZh(booking.date)}`,
+    `• 預約時段 / Time slot: ${dt.slotLabelZh(booking.slot)} (GMT+7)`,
+    `• 到訪人數 / Guests: ${booking.pax}`,
+    `• 地點 / Venue: ${CONFIG.VENUE_NAME}`,
+    `• 地址 / Address: ${CONFIG.VENUE_ADDRESS}`,
+    `• 地圖 / Map: ${CONFIG.MAP_URL}`,
     '',
-    '⚠️ 重要報到須知：',
+    '重要報到須知 / Arrival information:',
     '',
     `1. 座位保留： 我們將為您保留預約時段 ${CONFIG.GRACE_MINUTES} 分鐘。`,
     '',
     `2. 逾時處理： 由於現場空間有限且可能會有其他客人預約，若您未能於 ${deadline} 前 抵達，` +
-      '請透過 LINE 聯絡店員；逾時座位將由店員依現場情況安排，可能需要重新候位。🙇🏻‍♀️🙇🏻‍♂️',
+      '請透過 LINE 聯絡店員；逾時座位將由店員依現場情況安排，可能需要重新候位。',
     '',
     `3. 聯繫方式： 如行程有變動，或交通上的延誤，歡迎隨時透過 LINE (${CONFIG.LINE_URL}) ` +
-      '與我們聯絡，為您彈性保留調整。',
+      '與我們聯絡，確認是否能調整。',
     '',
-    '期待在清邁與您見面，祝您有一場愉快的飛行體驗！🫡',
-    '',
-    '最後祝您旅途順利愉快🥰❤️',
+    '期待在清邁與您見面。 / We look forward to welcoming you in Chiang Mai.',
     '',
     `${CONFIG.SENDER_NAME} 敬上`,
   ].join('\n');
@@ -64,10 +63,11 @@ function buildConfirmationHtml(booking) {
     '<div style="font-family:-apple-system,\'Noto Sans TC\',\'Microsoft JhengHei\',sans-serif;' +
     'font-size:15px;line-height:1.75;color:#222;max-width:620px">' +
       `<p>${escapeHtml(booking.name)} 您好，</p>` +
-      '<p>感謝您的預約！我們已為您安排好專屬的飛行體驗。</p>' +
+      '<p>感謝您的預約，您的到店時段已確認。 / Your visit time is confirmed.</p>' +
       '<p>以下是您的預約詳細資訊：</p>' +
       '<ul style="list-style:none;padding-left:0">' +
-        row('活動名稱', escapeHtml(CONFIG.EVENT_NAME)) +
+        row('預約編號 / Booking ID', escapeHtml(booking.id)) +
+        row('活動名稱 / Service', escapeHtml(CONFIG.EVENT_NAME)) +
         row('預約日期', `<strong>${dt.formatDateZh(booking.date)}</strong>`) +
         row('預約時段', `<strong>${dt.slotLabelZh(booking.slot)} (GMT+7)</strong>`) +
         row('到訪人數', `${escapeHtml(booking.pax)} 人`) +
@@ -75,17 +75,16 @@ function buildConfirmationHtml(booking) {
         row('地址', escapeHtml(CONFIG.VENUE_ADDRESS)) +
         row('地圖連結', `<a href="${CONFIG.MAP_URL}">點此開啟 Google 地圖</a>`) +
       '</ul>' +
-      '<p style="margin-top:24px"><strong>⚠️ 重要報到須知：</strong></p>' +
+      '<p style="margin-top:24px"><strong>重要報到須知 / Arrival information:</strong></p>' +
       '<ol style="padding-left:20px">' +
         `<li style="margin:8px 0"><strong>座位保留：</strong> 我們將為您保留預約時段 ${CONFIG.GRACE_MINUTES} 分鐘。</li>` +
         '<li style="margin:8px 0"><strong>逾時處理：</strong> 由於現場空間有限且可能會有其他客人預約，' +
           `若您未能於 <strong>${deadline} 前</strong> 抵達，請透過 LINE 聯絡店員；逾時座位將由店員依現場情況安排，` +
-          '可能需要重新候位。🙇🏻‍♀️🙇🏻‍♂️</li>' +
+          '可能需要重新候位。</li>' +
         '<li style="margin:8px 0"><strong>聯繫方式：</strong> 如行程有變動，或交通上的延誤，' +
-          `歡迎隨時透過 <a href="${CONFIG.LINE_URL}">LINE</a> 與我們聯絡，為您彈性保留調整。</li>` +
+          `歡迎隨時透過 <a href="${CONFIG.LINE_URL}">LINE</a> 與我們聯絡，確認是否能調整。</li>` +
       '</ol>' +
-      '<p>期待在清邁與您見面，祝您有一場愉快的飛行體驗！🫡</p>' +
-      '<p>最後祝您旅途順利愉快🥰❤️</p>' +
+      '<p>期待在清邁與您見面。 / We look forward to welcoming you in Chiang Mai.</p>' +
       `<p style="margin-top:20px">${escapeHtml(CONFIG.SENDER_NAME)} 敬上</p>` +
     '</div>';
 }

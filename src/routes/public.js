@@ -5,8 +5,14 @@ const { getAvailability } = require('../services/availability');
 const { submitBooking } = require('../services/booking');
 const { CONFIG } = require('../config');
 const dt = require('../util/datetime');
+const discovery = require('../services/discovery');
 
 const router = express.Router();
+
+router.get('/discovery-sources', async (req, res, next) => {
+  try { res.json({ sources: await discovery.listSources() }); }
+  catch (err) { next(err); }
+});
 
 router.get('/config', (req, res) => {
   res.json({

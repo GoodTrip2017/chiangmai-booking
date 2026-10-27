@@ -16,6 +16,8 @@ const { pool } = require('../src/db');
 const { migrate } = require('../src/db/migrate');
 const auth = require('../src/services/auth');
 const booking = require('../src/services/booking');
+const lifecycle = require('../src/services/lifecycle');
+const reporting = require('../src/services/reporting');
 const { createApp } = require('../src/app');
 const password = crypto.randomBytes(24).toString('hex');
 const form = { name: '測試預約', pax: 2, date: '2099-01-01', slot: '14:00-15:30', firstTime: '否', email: 'test@example.invalid', referral: '網路搜尋' };
@@ -53,7 +55,7 @@ before(async () => {
   origin = 'http://127.0.0.1:' + server.address().port;
   process.env.APP_ORIGIN = origin;
 });
-beforeEach(async () => { await pool.query('TRUNCATE bookings, admin_sessions, admin_login_limits, request_limits'); });
+beforeEach(async () => { await pool.query('TRUNCATE bookings, booking_events, notification_events, admin_sessions, admin_login_limits, request_limits'); });
 after(async () => {
   if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   await pool.end();
@@ -150,7 +152,7 @@ test('前台、後台新增及編輯缺少 Email 都遭拒絕', async () => {
   assert.equal((await request('/api/admin/bookings', { ...session, method: 'POST', body: { ...form, email: '' } })).status, 400);
   const valid = await request('/api/admin/bookings', { ...session, method: 'POST', body: form });
   assert.equal(valid.status, 200);
-  const missing = await request('/api/admin/bookings/' + valid.data.id, { ...session, method: 'PUT', body: { ...form, email: '' } });
+  const missing = await request('/api/admin/bookings/' + valid.data.id, { ...session, method: 'PUT', body: { ...form, email: '', revision: 1 } });
   assert.equal(missing.status, 400);
   assert.equal((await pool.query('SELECT email FROM bookings WHERE id=$1', [valid.data.id])).rows[0].email, form.email);
 });
@@ -195,6 +197,29 @@ test('通知逾時保留成功預約並標記失敗，不再次新增', async ()
     assert.equal((await booking.submitBooking(data)).ok, true);
     assert.equal((await pool.query('SELECT count(*)::int AS n FROM bookings')).rows[0].n, 1);
   } finally { global.fetch=previousFetch; delete process.env.RESEND_API_KEY; delete process.env.MAIL_FROM; }
+});
+test('報到、部分到店、結案與版本衝突均保留歷程；統計不重複計數', async () => {
+  const made = await booking.createManualBooking({ ...form, pax: 4 });
+  const checked = await lifecycle.changeStatus(made.id, { status: 'CHECKED_IN', revision: 1, actualPax: 2 });
+  assert.equal(checked.booking.actual_pax, 2);
+  await assert.rejects(lifecycle.changeStatus(made.id, { status: 'COMPLETED', revision: 1 }), { status: 409 });
+  const finished = await lifecycle.changeStatus(made.id, { status: 'COMPLETED', revision: 2 });
+  assert.equal(finished.booking.status, 'COMPLETED');
+  await assert.rejects(lifecycle.changeStatus(made.id, { status: 'NO_SHOW', revision: 3 }), { status: 409 });
+  const report = await reporting.analytics({ from: form.date, to: form.date });
+  assert.equal(report.summary.bookings, 1);
+  assert.equal(report.summary.checked_in_bookings, 1);
+  assert.equal(report.summary.actual_guests, 2);
+  assert.equal(report.summary.completed_bookings, 1);
+  const history = await reporting.bookingDetail(made.id);
+  assert.deepEqual(history.history.map(item => item.event_type), ['STATUS_CHANGED','STATUS_CHANGED','CREATED']);
+});
+test('未到店必須經店員標記且只能在預約時間開始後', async () => {
+  const future = await booking.createManualBooking(form);
+  await assert.rejects(lifecycle.changeStatus(future.id, { status: 'NO_SHOW', revision: 1 }), { status: 409 });
+  const old = await pool.query("INSERT INTO bookings(name,pax,date,slot,email) VALUES ('past',1,'2026-01-05','14:00-15:30',$1) RETURNING *", [form.email]);
+  const marked = await lifecycle.changeStatus(old.rows[0].id, { status: 'NO_SHOW', revision: 1, reason: 'staff checked' });
+  assert.equal(marked.booking.status, 'NO_SHOW');
 });
 test('錯誤不洩漏資料庫細節，資料庫不可用健康檢查回 503', async () => {
   assert.equal((await request('/api/availability?date=invalid')).status, 400);

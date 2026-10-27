@@ -61,3 +61,109 @@ CREATE TABLE IF NOT EXISTS line_group_candidates (
   group_id TEXT PRIMARY KEY,
   seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Stable discovery IDs keep historical reporting intact when labels change.
+CREATE TABLE IF NOT EXISTS discovery_sources (
+  id TEXT PRIMARY KEY,
+  label_zh TEXT NOT NULL,
+  label_en TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO discovery_sources (id, label_zh, label_en, sort_order, active) VALUES
+  ('google-maps', 'Google 地圖', 'Google Maps', 10, true),
+  ('google-search', 'Google 搜尋', 'Google Search', 20, true),
+  ('instagram', 'Instagram', 'Instagram', 30, true),
+  ('facebook', 'Facebook', 'Facebook', 40, true),
+  ('line', 'LINE', 'LINE', 50, true),
+  ('friends-family', '朋友推薦', 'Friends or Family', 60, true),
+  ('walk-in-discovery', '路過門市', 'Walk-in Discovery', 70, true),
+  ('hotel-accommodation', '飯店或旅宿推薦', 'Hotel or Accommodation', 80, true),
+  ('partner-event', '合作店家或活動', 'Partner or Event', 90, true),
+  ('previous-visit', '曾經來過', 'Previous Visit', 100, true),
+  ('other', '其他', 'Other', 110, true),
+  ('prefer-not-to-say', '不願提供', 'Prefer Not to Say', 120, true),
+  ('legacy-threads', 'Threads（舊選項）', 'Threads (Legacy)', 200, false),
+  ('legacy-goodtrip-web', 'GoodTrip官網（舊選項）', 'GoodTrip Website (Legacy)', 210, false),
+  ('legacy-goodtrip-store', 'GoodTrip門市（舊選項）', 'GoodTrip Store (Legacy)', 220, false),
+  ('legacy-online-search', '網路搜尋（舊選項）', 'Online Search (Legacy)', 230, false)
+ON CONFLICT (id) DO NOTHING;
+
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS discovery_source_id TEXT REFERENCES discovery_sources(id);
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS discovery_detail TEXT NOT NULL DEFAULT '';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS entry_source TEXT NOT NULL DEFAULT 'UNKNOWN';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS first_touch_source TEXT NOT NULL DEFAULT '';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS first_touch_medium TEXT NOT NULL DEFAULT '';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS first_touch_campaign TEXT NOT NULL DEFAULT '';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS partner_code TEXT NOT NULL DEFAULT '';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS actual_pax INTEGER CHECK (actual_pax >= 0);
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS internal_note TEXT NOT NULL DEFAULT '';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancel_reason TEXT NOT NULL DEFAULT '';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS no_show_note TEXT NOT NULL DEFAULT '';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checked_in_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS no_show_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS original_date TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS original_slot TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS assigned_staff_id UUID;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_id UUID;
+
+-- Backfill only exact legacy selections. Unknown stays unknown; old text remains untouched.
+UPDATE bookings SET discovery_source_id = CASE referral
+  WHEN 'Instagram' THEN 'instagram'
+  WHEN '親友介紹' THEN 'friends-family'
+  WHEN 'Threads' THEN 'legacy-threads'
+  WHEN 'GoodTrip官網' THEN 'legacy-goodtrip-web'
+  WHEN 'GoodTrip門市' THEN 'legacy-goodtrip-store'
+  WHEN '網路搜尋' THEN 'legacy-online-search'
+  ELSE NULL END
+WHERE discovery_source_id IS NULL AND referral <> '' AND (pax BETWEEN 1 AND 12 OR status='CANCELLED');
+UPDATE bookings SET entry_source = source WHERE entry_source = 'UNKNOWN' AND source IN ('WEB', 'WALK_IN', 'LINE', 'PHONE') AND (pax BETWEEN 1 AND 12 OR status='CANCELLED');
+UPDATE bookings SET confirmed_at = created_at WHERE status = 'CONFIRMED' AND confirmed_at IS NULL AND pax BETWEEN 1 AND 12;
+
+CREATE INDEX IF NOT EXISTS idx_bookings_discovery ON bookings (discovery_source_id, date);
+CREATE INDEX IF NOT EXISTS idx_bookings_created ON bookings (created_at);
+CREATE INDEX IF NOT EXISTS idx_bookings_status_date ON bookings (status, date);
+
+CREATE TABLE IF NOT EXISTS booking_events (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  booking_id UUID NOT NULL REFERENCES bookings(id),
+  event_type TEXT NOT NULL,
+  actor_type TEXT NOT NULL,
+  actor_id TEXT NOT NULL DEFAULT '',
+  reason TEXT NOT NULL DEFAULT '',
+  before_data JSONB,
+  after_data JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_booking_events_booking ON booking_events (booking_id, id);
+
+CREATE TABLE IF NOT EXISTS notification_events (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  booking_id UUID REFERENCES bookings(id),
+  event_type TEXT NOT NULL,
+  recipient_kind TEXT NOT NULL,
+  recipient_id TEXT NOT NULL DEFAULT '',
+  idempotency_key TEXT NOT NULL UNIQUE,
+  retry_key UUID NOT NULL DEFAULT gen_random_uuid(),
+  status TEXT NOT NULL DEFAULT 'QUEUED',
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  response_code TEXT NOT NULL DEFAULT '',
+  failure_reason TEXT NOT NULL DEFAULT '',
+  message_preview TEXT NOT NULL DEFAULT '',
+  scheduled_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  attempted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_notification_events_schedule ON notification_events (status, scheduled_at);
+ALTER TABLE notification_events ADD COLUMN IF NOT EXISTS recipient_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE notification_events ADD COLUMN IF NOT EXISTS retry_key UUID NOT NULL DEFAULT gen_random_uuid();
+
+-- Keep existing two-state rows intact; new lifecycle states are added without rewriting history.
+CREATE INDEX IF NOT EXISTS idx_bookings_capacity_active ON bookings (date, slot)
+  WHERE status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'COMPLETED');

@@ -73,7 +73,7 @@ before(async () => {
   await restartApp();
 });
 beforeEach(async () => {
-  await pool.query('TRUNCATE bookings, admin_sessions, admin_login_limits');
+  await pool.query('TRUNCATE bookings, booking_events, notification_events, admin_sessions, admin_login_limits');
   await pool.query('TRUNCATE line_group_candidates');
   if ((await pool.query("SELECT to_regclass('request_limits') AS table_name")).rows[0].table_name) await pool.query('TRUNCATE request_limits');
 });
@@ -266,7 +266,7 @@ test('SEC-17: production startup rejects missing/legacy hashes and unsafe origin
 test('SEC-18: prototype pollution and body identifier replacement cannot grant privileges or edit another booking', async () => {
   const first=await booking.createManualBooking(form), second=await booking.createManualBooking(form), session=await login();
   const input=JSON.parse(JSON.stringify({...form,id:second.id,status:'CANCELLED',source:'<script>alert(1)</script>'}).slice(0,-1)+',"__proto__":{"admin":true},"constructor":{"prototype":{"admin":true}}}');
-  const r=await request('/api/admin/bookings/'+first.id,{...session,method:'PUT',body:{...input,name:'Edited first'}});assert.equal(r.status,200);assert.equal({}.admin,undefined);
+  const r=await request('/api/admin/bookings/'+first.id,{...session,method:'PUT',body:{...input,name:'Edited first',revision:1}});assert.equal(r.status,200);assert.equal({}.admin,undefined);
   const rows=(await pool.query('SELECT id,name,status,source FROM bookings ORDER BY id')).rows;
   assert.equal(rows.find(b=>b.id===first.id).name,'Edited first');assert.equal(rows.find(b=>b.id===second.id).name,form.name);
   assert.ok(rows.every(b=>b.status==='CONFIRMED'&&b.source==='WALK_IN'));
@@ -275,7 +275,7 @@ test('SEC-18: prototype pollution and body identifier replacement cannot grant p
 test('SEC-19: admin edit/cancel/resend rejects invalid or nonexistent IDs and cancelled edits', async () => {
   const session=await login(), b=await booking.createManualBooking(form);
   for(const id of ['not-a-uuid',"x%27%3BOR%201%3D1--",crypto.randomUUID()]) for(const [method,suffix] of [['PUT',''],['POST','/cancel'],['POST','/resend-mail']]) {
-    const r=await request('/api/admin/bookings/'+id+suffix,{...session,method,body:form}); assert.ok([400,404].includes(r.status));
+    const r=await request('/api/admin/bookings/'+id+suffix,{...session,method,body:{...form,revision:1,reason:'test'}}); assert.ok([400,404].includes(r.status));
   }
   await booking.cancelBooking(b.id);await assert.rejects(booking.updateBooking({...form,id:b.id}),{status:409});await assert.rejects(booking.resendConfirmation(b.id),{status:409});
   assert.equal((await pool.query('SELECT status FROM bookings WHERE id=$1',[b.id])).rows[0].status,'CANCELLED');

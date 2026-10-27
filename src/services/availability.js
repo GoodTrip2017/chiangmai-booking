@@ -10,10 +10,11 @@ const dt = require('../util/datetime');
 /** 讀取某日所有已確認預約。容量須包含與目標時段重疊的舊預約。 */
 async function confirmedIn(db, dateStr, slot, excludeId) {
   const params = [dateStr];
-  let sql = `SELECT * FROM bookings WHERE status = '${STATUS.CONFIRMED}' AND date = $1`;
+  let sql = `SELECT * FROM bookings WHERE status = ANY($2::text[]) AND date = $1`;
+  params.push([STATUS.PENDING, STATUS.CONFIRMED, STATUS.CHECKED_IN, STATUS.COMPLETED]);
   if (excludeId) {
     params.push(excludeId);
-    sql += ' AND id <> $2';
+    sql += ' AND id <> $3';
   }
   sql += ' ORDER BY created_at';
   const { rows } = await db.query(sql, params);

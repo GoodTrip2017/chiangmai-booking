@@ -131,8 +131,10 @@ test('成功頁姓名與 Email 僅作文字；未送信不承諾 LINE 私訊', (
   const ctx = { document: doc, fetch: async () => ({ ok: true, json: async () => ({ today: '2026-09-14' }) }), window: { scrollTo() {} } };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync('public/assets/booking.js', 'utf8'), ctx);
-  ctx.onDone({ mailStatus: 'NOT_CONFIGURED', summary: { name: '<img onerror=alert(1)>', email: 'x<y@example.invalid', pax: 2, dateLabel: 'date', slotLabel: 'slot', deadline: '下午 2:40', graceMinutes: 10 } });
-  assert.equal(nodes.get('doneCard').children[1].children[1].text, '<img onerror=alert(1)>');
+  ctx.onDone({ mailStatus: 'NOT_CONFIGURED', summary: { bookingId: 'booking-123', name: '<img onerror=alert(1)>', email: 'x<y@example.invalid', pax: 2, dateLabel: 'date', slotLabel: 'slot', deadline: '下午 2:40', graceMinutes: 10 } });
+  const details = nodes.get('doneCard').children[1].children;
+  const nameIndex = details.findIndex((item) => item.text === '預約人 / Name');
+  assert.equal(details[nameIndex + 1].text, '<img onerror=alert(1)>');
   assert.match(nodes.get('doneCard').children[2].text, /預約已成立/);
   assert.doesNotMatch(nodes.get('doneCard').children[2].text, /我們會另外透過 LINE/);
 });
@@ -146,4 +148,27 @@ test('Railway 只信任邊緣 X-Real-IP，缺失或異常值共用受限桶', ()
     assert.equal(clientIp({ ip: '203.0.113.9', headers: { 'x-real-ip': value } }, env), 'unknown');
   }
   assert.equal(clientIp({ ip: '127.0.0.1', headers: { 'x-real-ip': '203.0.113.9' } }, { NODE_ENV: 'test' }), '127.0.0.1');
+});
+test('LINE 群組訊息使用雙語純文字，重試沿用固定 retry key', async () => {
+  const lineNotify = require('../src/services/lineNotify');
+  const sample = { id: '11111111-1111-4111-8111-111111111111', name: 'Test', pax: 2, date: '2099-01-01', slot: '14:00-15:30', source: 'WEB', note: '' };
+  const message = lineNotify.buildBookingMessage(sample);
+  assert.match(message, /Booking ID/);
+  assert.match(message, /新預約已確認/);
+  assert.doesNotMatch(message, /[🔔⭐✏️❌]/u);
+  const oldFetch = global.fetch;
+  const oldToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  let sent;
+  process.env.LINE_CHANNEL_ACCESS_TOKEN = 'unit-test';
+  global.fetch = async (url, options) => { sent = { url, options }; return { ok: true, status: 200, headers: new Headers() }; };
+  try {
+    const result = await lineNotify.pushToGroup(message, 'group-test', sample.id);
+    assert.equal(result.accepted, true);
+    assert.equal(sent.options.headers['X-Line-Retry-Key'], sample.id);
+    assert.equal(JSON.parse(sent.options.body).to, 'group-test');
+  } finally {
+    global.fetch = oldFetch;
+    if (oldToken === undefined) delete process.env.LINE_CHANNEL_ACCESS_TOKEN;
+    else process.env.LINE_CHANNEL_ACCESS_TOKEN = oldToken;
+  }
 });

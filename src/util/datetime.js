@@ -112,5 +112,5 @@ function formatShortBkk(date) {
 module.exports = {
   todayStr, isValidDateStr, isoWeekday, weekdayZh, isClosedDay, getSlotDef,
   addDaysStr, mondayOf, isSlotPast, formatDateZh, formatTimeZh, slotLabelZh,
-  graceDeadlineZh, formatShortBkk,
+  graceDeadlineZh, formatShortBkk, toUtcMs,
 };

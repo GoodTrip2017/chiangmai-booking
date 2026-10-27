@@ -82,6 +82,20 @@
   .chk { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; }
   .chk input { width: auto; }
   #loading { padding: 40px; text-align: center; color: var(--muted); }
+  .report { padding: 20px 24px; max-width: 1200px; margin: 0 auto; }
+  .report h2 { font-size: 20px; margin: 0 0 18px; }
+  .report-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 20px; }
+  .report-filters label { color: var(--muted); font-size: 12px; display: grid; gap: 5px; }
+  .report-filters input, .report-filters select { color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 7px; padding: 8px; font: inherit; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit,minmax(155px,1fr)); gap: 12px; }
+  .metric { background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 16px; }
+  .metric strong { display: block; font-size: 27px; margin-top: 7px; }
+  .metric span { color: var(--muted); font-size: 12px; }
+  .report-table { width: 100%; min-width: 700px; margin-top: 18px; }
+  .report-table td, .report-table th { width: auto; padding: 10px; }
+  .report-table td button { text-align: left; }
+  .report-scroll { overflow-x: auto; }
+  .report-note { color: var(--muted); line-height: 1.6; }
 </style>
 </head>
 <body>
@@ -91,6 +105,9 @@
   <button id="this" disabled>本週</button>
   <button id="next" disabled>下一週 →</button>
   <button id="reload">重新整理</button>
+  <button id="overviewTab" type="button">營運總覽 / Overview</button>
+  <button id="calendarTab" type="button">預約日曆 / Calendar</button>
+  <button id="analyticsTab" type="button">數據分析 / Analytics</button>
   <button id="lineGroups" type="button">LINE 群組設定</button>
   <button class="primary" id="addNew" disabled>＋ 手動新增</button>
   <button id="logout">登出</button>
@@ -104,6 +121,26 @@
     <button id="lineRefresh" type="button">重新讀取群組</button>
     <div id="lineGroupList"></div>
   </div>
+</section>
+
+<section id="reportPanel" class="report" hidden>
+  <h2 id="reportTitle">營運總覽 / Overview</h2>
+  <div class="report-filters">
+    <label>開始日期 / From<input id="reportFrom" type="date"></label>
+    <label>結束日期 / To<input id="reportTo" type="date"></label>
+    <label>日期基準 / Date basis<select id="reportBasis"><option value="visit">預約到店日 / Visit date</option><option value="created">預約建立日 / Created date</option></select></label>
+    <label>狀態 / Status<select id="reportStatus"><option value="">全部 / All</option><option value="PENDING">待確認 / Pending</option><option value="CONFIRMED">已確認 / Confirmed</option><option value="CHECKED_IN">已到店 / Checked in</option><option value="COMPLETED">已完成 / Completed</option><option value="CANCELLED">已取消 / Cancelled</option><option value="NO_SHOW">未到店 / No-show</option></select></label>
+    <button id="reportRefresh" type="button">查詢 / Apply</button>
+  </div>
+  <p id="reportMessage" role="status"></p>
+  <div id="metrics" class="metrics"></div>
+  <p class="report-note">實際人數只統計已報到並記錄的人數；未處理紀錄不會自動當作未到店。<br>Actual guests count recorded check-ins only. Unresolved bookings are not treated as no-shows.</p>
+  <h2>得知管道 / Discovery sources</h2>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>得知管道 / Source</th><th>預約筆數 / Bookings</th><th>預約人數 / Guests</th><th>到店筆數 / Checked in</th><th>實際人數 / Actual guests</th></tr></thead><tbody id="sourceRows"></tbody></table></div>
+  <h2>預約清單 / Bookings</h2>
+  <div class="report-filters"><label>編號、姓名或 Email / Search<input id="reportSearch" type="search" maxlength="120"></label><button id="searchBookings" type="button">搜尋 / Search</button></div>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>編號 / ID</th><th>到店日期 / Visit date</th><th>預約人 / Contact</th><th>人數 / Guests</th><th>狀態 / Status</th><th>來源 / Source</th></tr></thead><tbody id="bookingRows"></tbody></table></div>
+  <p id="bookingCount" class="report-note"></p>
 </section>
 
 <div id="loading">載入中…</div>
@@ -162,8 +199,20 @@
     <option value="親友介紹">親友介紹 / Friends or family</option>
     <option value="網路搜尋">網路搜尋 / Online search</option>
   </select>
+  <label for="fDiscoverySource">得知管道 / Discovery source</label>
+  <select id="fDiscoverySource"><option value="">未提供 / Not provided</option></select>
+  <label for="fDiscoveryDetail">來源補充 / Source detail</label>
+  <input type="text" id="fDiscoveryDetail" maxlength="120">
   <label for="fNote">備註 / Notes</label>
   <input type="text" id="fNote" maxlength="300">
+  <div id="statusPanel" style="display:none">
+    <p id="statusCurrent"></p>
+    <label for="fActualPax">實際到店人數 / Actual guests</label>
+    <input type="number" id="fActualPax" min="1" max="12" step="1">
+    <label for="fStatusReason">操作原因或備註 / Reason or note</label>
+    <input type="text" id="fStatusReason" maxlength="300">
+    <div class="acts" id="statusActions"></div>
+  </div>
   <div class="chk" id="mailChk"><input type="checkbox" id="fSendMail"><label for="fSendMail" style="margin:0">新增後寄出確認信</label></div>
   <div class="mmsg" id="mMsg"></div>
   <div class="acts">

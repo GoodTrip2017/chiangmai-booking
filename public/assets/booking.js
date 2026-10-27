@@ -1,5 +1,5 @@
 
-  var state = { slot: '', firstTime: '', referral: '', slotMax: 0, loading: false };
+  var state = { slot: '', firstTime: '', slotMax: 0, loading: false, reviewedForm: null };
 
   var availabilityVersion = 0;
   var submission = null;
@@ -44,14 +44,24 @@
     });
   });
 
-  // ---- 從哪邊知道我們的
-  Array.prototype.forEach.call($('referral').children, function (el) {
-    el.addEventListener('click', function () {
-      state.referral = el.getAttribute('data-v');
-      Array.prototype.forEach.call($('referral').children, function (o) {
-        o.className = 'slot' + (o === el ? ' on' : '');
-      });
+  api('/api/discovery-sources').then(function (data) {
+    data.sources.forEach(function (source) {
+      var option = document.createElement('option');
+      option.value = source.id;
+      option.textContent = source.labelZh + ' / ' + source.labelEn;
+      $('discoverySource').appendChild(option);
     });
+  }).catch(function () {
+    showMsg('得知管道暫時無法載入，請重新整理 / Discovery sources could not be loaded. Please refresh.');
+  });
+  $('discoverySource').addEventListener('change', function () {
+    var id = $('discoverySource').value;
+    var needsDetail = ['other', 'hotel-accommodation', 'partner-event'].includes(id);
+    $('discoveryDetailWrap').hidden = !needsDetail;
+    $('discoveryDetail').value = '';
+    $('discoveryDetailLabel').firstChild.textContent = id === 'hotel-accommodation'
+      ? '旅宿名稱 / Accommodation name ' : id === 'partner-event'
+        ? '店家或活動名稱 / Partner or event name ' : '補充說明 / Details ';
   });
 
   // ---- 日期 → 查空位
@@ -119,7 +129,40 @@
     $('paxHint').textContent = '（此時段最多可再預約 ' + state.slotMax + ' 人；總上限 12 人）';
   }
 
-  // ---- 送出
+  function showReview(form) {
+    var labels = [
+      ['預約人 / Name', form.name],
+      ['到店日期 / Visit date', form.date],
+      ['清邁時間 / Chiang Mai time', form.slot + ' (GMT+7)'],
+      ['人數 / Guests', String(form.pax)],
+      ['Email', form.email],
+      ['LINE', form.line || '未填 / Not provided'],
+      ['得知管道 / Discovery source', $('discoverySource').selectedOptions[0].textContent],
+    ];
+    if (form.discoveryDetail) labels.push(['補充 / Details', form.discoveryDetail]);
+    var list = $('reviewDetails');
+    list.replaceChildren();
+    labels.forEach(function (entry) {
+      var dt = document.createElement('dt');
+      var dd = document.createElement('dd');
+      dt.textContent = entry[0];
+      dd.textContent = entry[1];
+      list.append(dt, dd);
+    });
+    $('formCard').hidden = true;
+    $('reviewCard').hidden = false;
+    $('reviewMsg').className = 'msg';
+    $('reviewCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  $('reviewEdit').addEventListener('click', function () {
+    $('reviewCard').hidden = true;
+    $('formCard').hidden = false;
+    state.reviewedForm = null;
+    $('formCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  // ---- 先檢查，再確認送出
   $('go').addEventListener('click', function () {
     if (state.loading) return;
     clearMsg();
@@ -136,7 +179,8 @@
       firstTime: state.firstTime,
       line: $('line').value.trim(),
       email: $('email').value.trim(),
-      referral: state.referral
+      discoverySourceId: $('discoverySource').value,
+      discoveryDetail: $('discoveryDetailWrap').hidden ? '' : $('discoveryDetail').value.trim()
     };
 
     if (!form.name) return showMsg('請填寫預約人（綽號或本名）。');
@@ -145,14 +189,22 @@
     if (!Number.isInteger(form.pax) || form.pax < 1 || form.pax > state.slotMax) return showMsg('人數請填 1 至 ' + state.slotMax + ' 的整數；每個時段合計最多 12 人。');
     if (!form.firstTime) return showMsg('請選擇是否為第一次接觸。');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return showMsg('請填寫正確的 Email。');
-    if (!form.referral) return showMsg('請選擇從哪邊知道我們的。');
+    if (!form.discoverySourceId) return showMsg('請選擇得知管道 / Please select how you heard about us.');
+
+    state.reviewedForm = form;
+    showReview(form);
+  });
+
+  $('reviewSubmit').addEventListener('click', function () {
+    if (state.loading || !state.reviewedForm) return;
+    var form = state.reviewedForm;
 
     var fingerprint = JSON.stringify(form);
     if (!submission || submission.fingerprint !== fingerprint) submission = { fingerprint: fingerprint, id: crypto.randomUUID() };
     form.requestId = submission.id;
     state.loading = true;
-    $('go').disabled = true;
-    $('go').textContent = '送出中，請稍候…';
+    $('reviewSubmit').disabled = true;
+    $('reviewSubmit').textContent = '送出中 / Sending…';
 
     api('/api/bookings', {
       method: 'POST',
@@ -162,8 +214,12 @@
       .then(onDone)
       .catch(function (err) {
         state.loading = false;
+        $('reviewSubmit').disabled = false;
+        $('reviewSubmit').textContent = '確認送出 / Confirm booking';
         updateGroupNotice();
-        showMsg(err.message || '送出失敗，請稍後再試或改用 LINE 聯絡我們。');
+        var message = $('reviewMsg');
+        message.textContent = err.message || '送出失敗 / Submission failed. Please try again.';
+        message.className = 'msg show error';
         var retryDate = $('date').value;
         var retryVersion = ++availabilityVersion;
         if (retryDate) {
@@ -180,10 +236,10 @@
     var box = $('doneCard');
     box.replaceChildren();
     var heading = document.createElement('h2');
-    heading.textContent = '預約成功 / Booking confirmed 🎉';
+    heading.textContent = '預約成功 / Booking confirmed';
     box.appendChild(heading);
     var list = document.createElement('dl');
-    [['預約人 / Name', s.name], ['日期 / Date', s.dateLabel], ['時段 / Time slot', s.slotLabel + '（GMT+7）'], ['人數 / Guests', s.pax + ' 人']].forEach(function (entry) {
+    [['預約編號 / Booking ID', s.bookingId], ['狀態 / Status', '已確認 / Confirmed'], ['預約人 / Name', s.name], ['日期 / Date', s.dateLabel], ['時段 / Time slot', s.slotLabel + '（GMT+7）'], ['人數 / Guests', s.pax + ' 人']].forEach(function (entry) {
       var label = document.createElement('dt');
       var value = document.createElement('dd');
       label.textContent = entry[0];
@@ -201,5 +257,6 @@
     notice.textContent = '座位保留 ' + s.graceMinutes + ' 分鐘，請於 ' + s.deadline + ' 前抵達。若有延誤請主動透過 LINE 聯絡店員，逾時座位由店員依現場情況安排。';
     box.appendChild(notice);
     box.style.display = 'block';
+    $('reviewCard').hidden = true;
     window.scrollTo(0, 0);
   }
