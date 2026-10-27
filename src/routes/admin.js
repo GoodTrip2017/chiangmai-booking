@@ -13,6 +13,7 @@ const QRCode = require('qrcode');
 const customers = require('../services/customers');
 
 const router = express.Router();
+const actorFor = req => ({ type: req.adminSession.role, id: req.adminSession.account_id || 'environment-admin' });
 
 router.use(auth.requireAdmin, auth.requireCsrf);
 router.get('/session', (req, res) => res.json({ csrfToken: req.adminSession.csrf_token, role: req.adminSession.role,
@@ -77,6 +78,15 @@ router.get('/week', auth.requireRole('ADMIN','STAFF'), async (req, res, next) =>
 router.get('/bookings', async (req, res, next) => {
   try { res.json(await reporting.listBookings(req.query, req.adminSession.role)); } catch (err) { next(err); }
 });
+router.get('/bookings.csv', auth.requireRole('ADMIN'), async (req, res, next) => {
+  try {
+    const csv = await reporting.exportBookingsCsv(req.query);
+    res.set({ 'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="chiangmai-bookings.csv"',
+      'Cache-Control': 'no-store' });
+    res.send(csv);
+  } catch (err) { next(err); }
+});
 router.get('/bookings/:id', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
   try { res.json(await reporting.bookingDetail(req.params.id)); } catch (err) { next(err); }
 });
@@ -89,7 +99,6 @@ router.get('/customers/:id', auth.requireRole('ADMIN','STAFF'), async (req, res,
 router.get('/analytics', async (req, res, next) => {
   try { res.json(await reporting.analytics(req.query)); } catch (err) { next(err); }
 });
-
 router.get('/availability-settings', auth.requireRole('ADMIN'), async (req, res, next) => {
   try { res.json({ settings: await rules.readSettings() }); } catch (err) { next(err); }
 });
@@ -117,14 +126,15 @@ router.put('/slot-overrides/:date/:slot', auth.requireRole('ADMIN'), async (req,
 
 router.post('/bookings', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
   try {
-    res.json(await booking.createManualBooking(req.body));
+    res.json(await booking.createManualBooking(req.body, actorFor(req)));
   } catch (err) { next(err); }
 });
 
 router.put('/bookings/:id', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
   try {
     if (!Number.isSafeInteger(req.body?.revision)) throw require('../util/errors').userError('請重新整理預約資料後再操作 / Refresh the booking before editing.', 409);
-    res.json(await booking.updateBooking({ ...req.body, id: req.params.id }));
+    if (typeof req.body.changeReason !== 'string' || !req.body.changeReason.trim()) throw require('../util/errors').userError('請填寫修改原因 / A change reason is required.');
+    res.json(await booking.updateBooking({ ...req.body, id: req.params.id }, actorFor(req)));
   } catch (err) { next(err); }
 });
 
@@ -132,12 +142,12 @@ router.post('/bookings/:id/cancel', auth.requireRole('ADMIN','STAFF'), async (re
   try {
     if (!Number.isSafeInteger(req.body?.revision)) throw require('../util/errors').userError('請重新整理預約資料後再操作 / Refresh the booking before editing.', 409);
     if (typeof req.body.reason !== 'string' || !req.body.reason.trim()) throw require('../util/errors').userError('請填寫取消原因 / A cancellation reason is required.');
-    res.json(await booking.cancelBooking(req.params.id, req.body));
+    res.json(await booking.cancelBooking(req.params.id, req.body, actorFor(req)));
   } catch (err) { next(err); }
 });
 
 router.post('/bookings/:id/status', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
-  try { res.json(await lifecycle.changeStatus(req.params.id, req.body)); }
+  try { res.json(await lifecycle.changeStatus(req.params.id, req.body, actorFor(req))); }
   catch (err) { next(err); }
 });
 

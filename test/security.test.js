@@ -267,7 +267,7 @@ test('SEC-17: production startup rejects missing/legacy hashes and unsafe origin
 test('SEC-18: prototype pollution and body identifier replacement cannot grant privileges or edit another booking', async () => {
   const first=await booking.createManualBooking(form), second=await booking.createManualBooking(form), session=await login();
   const input=JSON.parse(JSON.stringify({...form,id:second.id,status:'CANCELLED',source:'<script>alert(1)</script>'}).slice(0,-1)+',"__proto__":{"admin":true},"constructor":{"prototype":{"admin":true}}}');
-  const r=await request('/api/admin/bookings/'+first.id,{...session,method:'PUT',body:{...input,name:'Edited first',revision:1}});assert.equal(r.status,200);assert.equal({}.admin,undefined);
+  const r=await request('/api/admin/bookings/'+first.id,{...session,method:'PUT',body:{...input,name:'Edited first',revision:1,changeReason:'staff correction'}});assert.equal(r.status,200);assert.equal({}.admin,undefined);
   const rows=(await pool.query('SELECT id,name,status,source FROM bookings ORDER BY id')).rows;
   assert.equal(rows.find(b=>b.id===first.id).name,'Edited first');assert.equal(rows.find(b=>b.id===second.id).name,form.name);
   assert.ok(rows.every(b=>b.status==='CONFIRMED'&&b.source==='WALK_IN'));

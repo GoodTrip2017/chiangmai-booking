@@ -142,4 +142,41 @@ async function analytics(query = {}) {
   };
 }
 
-module.exports = { filters, listBookings, bookingDetail, analytics };
+function csvCell(value) {
+  const raw = value === null || value === undefined ? '' : String(value);
+  const safe = /^[\s]*[=+\-@\t\r\n]/.test(raw) ? "'" + raw : raw;
+  return '"' + safe.replace(/"/g, '""') + '"';
+}
+async function exportBookingsCsv(query = {}) {
+  const f = filters(query);
+  const w = where(f, { search: true });
+  const { rows } = await pool.query(
+    `SELECT b.id,b.date,b.slot,b.name,b.email,b.line,b.pax,b.actual_pax,b.status,
+       b.discovery_source_id,b.discovery_detail,b.entry_source,b.first_touch_source,
+       b.first_touch_medium,b.first_touch_campaign,b.partner_code,b.campaign_code,
+       to_char(b.created_at AT TIME ZONE 'Asia/Bangkok','YYYY-MM-DD HH24:MI:SS') AS created_bkk
+     FROM bookings b WHERE ${w.clause}
+     ORDER BY b.date DESC,b.slot DESC,b.created_at DESC,b.id DESC LIMIT 50001`, w.values
+  );
+  if (rows.length > 50000) throw userError('匯出超過 50,000 筆，請縮小日期區間 / Narrow the date range for export.', 413);
+  const lines = [
+    ['報表 / Report','預約明細 / Booking details'],
+    ['時區 / Timezone','Asia/Bangkok (GMT+7)'],
+    ['匯出時間 / Exported at', new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Bangkok', year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23' }).format(new Date())],
+    ['日期基準 / Date basis', f.basis === 'visit' ? '到店日期 / Visit date' : '建立日期 / Created date'],
+    ['區間 / Range', f.from + ' – ' + f.to],
+    ['定義 / Definition','每一列代表一筆預約；實際到店人數未記錄時留空 / One row per booking; unknown actual guests remain blank.'],
+    [],
+    ['預約編號 / Booking ID','到店日期 / Visit Date','時段 / Time Slot','姓名 / Name','Email',
+      'LINE 聯絡 / LINE Contact','預約人數 / Booked Guests','實際人數 / Actual Guests','狀態 / Status',
+      '得知管道 ID / Discovery ID','來源補充 / Discovery Detail','預約入口 / Entry Source',
+      '首次 UTM Source','首次 UTM Medium','首次 UTM Campaign','合作代碼 / Partner Code',
+      '活動代碼 / Campaign Code','建立時間（清邁） / Created At (Bangkok)'],
+    ...rows.map(row => [row.id,row.date,row.slot,row.name,row.email,row.line,row.pax,row.actual_pax,row.status,
+      row.discovery_source_id,row.discovery_detail,row.entry_source,row.first_touch_source,
+      row.first_touch_medium,row.first_touch_campaign,row.partner_code,row.campaign_code,row.created_bkk]),
+  ];
+  return '\ufeff' + lines.map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
+}
+
+module.exports = { filters, listBookings, bookingDetail, analytics, csvCell, exportBookingsCsv };

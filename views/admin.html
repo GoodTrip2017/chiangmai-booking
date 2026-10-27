@@ -222,6 +222,7 @@
     <label>日期基準 / Date basis<select id="reportBasis"><option value="visit">預約到店日 / Visit date</option><option value="created">預約建立日 / Created date</option></select></label>
     <label>狀態 / Status<select id="reportStatus"><option value="">全部 / All</option><option value="PENDING">待確認 / Pending</option><option value="CONFIRMED">已確認 / Confirmed</option><option value="CHECKED_IN">已到店 / Checked in</option><option value="COMPLETED">已完成 / Completed</option><option value="CANCELLED">已取消 / Cancelled</option><option value="NO_SHOW">未到店 / No-show</option></select></label>
     <button id="reportRefresh" type="button">查詢 / Apply</button>
+    <button id="exportBookings" type="button" hidden>匯出預約 CSV / Export bookings CSV</button>
   </div>
   <p id="reportMessage" role="status"></p>
   <div id="metrics" class="metrics"></div>
@@ -301,6 +302,8 @@
   <input type="text" id="fDiscoveryDetail" maxlength="120">
   <label for="fNote">備註 / Notes</label>
   <input type="text" id="fNote" maxlength="300">
+  <label for="fEditReason">修改原因 / Change reason（編輯時必填 / Required when editing）</label>
+  <input type="text" id="fEditReason" maxlength="300">
   <div id="statusPanel" style="display:none">
     <p id="statusCurrent"></p>
     <label for="fActualPax">實際到店人數 / Actual guests</label>

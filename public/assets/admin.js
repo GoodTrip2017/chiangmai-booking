@@ -153,6 +153,7 @@
     $('fDiscoverySource').value = '';
     $('fDiscoveryDetail').value = '';
     $('fNote').value = '';
+    $('fEditReason').value = '';
     $('fSendMail').checked = false;
     $('mailChk').style.display = 'flex';
     $('fSource').disabled = false;
@@ -179,6 +180,7 @@
     $('fDiscoverySource').value = b.discoverySourceId || '';
     $('fDiscoveryDetail').value = b.discoveryDetail || '';
     $('fNote').value = b.note;
+    $('fEditReason').value = '';
     $('mailChk').style.display = 'none';
     $('mCancelBooking').style.display = ['PENDING', 'CONFIRMED'].includes(b.status) ? 'inline-block' : 'none';
     $('mResend').style.display = b.email ? 'inline-block' : 'none';
@@ -228,6 +230,7 @@
       discoveryDetail: $('fDiscoveryDetail').value.trim(),
       revision: editing ? editing.revision : undefined,
       note: $('fNote').value.trim(),
+      changeReason: $('fEditReason').value.trim(),
       sendMail: $('fSendMail').checked
     };
   }
@@ -250,6 +253,7 @@
     if (!p.name) return showMMsg('請填寫預約人。');
     if (!p.date) return showMMsg('請選擇日期。');
     if (!p.email) return showMMsg('請填寫 Email，確認信會寄到這個信箱。');
+    if (editing && !p.changeReason) return showMMsg('請填寫修改原因 / A change reason is required.');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email)) return showMMsg('請填寫正確的 Email。');
     if (!Number.isInteger(p.pax) || p.pax < 1 || p.pax > 12) return showMMsg('人數請填 1 至 12 的整數。');
     var fingerprint = JSON.stringify(p);
@@ -401,6 +405,24 @@
   $('customersTab').addEventListener('click', function () { setReportMode('customers'); });
   $('reportRefresh').addEventListener('click', loadReport);
   $('searchBookings').addEventListener('click', loadReportBookings);
+  $('exportBookings').addEventListener('click', async function () {
+    var query = reportQuery(); query.set('search', $('reportSearch').value.trim());
+    $('reportMessage').textContent = '正在匯出 / Preparing export…';
+    try {
+      var res = await fetch('/api/admin/bookings.csv?' + query.toString(), {
+        credentials: 'same-origin', headers: { 'X-CSRF-Token': csrfToken }
+      });
+      if (res.status === 401) { location.replace('/admin/login'); return; }
+      if (!res.ok) {
+        var error = await res.json(); throw new Error(error.error || '匯出失敗 / Export failed.');
+      }
+      var url = URL.createObjectURL(await res.blob());
+      var link = document.createElement('a'); link.href = url; link.download = 'chiangmai-bookings.csv';
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      $('reportMessage').textContent = 'CSV 已下載 / CSV downloaded.';
+    } catch (err) { $('reportMessage').textContent = err.message; }
+  });
   function loadAccounts() {
     api('/api/admin/accounts').then(function (data) {
       $('accountRows').replaceChildren();
@@ -639,6 +661,7 @@
     csrfToken = session.csrfToken; role = session.role;
     $('reportFrom').value = session.today; $('reportTo').value = session.today;
     $('accountsTab').hidden = role !== 'ADMIN';
+    $('exportBookings').hidden = role !== 'ADMIN';
     $('availabilityTab').hidden = role !== 'ADMIN';
     $('sourcesTab').hidden = role !== 'ADMIN';
     $('customersTab').hidden = role === 'ANALYST';

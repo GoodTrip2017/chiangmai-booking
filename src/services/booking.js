@@ -91,7 +91,7 @@ async function lockSlots(client, entries) {
 function rejectForce(payload) {
   if (payload?.force) throw userError('每個時段最多接待 12 人，無法強制超額安排。');
 }
-async function insertBooking(data, source, requestId) {
+async function insertBooking(data, source, requestId, actor) {
   const key = requestId ? validId(requestId) : crypto.randomUUID();
   const hash = crypto.createHash('sha256').update(JSON.stringify({ data, source })).digest('hex');
   const client = await pool.connect();
@@ -131,7 +131,7 @@ async function insertBooking(data, source, requestId) {
        data.firstTouchSource, data.firstTouchMedium, data.firstTouchCampaign, tracking.partnerCode, tracking.campaignCode,
        STATUS.CONFIRMED, data.note, key, hash, check.state.maxPax, customerId]
     );
-    await recordEvent(client, rows[0].id, 'CREATED', null, rows[0], '', source === 'WEB' ? 'CUSTOMER' : 'ADMIN');
+    await recordEvent(client, rows[0].id, 'CREATED', null, rows[0], '', actor || (source === 'WEB' ? 'CUSTOMER' : 'ADMIN'));
     await enqueueGroup(client, rows[0], 'BOOKING_CONFIRMED', buildBookingMessage(rows[0]));
     await client.query('COMMIT');
     return { booking: rows[0], replayed: false };
@@ -173,20 +173,22 @@ async function submitBooking(form) {
   const mailStatus = await trySendConfirmation(booking, `confirmation/${booking.id}`);
   return summaryResponse(booking, mailStatus);
 }
-async function createManualBooking(payload) {
+async function createManualBooking(payload, actor) {
   const p = payload || {};
   rejectForce(p);
   const data = validateForm(p, { allowPast: true, referralOptional: true });
   const source = SOURCES.includes(p.source) ? p.source : 'WALK_IN';
-  const { booking, replayed } = await insertBooking(data, source, p.requestId);
+  const { booking, replayed } = await insertBooking(data, source, p.requestId, actor);
   if (!replayed) void processPending().catch(err => console.error('處理 LINE 通知失敗：', err.code || err.name));
   let mailStatus = booking.mail_status;
   if (!replayed && p.sendMail && booking.email) mailStatus = await trySendConfirmation(booking, `confirmation/${booking.id}`);
   return { ok: true, mailSent: mailStatus === 'ACCEPTED', mailStatus, id: booking.id };
 }
-async function updateBooking(payload) {
+async function updateBooking(payload, actor = 'ADMIN') {
   const p = payload || {};
   rejectForce(p);
+  const changeReason = typeof p.changeReason === 'string' ? p.changeReason.trim() : '';
+  if (changeReason.length > 300 || /[\u0000-\u001f\u007f]/.test(changeReason)) throw userError('修改原因格式不正確 / Invalid change reason.');
   const id = validId(p.id);
   const client = await pool.connect();
   let updated, previous;
@@ -226,7 +228,7 @@ async function updateBooking(payload) {
     );
     updated = result.rows[0];
     previous = booking;
-    await recordEvent(client, id, booking.date !== data.date || booking.slot !== data.slot ? 'RESCHEDULED' : 'UPDATED', booking, updated);
+    await recordEvent(client, id, booking.date !== data.date || booking.slot !== data.slot ? 'RESCHEDULED' : 'UPDATED', booking, updated, changeReason, actor);
     await enqueueGroup(client, updated, 'BOOKING_UPDATED', buildUpdateMessage(updated, booking));
     await client.query('COMMIT');
   } catch (err) {
@@ -236,10 +238,10 @@ async function updateBooking(payload) {
   void processPending().catch(err => console.error('處理 LINE 通知失敗：', err.code || err.name));
   return { ok: true, revision: updated.revision };
 }
-async function cancelBooking(id, payload = {}) {
+async function cancelBooking(id, payload = {}, actor = 'ADMIN') {
   validId(id);
   const reason = typeof payload.reason === 'string' ? payload.reason.trim() : 'Legacy administrative cancellation';
-  if (!reason || reason.length > 300) throw userError('請填寫取消原因 / A cancellation reason is required.');
+  if (!reason || reason.length > 300 || /[\u0000-\u001f\u007f]/.test(reason)) throw userError('請填寫取消原因 / A cancellation reason is required.');
   const client = await pool.connect();
   let booking;
   try {
@@ -252,7 +254,7 @@ async function cancelBooking(id, payload = {}) {
     if (payload.revision !== undefined && payload.revision !== booking.revision) throw userError('預約已由其他人修改，請重新整理 / Booking changed; refresh and try again.', 409);
     await lockSlots(client, [[booking.date, booking.slot]]);
     const { rows: updated } = await client.query('UPDATE bookings SET status=$1, cancel_reason=$3, cancelled_at=now(), updated_at=now(), revision=revision+1 WHERE id=$2 RETURNING *', [STATUS.CANCELLED, id, reason]);
-    await recordEvent(client, id, 'STATUS_CHANGED', booking, updated[0], reason);
+    await recordEvent(client, id, 'STATUS_CHANGED', booking, updated[0], reason, actor);
     await enqueueGroup(client, updated[0], 'BOOKING_CANCELLED', buildCancelMessage(updated[0]));
     await client.query('COMMIT');
   } catch (err) {

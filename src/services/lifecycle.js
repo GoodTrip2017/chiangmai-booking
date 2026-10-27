@@ -26,13 +26,15 @@ function clean(value, max = 300) {
 }
 
 async function recordEvent(client, bookingId, eventType, before, after, reason = '', actor = 'ADMIN') {
+  const actorType = typeof actor === 'string' ? actor : actor?.type || 'ADMIN';
+  const actorId = typeof actor === 'string' ? '' : actor?.id || '';
   await client.query(
     'INSERT INTO booking_events (booking_id, event_type, actor_type, actor_id, reason, before_data, after_data) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-    [bookingId, eventType, actor, '', reason, before, after]
+    [bookingId, eventType, actorType, actorId, reason, before, after]
   );
 }
 
-async function changeStatus(id, body = {}) {
+async function changeStatus(id, body = {}, actor = 'ADMIN') {
   if (typeof id !== 'string' || !UUID.test(id)) throw userError('預約編號格式不正確 / Invalid booking ID.');
   const target = body.status;
   if (!Object.values(STATUS).includes(target)) throw userError('狀態不正確 / Invalid status.');
@@ -75,7 +77,7 @@ async function changeStatus(id, body = {}) {
        revision=revision+1, updated_at=now() WHERE id=$1 RETURNING *`,
       [id, target, guests, reason]
     );
-    await recordEvent(client, id, 'STATUS_CHANGED', before, updated[0], reason);
+    await recordEvent(client, id, 'STATUS_CHANGED', before, updated[0], reason, actor);
     await client.query('COMMIT');
     return { ok: true, booking: updated[0] };
   } catch (err) { await client.query('ROLLBACK'); throw err; }

@@ -120,6 +120,13 @@ test('門市與分析帳號在伺服器端分權；停用帳號立即使工作�
   assert.equal(list.data.items[0].email, undefined);
   assert.equal(list.data.items[0].name, undefined);
   assert.equal((await request('/api/admin/analytics?from=' + form.date, analystSession)).status, 200);
+  assert.equal((await request('/api/admin/bookings.csv?from=' + form.date, analystSession)).status, 403);
+  assert.equal((await request('/api/admin/bookings.csv?from=' + form.date, staffSession)).status, 403);
+  const exported = await request('/api/admin/bookings.csv?from=' + form.date, administrator);
+  assert.equal(exported.status, 200);
+  assert.match(exported.headers.get('content-type'), /text\/csv/);
+  assert.match(exported.data, /Asia\/Bangkok/);
+  assert.match(exported.data, /測試預約/);
   assert.equal((await request('/api/admin/accounts/' + analyst.data.id, { ...administrator, method: 'PATCH', body: { active: false } })).status, 200);
   assert.equal((await request('/api/admin/analytics?from=' + form.date, analystSession)).status, 401);
 });
