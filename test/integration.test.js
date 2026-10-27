@@ -56,7 +56,7 @@ before(async () => {
   process.env.APP_ORIGIN = origin;
 });
 beforeEach(async () => {
-  await pool.query('TRUNCATE bookings, booking_events, notification_events, admin_sessions, staff_accounts, admin_login_limits, request_limits, availability_exceptions, slot_overrides, tracking_links');
+  await pool.query('TRUNCATE bookings, booking_events, notification_events, admin_sessions, staff_accounts, admin_login_limits, request_limits, availability_exceptions, slot_overrides, tracking_links, customers');
   await pool.query("UPDATE availability_settings SET open_time='14:00',close_time='23:00',service_minutes=90,interval_minutes=90,max_pax=12,closed_weekdays=ARRAY[2],max_advance_days=NULL,cutoff_minutes=0,finish_before_close=true WHERE id=1");
 });
 after(async () => {
@@ -309,6 +309,21 @@ test('客人填寫來源、預約入口及首次 UTM 分開保存；合作代碼
   const report = await request('/api/admin/analytics?from=' + form.date, administrator);
   assert.equal(report.data.discovery.find(row => row.id === 'google-maps').bookings, 1);
   assert.equal(report.data.tracked.find(row => row.code === 'hotel-nimman').bookings, 1);
+});
+test('Email 標準化建立穩定顧客 ID；不同姓名不影響回訪連結', async () => {
+  const first = await booking.createManualBooking({ ...form, email: ' Test@Example.Invalid ', name: 'Name A' });
+  const second = await booking.createManualBooking({ ...form, email: 'test@example.invalid', name: 'Name B', slot: '15:30-17:00' });
+  const ids = (await pool.query('SELECT customer_id FROM bookings ORDER BY date,slot')).rows.map(row => row.customer_id);
+  assert.equal(ids[0], ids[1]);
+  assert.ok(ids[0]);
+  const session = await login();
+  const customers = await request('/api/admin/customers?search=test@example.invalid', session);
+  assert.equal(customers.status, 200);
+  assert.equal(customers.data.items[0].booking_count, 2);
+  const detail = await request('/api/admin/customers/' + ids[0], session);
+  assert.equal(detail.status, 200);
+  assert.equal(detail.data.bookings.length, 2);
+  assert.notEqual(first.id, second.id);
 });
 test('錯誤不洩漏資料庫細節，資料庫不可用健康檢查回 503', async () => {
   assert.equal((await request('/api/availability?date=invalid')).status, 400);

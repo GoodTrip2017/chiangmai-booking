@@ -15,6 +15,7 @@ const { buildBookingMessage, buildUpdateMessage, buildCancelMessage, enqueueGrou
 const { resolveSource } = require('./discovery');
 const { recordEvent } = require('./lifecycle');
 const { resolveTracking } = require('./tracking');
+const { ensureCustomer } = require('./customers');
 
 /** 表單欄位驗證，回傳整理過的資料或丟出錯誤 */
 function validateForm(form, opts = {}) {
@@ -115,6 +116,7 @@ async function insertBooking(data, source, requestId) {
     }
     const discovery = await resolveSource(client, data, { optional: source !== 'WEB' });
     const tracking = await resolveTracking(client, data);
+    const customerId = await ensureCustomer(client, data.email);
     await lockSlots(client, [[data.date, data.slot]]);
     const check = await capacityCheck(client, data.date, data.slot, data.pax, null, { allowPast: source !== 'WEB' });
     if (!check.ok) throw userError(check.reason, 409);
@@ -122,12 +124,12 @@ async function insertBooking(data, source, requestId) {
       `INSERT INTO bookings (source, name, pax, date, slot, first_time, line, email, referral,
         discovery_source_id, discovery_detail, entry_source, first_touch_source, first_touch_medium,
         first_touch_campaign, partner_code, campaign_code, status, note, request_key, request_hash,
-        confirmed_at, capacity_at_booking)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,now(),$22) RETURNING *`,
+        confirmed_at, capacity_at_booking, customer_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,now(),$22,$23) RETURNING *`,
       [source, data.name, data.pax, data.date, data.slot, data.firstTime, data.line,
        data.email, data.referral || discovery.label, discovery.id, data.discoveryDetail, source,
        data.firstTouchSource, data.firstTouchMedium, data.firstTouchCampaign, tracking.partnerCode, tracking.campaignCode,
-       STATUS.CONFIRMED, data.note, key, hash, check.state.maxPax]
+       STATUS.CONFIRMED, data.note, key, hash, check.state.maxPax, customerId]
     );
     await recordEvent(client, rows[0].id, 'CREATED', null, rows[0], '', source === 'WEB' ? 'CUSTOMER' : 'ADMIN');
     await enqueueGroup(client, rows[0], 'BOOKING_CONFIRMED', buildBookingMessage(rows[0]));
@@ -205,6 +207,9 @@ async function updateBooking(payload) {
     await lockSlots(client, [[booking.date, booking.slot], [data.date, data.slot]]);
     const check = await capacityCheck(client, data.date, data.slot, data.pax, id, { allowPast: true, allowLegacySlot: allowedLegacySlot });
     if (!check.ok) throw userError(check.reason, 409);
+    const customerId = data.email.toLowerCase() === booking.email.toLowerCase()
+      ? booking.customer_id || await ensureCustomer(client, data.email)
+      : await ensureCustomer(client, data.email);
     const mailChanged = ['name', 'pax', 'date', 'slot', 'email'].some(field => booking[field] !== data[field]);
     const result = await client.query(
       `UPDATE bookings SET name=$1, pax=$2, date=$3, slot=$4, first_time=$5,
@@ -212,11 +217,12 @@ async function updateBooking(payload) {
        discovery_source_id=$11, discovery_detail=$12, updated_at=now(), revision=revision+1,
        original_date=CASE WHEN date<>$3 AND original_date IS NULL THEN date ELSE original_date END,
        original_slot=CASE WHEN slot<>$4 AND original_slot IS NULL THEN slot ELSE original_slot END,
-       capacity_at_booking=CASE WHEN date<>$3 OR slot<>$4 THEN $14 ELSE capacity_at_booking END
+       capacity_at_booking=CASE WHEN date<>$3 OR slot<>$4 THEN $14 ELSE capacity_at_booking END,
+       customer_id=$15
        WHERE id=$13 RETURNING *`,
       [data.name, data.pax, data.date, data.slot, data.firstTime, data.line, data.email,
        data.referral || discovery.label, data.note, mailChanged ? 'NOT_REQUESTED' : booking.mail_status,
-       discovery.id, data.discoveryDetail, id, check.state.maxPax]
+       discovery.id, data.discoveryDetail, id, check.state.maxPax, customerId]
     );
     updated = result.rows[0];
     previous = booking;

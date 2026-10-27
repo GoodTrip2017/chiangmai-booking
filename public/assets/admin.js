@@ -306,10 +306,11 @@
     $('accountsPanel').hidden = mode !== 'accounts';
     $('availabilityPanel').hidden = mode !== 'availability';
     $('sourcesPanel').hidden = mode !== 'sources';
+    $('customersPanel').hidden = mode !== 'customers';
     $('scroll').style.display = mode === 'calendar' ? 'block' : 'none';
     $('loading').style.display = mode === 'calendar' ? 'block' : 'none';
     $('reportTitle').textContent = mode === 'analytics' ? '數據分析 / Analytics' : '營運總覽 / Overview';
-    if (visible) loadReport(); else if (mode === 'accounts') loadAccounts(); else if (mode === 'availability') loadAvailability(); else if (mode === 'sources') loadSourceOptions(); else load();
+    if (visible) loadReport(); else if (mode === 'accounts') loadAccounts(); else if (mode === 'availability') loadAvailability(); else if (mode === 'sources') loadSourceOptions(); else if (mode === 'customers') loadCustomers(); else load();
   }
   function reportQuery() {
     var p = new URLSearchParams({ from: $('reportFrom').value, to: $('reportTo').value, basis: $('reportBasis').value });
@@ -332,7 +333,9 @@
        ['到店筆數 / Checked in', data.summary.checked_in_bookings], ['實際人數 / Actual guests', data.summary.actual_guests],
        ['完成服務 / Completed', data.summary.completed_bookings], ['取消 / Cancelled', data.summary.cancellations],
        ['未到 / No-show', data.summary.no_shows], ['已逾時未處理 / Unresolved', data.summary.overdue_unresolved],
-       ['未知來源 / Unknown source', data.summary.unknown_discovery]].forEach(function (pair) { putMetric(pair[0], pair[1]); });
+       ['未知來源 / Unknown source', data.summary.unknown_discovery],
+       ['首次記錄到店 / First recorded visitors', data.summary.first_recorded_visitors],
+       ['回訪預約者 / Returning visitors', data.summary.returning_visitors]].forEach(function (pair) { putMetric(pair[0], pair[1]); });
       $('sourceRows').replaceChildren();
       data.discovery.forEach(function (source) {
         var tr = document.createElement('tr');
@@ -395,6 +398,7 @@
   $('accountsTab').addEventListener('click', function () { setReportMode('accounts'); });
   $('availabilityTab').addEventListener('click', function () { setReportMode('availability'); });
   $('sourcesTab').addEventListener('click', function () { setReportMode('sources'); });
+  $('customersTab').addEventListener('click', function () { setReportMode('customers'); });
   $('reportRefresh').addEventListener('click', loadReport);
   $('searchBookings').addEventListener('click', loadReportBookings);
   function loadAccounts() {
@@ -550,6 +554,38 @@
       .then(function () { $('trackingMessage').textContent = '追蹤連結已建立 / Tracking link created.'; loadTrackingLinks(); })
       .catch(function (err) { $('trackingMessage').textContent = err.message; });
   });
+  function loadCustomers() {
+    api('/api/admin/customers?search=' + encodeURIComponent($('customerSearch').value.trim())).then(function (data) {
+      $('customerRows').replaceChildren();
+      $('customerMessage').textContent = data.items.length + ' 筆顧客 / customers（顯示前 ' + data.pageSize + ' 筆）';
+      data.items.forEach(function (customer) {
+        var tr = document.createElement('tr'), first = document.createElement('td');
+        var button = document.createElement('button'); button.type = 'button'; button.textContent = customer.normalized_email;
+        button.addEventListener('click', function () { showCustomerDetail(customer.id); });
+        first.appendChild(button); tr.appendChild(first);
+        [customer.booking_count, customer.checked_in_count, customer.cancellation_count, customer.no_show_count,
+          customer.first_recorded_visit || '—', customer.last_recorded_visit || '—',
+          customer.line_bound ? '已綁定 / Linked' : '未綁定 / Not linked'].forEach(function (value) {
+          var td = document.createElement('td'); td.textContent = value; tr.appendChild(td);
+        });
+        $('customerRows').appendChild(tr);
+      });
+    }).catch(function (err) { $('customerMessage').textContent = err.message; });
+  }
+  function showCustomerDetail(id) {
+    api('/api/admin/customers/' + encodeURIComponent(id)).then(function (data) {
+      $('customerDetail').replaceChildren();
+      var heading = document.createElement('h3'); heading.textContent = '顧客 / Customer: ' + data.customer.normalized_email;
+      $('customerDetail').appendChild(heading);
+      data.bookings.forEach(function (b) {
+        var p = document.createElement('p');
+        p.textContent = b.date + ' ' + b.slot + ' · ' + statusLabel(b.status) + ' · ' + b.pax + ' 預約 / booked · ' +
+          (b.actual_pax === null ? '實際未知 / actual unknown' : b.actual_pax + ' 實際 / actual');
+        $('customerDetail').appendChild(p);
+      });
+    }).catch(function (err) { $('customerMessage').textContent = err.message; });
+  }
+  $('customerSearchButton').addEventListener('click', loadCustomers);
   function loadLineGroups() {
     $('lineStatus').textContent = '讀取中…';
     api('/api/admin/line/groups').then(function (data) {
@@ -605,6 +641,7 @@
     $('accountsTab').hidden = role !== 'ADMIN';
     $('availabilityTab').hidden = role !== 'ADMIN';
     $('sourcesTab').hidden = role !== 'ADMIN';
+    $('customersTab').hidden = role === 'ANALYST';
     $('lineGroups').hidden = role !== 'ADMIN';
     ['prev','this','next','reload','calendarTab','addNew'].forEach(function (id) { if (role === 'ANALYST') $(id).hidden = true; });
     if (role === 'ANALYST') setReportMode('analytics'); else { loadDiscoverySources(); load(); }

@@ -127,6 +127,20 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS original_slot TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS assigned_staff_id UUID;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_id UUID;
 
+CREATE TABLE IF NOT EXISTS customers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  normalized_email TEXT NOT NULL UNIQUE,
+  internal_note TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO customers (normalized_email)
+  SELECT DISTINCT lower(trim(email)) FROM bookings WHERE trim(email) <> ''
+  ON CONFLICT (normalized_email) DO NOTHING;
+UPDATE bookings b SET customer_id=c.id FROM customers c
+  WHERE b.customer_id IS NULL AND lower(trim(b.email))=c.normalized_email
+  AND (b.pax BETWEEN 1 AND 12 OR b.status='CANCELLED');
+CREATE INDEX IF NOT EXISTS idx_bookings_customer ON bookings (customer_id, date);
+
 -- Backfill only exact legacy selections. Unknown stays unknown; old text remains untouched.
 UPDATE bookings SET discovery_source_id = CASE referral
   WHEN 'Instagram' THEN 'instagram'

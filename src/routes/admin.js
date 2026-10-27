@@ -10,6 +10,7 @@ const reporting = require('../services/reporting');
 const rules = require('../services/rules');
 const tracking = require('../services/tracking');
 const QRCode = require('qrcode');
+const customers = require('../services/customers');
 
 const router = express.Router();
 
@@ -78,6 +79,12 @@ router.get('/bookings', async (req, res, next) => {
 });
 router.get('/bookings/:id', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
   try { res.json(await reporting.bookingDetail(req.params.id)); } catch (err) { next(err); }
+});
+router.get('/customers', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
+  try { res.json(await customers.listCustomers(req.query)); } catch (err) { next(err); }
+});
+router.get('/customers/:id', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {
+  try { res.json(await customers.customerDetail(req.params.id)); } catch (err) { next(err); }
 });
 router.get('/analytics', async (req, res, next) => {
   try { res.json(await reporting.analytics(req.query)); } catch (err) { next(err); }

@@ -117,8 +117,17 @@ async function analytics(query = {}) {
       (sum(b.actual_pax) FILTER (WHERE b.checked_in_at IS NOT NULL))::int AS actual_guests
      FROM bookings b WHERE ${w.clause} GROUP BY 1,2,3,4 ORDER BY bookings DESC`, w.values
   );
+  const { rows: visitors } = await pool.query(
+    `WITH first_visit AS (
+       SELECT customer_id,min(date) AS first_date FROM bookings
+       WHERE customer_id IS NOT NULL AND checked_in_at IS NOT NULL GROUP BY customer_id
+     )
+     SELECT count(DISTINCT b.customer_id) FILTER (WHERE b.checked_in_at IS NOT NULL AND b.date=first_visit.first_date)::int AS first_recorded_visitors,
+       count(DISTINCT b.customer_id) FILTER (WHERE b.checked_in_at IS NOT NULL AND b.date>first_visit.first_date)::int AS returning_visitors
+     FROM bookings b LEFT JOIN first_visit ON first_visit.customer_id=b.customer_id WHERE ${w.clause}`, w.values
+  );
   return {
-    filters: f, summary: summary[0], trend, discovery, entries, tracked,
+    filters: f, summary: { ...summary[0], ...visitors[0] }, trend, discovery, entries, tracked,
     definitions: {
       bookings: '預約筆數 / Booking orders: number of booking records in the chosen date basis.',
       booked_guests: '預約人數 / Booked guests: sum of booked group sizes; cancellations are included unless filtered out.',
@@ -127,6 +136,8 @@ async function analytics(query = {}) {
       cancellations: '取消筆數 / Cancellations: currently cancelled records, measured by the selected date basis.',
       no_shows: '未到筆數 / No-shows: staff-marked no-shows only; unresolved past bookings remain separate.',
       attribution: '得知管道由客人自行填寫；入口由系統寫入；首次可辨識 UTM 僅為同一瀏覽器工作階段的連結參數，不代表跨裝置的完整歸因。 / Discovery is self-reported, entry is system-recorded, and first-touch UTM is limited to the current browser session.',
+      first_recorded_visitors: '可追溯期間首次到店的預約者 / First recorded visitors: unique email-linked contacts whose earliest recorded check-in is in this period; this may not be their true first visit.',
+      returning_visitors: '回訪預約者 / Returning visitors: unique email-linked contacts checked in after an earlier recorded check-in.',
     },
   };
 }

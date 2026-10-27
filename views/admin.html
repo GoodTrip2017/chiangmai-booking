@@ -111,6 +111,7 @@
   <button id="accountsTab" type="button" hidden>人員權限 / Accounts</button>
   <button id="availabilityTab" type="button" hidden>營業與容量 / Availability</button>
   <button id="sourcesTab" type="button" hidden>來源與合作 / Sources</button>
+  <button id="customersTab" type="button">顧客紀錄 / Customers</button>
   <button id="lineGroups" type="button">LINE 群組設定</button>
   <button class="primary" id="addNew" disabled>＋ 手動新增</button>
   <button id="logout">登出</button>
@@ -124,6 +125,15 @@
     <button id="lineRefresh" type="button">重新讀取群組</button>
     <div id="lineGroupList"></div>
   </div>
+</section>
+
+<section id="customersPanel" class="report" hidden>
+  <h2>顧客紀錄 / Customers</h2>
+  <p class="report-note">以標準化 Email 對應顧客 ID；不依姓名合併。同行者未個別識別，回訪數僅代表預約聯絡人。<br>Customer IDs are linked by normalized email, never by name. Return counts represent booking contacts, not unidentified companions.</p>
+  <div class="report-filters"><label>顧客 ID 或 Email / Search<input id="customerSearch" type="search" maxlength="120"></label><button id="customerSearchButton" type="button">搜尋 / Search</button></div>
+  <p id="customerMessage" role="status"></p>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>Email</th><th>預約 / Bookings</th><th>到店 / Checked in</th><th>取消 / Cancelled</th><th>未到 / No-show</th><th>首次記錄 / First recorded</th><th>最近到店 / Last visit</th><th>LINE</th></tr></thead><tbody id="customerRows"></tbody></table></div>
+  <div id="customerDetail" class="report-note"></div>
 </section>
 
 <section id="sourcesPanel" class="report" hidden>
