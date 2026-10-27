@@ -497,7 +497,21 @@ test('客人填寫來源、預約入口及首次 UTM 分開保存；合作代碼
     first_touch_source: 'hotel', first_touch_medium: 'qr', partner_code: 'hotel-nimman' });
   const report = await request('/api/admin/analytics?from=' + form.date, administrator);
   assert.equal(report.data.discovery.find(row => row.id === 'google-maps').bookings, 1);
-  assert.equal(report.data.tracked.find(row => row.code === 'hotel-nimman').bookings, 1);
+  const trackedRow = report.data.tracked.find(row => row.code === 'hotel-nimman');
+  assert.equal(trackedRow.bookings, 1);
+  assert.equal(trackedRow.link_name, 'Nimman Hotel');
+  assert.equal(trackedRow.link_kind, 'PARTNER');
+  // 名稱可改、代碼不可改；改名後清單與分析都用新名稱，舊預約仍歸在同一代碼。
+  const renamed = await request('/api/admin/tracking-links/hotel-nimman', { ...administrator, method: 'PATCH', body: { name: 'Nimman Hotel Front Desk', active: true } });
+  assert.equal(renamed.status, 200);
+  assert.equal(renamed.data.name, 'Nimman Hotel Front Desk');
+  assert.equal((await request('/api/admin/tracking-links/hotel-nimman', { ...administrator, method: 'PATCH', body: { name: '', active: true } })).status, 400);
+  const list = await request('/api/admin/tracking-links', administrator);
+  assert.equal(list.data.items.find(item => item.code === 'hotel-nimman').name, 'Nimman Hotel Front Desk');
+  const after = await request('/api/admin/analytics?from=' + form.date, administrator);
+  assert.equal(after.data.tracked.find(row => row.code === 'hotel-nimman').link_name, 'Nimman Hotel Front Desk');
+  const csv = await request('/api/admin/analytics.csv?from=' + form.date, administrator);
+  assert.ok(csv.data.includes('Nimman Hotel Front Desk'));
 });
 test('Email 標準化建立穩定顧客 ID；不同姓名不影響回訪連結', async () => {
   const first = await booking.createManualBooking({ ...form, email: ' Test@Example.Invalid ', name: 'Name A' });

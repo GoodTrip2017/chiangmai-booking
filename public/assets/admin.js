@@ -582,7 +582,11 @@
       $('trackingRows').replaceChildren();
       data.tracked.forEach(function (item) {
         var tr = document.createElement('tr');
-        [item.source + ' / ' + item.medium + ' / ' + item.campaign + ' / ' + item.code,
+        var utm = [item.source, item.medium, item.campaign].every(function (value) { return value === 'UNKNOWN'; })
+          ? '—' : item.source + ' / ' + item.medium + ' / ' + item.campaign;
+        var linkLabel = item.code === 'UNKNOWN' ? '未帶代碼 / No code'
+          : (item.link_name ? item.link_name + '（' + item.code + '）' : item.code) + (item.link_kind ? ' · ' + item.link_kind : '');
+        [linkLabel, utm,
           item.bookings, percentWithCounts(item.share, item.bookings, data.summary.bookings),
           item.booked_guests, item.checked_in_bookings,
           percentWithCounts(item.cancellation_rate, item.cancelled_due, item.decided_due),
@@ -1033,7 +1037,23 @@
       $('trackingLinkRows').replaceChildren();
       data.items.forEach(function (item) {
         var tr = document.createElement('tr');
-        [item.code, item.name, item.kind, item.url, item.active ? '啟用 / Active' : '停用 / Disabled'].forEach(function (value) {
+        var codeCell = document.createElement('td'); codeCell.textContent = item.code; tr.appendChild(codeCell);
+        // 名稱可以直接在表格裡改；代碼是統計鍵，建立後不開放修改。
+        var nameCell = document.createElement('td');
+        var nameInput = document.createElement('input'); nameInput.type = 'text'; nameInput.maxLength = 80; nameInput.value = item.name;
+        nameInput.setAttribute('aria-label', '名稱 / Name ' + item.code); nameInput.style.minWidth = '160px';
+        var saveName = document.createElement('button'); saveName.type = 'button'; saveName.textContent = '儲存名稱 / Save name';
+        saveName.style.marginTop = '6px';
+        saveName.addEventListener('click', function () {
+          var name = nameInput.value.trim();
+          if (!name) { $('trackingMessage').textContent = '請填寫名稱 / Name is required.'; return; }
+          saveName.disabled = true;
+          api('/api/admin/tracking-links/' + encodeURIComponent(item.code), { method: 'PATCH', body: JSON.stringify({ name: name, active: item.active }) })
+            .then(function () { $('trackingMessage').textContent = '名稱已更新 / Name updated.'; loadTrackingLinks(); })
+            .catch(function (err) { saveName.disabled = false; $('trackingMessage').textContent = err.message; });
+        });
+        nameCell.append(nameInput, saveName); tr.appendChild(nameCell);
+        [item.kind, item.url, item.active ? '啟用 / Active' : '停用 / Disabled'].forEach(function (value) {
           var td = document.createElement('td'); td.textContent = value; td.style.overflowWrap = 'anywhere'; tr.appendChild(td);
         });
         var action = document.createElement('td');

@@ -274,6 +274,7 @@ async function analytics(query = {}, role = 'ADMIN') {
       COALESCE(NULLIF(b.first_touch_medium,''),'UNKNOWN') AS medium,
       COALESCE(NULLIF(b.first_touch_campaign,''),'UNKNOWN') AS campaign,
       COALESCE(NULLIF(b.partner_code,''),NULLIF(b.campaign_code,''),'UNKNOWN') AS code,
+      COALESCE(t.name,'') AS link_name,COALESCE(t.kind,'') AS link_kind,
       count(*)::int AS bookings,COALESCE(sum(b.pax),0)::int AS booked_guests,
       count(*) FILTER (WHERE b.checked_in_at IS NOT NULL)::int AS checked_in_bookings,
       (sum(b.actual_pax) FILTER (WHERE b.checked_in_at IS NOT NULL))::int AS actual_guests,
@@ -281,7 +282,9 @@ async function analytics(query = {}, role = 'ADMIN') {
       count(*) FILTER (WHERE ${dueExpr} AND b.status IN ('CHECKED_IN','COMPLETED','NO_SHOW'))::int AS attendance_due,
       count(*) FILTER (WHERE ${dueExpr} AND b.status='CANCELLED')::int AS cancelled_due,
       count(*) FILTER (WHERE ${dueExpr} AND b.status='NO_SHOW')::int AS no_show_due
-     FROM bookings b WHERE ${w.clause} GROUP BY 1,2,3,4 ORDER BY bookings DESC`, w.values
+     FROM bookings b
+     LEFT JOIN tracking_links t ON t.code = COALESCE(NULLIF(b.partner_code,''),NULLIF(b.campaign_code,''))
+     WHERE ${w.clause} GROUP BY 1,2,3,4,5,6 ORDER BY bookings DESC`, w.values
   );
   const { rows: visitors } = await pool.query(
     `WITH first_visit AS (
@@ -391,8 +394,8 @@ async function exportAnalyticsCsv(query = {}, role = 'ADMIN') {
     ['得知管道 / Discovery source','預約筆數 / Bookings','預約人數 / Booked guests','到店筆數 / Checked in','實際人數 / Actual guests','取消分子 / Cancelled due','取消分母 / Decided due','未到分子 / No-show due','未到分母 / Attendance due'],
     ...data.discovery.map(row => [row.label_zh + ' / ' + row.label_en,row.bookings,row.booked_guests,row.checked_in_bookings,row.actual_guests,row.cancelled_due,row.decided_due,row.no_show_due,row.attendance_due]),
     [],
-    ['首次追蹤來源 / First tracked source','媒介 / Medium','活動 / Campaign','代碼 / Code','預約筆數 / Bookings','到店筆數 / Checked in'],
-    ...data.tracked.map(row => [row.source,row.medium,row.campaign,row.code,row.bookings,row.checked_in_bookings]),
+    ['追蹤連結名稱 / Link name','代碼 / Code','類型 / Kind','首次追蹤來源 / First tracked source','媒介 / Medium','活動 / Campaign','預約筆數 / Bookings','到店筆數 / Checked in'],
+    ...data.tracked.map(row => [row.link_name,row.code,row.link_kind,row.source,row.medium,row.campaign,row.bookings,row.checked_in_bookings]),
     [],
     ['趨勢日期 / Trend date','預約筆數 / Bookings','預約人數 / Booked guests','到店筆數 / Checked in'],
     ...data.trend.map(row => [row.day,row.bookings,row.booked_guests,row.checked_in_bookings]),
