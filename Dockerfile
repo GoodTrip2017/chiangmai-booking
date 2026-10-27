@@ -6,7 +6,7 @@ RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 
 # Keep package managers and shells out of the production image.
 # Re-scan and update this digest when adopting a new runtime release.
-FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:bb6b03d81066993293a10feda7250e8e1cc034035fe9b61cfceededa7c8bf04d
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:cb606325b7ec4af55462cb0b424a53b452a5b4a894ffe841fcf1048d216fb9f8
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
