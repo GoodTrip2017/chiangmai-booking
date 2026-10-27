@@ -111,6 +111,36 @@ async function operationalOverview() {
     capacity_note: '各可預約起始時段剩餘名額相加；重疊時段共用同一接待容量。 / Sum of available places at each start time; overlapping visits share capacity.' };
 }
 
+async function returnCohorts(from, to) {
+  const sql = `WITH visits AS (
+      SELECT customer_id,date::date AS visit_date FROM bookings
+      WHERE customer_id IS NOT NULL AND checked_in_at IS NOT NULL AND status IN ('CHECKED_IN','COMPLETED')
+      GROUP BY customer_id,date::date
+    ), firsts AS (
+      SELECT customer_id,min(visit_date) AS first_date FROM visits GROUP BY customer_id
+    ), nexts AS (
+      SELECT f.customer_id,f.first_date,min(v.visit_date) AS next_date
+      FROM firsts f LEFT JOIN visits v ON v.customer_id=f.customer_id AND v.visit_date>f.first_date
+      GROUP BY f.customer_id,f.first_date
+    )
+    SELECT date_trunc('month',first_date)::date AS cohort_month,
+      count(*)::int AS first_recorded,
+      count(*) FILTER (WHERE first_date <= (now() AT TIME ZONE 'Asia/Bangkok')::date-30)::int AS eligible_30,
+      count(*) FILTER (WHERE first_date <= (now() AT TIME ZONE 'Asia/Bangkok')::date-30 AND next_date<=first_date+30)::int AS returned_30,
+      count(*) FILTER (WHERE first_date <= (now() AT TIME ZONE 'Asia/Bangkok')::date-60)::int AS eligible_60,
+      count(*) FILTER (WHERE first_date <= (now() AT TIME ZONE 'Asia/Bangkok')::date-60 AND next_date<=first_date+60)::int AS returned_60,
+      count(*) FILTER (WHERE first_date <= (now() AT TIME ZONE 'Asia/Bangkok')::date-90)::int AS eligible_90,
+      count(*) FILTER (WHERE first_date <= (now() AT TIME ZONE 'Asia/Bangkok')::date-90 AND next_date<=first_date+90)::int AS returned_90,
+      round(avg(next_date-first_date) FILTER (WHERE next_date IS NOT NULL),1) AS average_return_days
+    FROM nexts WHERE first_date BETWEEN $1::date AND $2::date
+    GROUP BY 1 ORDER BY 1`;
+  const { rows } = await pool.query(sql, [from, to]);
+  const total = { first_recorded: 0, eligible_30: 0, returned_30: 0, eligible_60: 0,
+    returned_60: 0, eligible_90: 0, returned_90: 0 };
+  for (const row of rows) for (const key of Object.keys(total)) total[key] += row[key];
+  return { rows, total, definition: '以 Email 對應的預約聯絡人、可追溯期間首次記錄報到日分組；30/60/90 天分母只含已過完整觀察期的人。同行者未個別識別。 / Cohorts use the first recorded check-in of an email-linked booking contact. Denominators include only contacts with a complete 30/60/90-day observation window; companions are not individually identified.' };
+}
+
 async function analytics(query = {}) {
   const f = filters(query);
   const w = where(f);
@@ -179,13 +209,14 @@ async function analytics(query = {}) {
        count(DISTINCT b.customer_id) FILTER (WHERE b.checked_in_at IS NOT NULL AND b.date>first_visit.first_date)::int AS returning_visitors
      FROM bookings b LEFT JOIN first_visit ON first_visit.customer_id=b.customer_id WHERE ${w.clause}`, w.values
   );
+  const cohorts = await returnCohorts(f.from, f.to);
   return {
     filters: { ...f, trendGroup }, previous: { from: previousFrom, to: previousTo, summary: previous[0] },
     summary: { ...summary[0], ...visitors[0],
       cancellation_rate: summary[0].decided_due ? summary[0].cancelled_due / summary[0].decided_due : null,
       no_show_rate: summary[0].attendance_due ? summary[0].no_show_due / summary[0].attendance_due : null,
       average_party_size: summary[0].bookings ? summary[0].booked_guests / summary[0].bookings : null },
-    trend, discovery, entries, tracked,
+    trend, discovery, entries, tracked, cohorts,
     definitions: {
       bookings: '預約筆數 / Booking orders: number of booking records in the chosen date basis.',
       booked_guests: '預約人數 / Booked guests: sum of booked group sizes; cancellations are included unless filtered out.',

@@ -481,6 +481,25 @@
         });
         $('trackingRows').appendChild(tr);
       });
+      $('cohortDefinition').textContent = data.cohorts.definition + ' 日期固定使用到店日 / Cohorts always use visit date.';
+      $('cohortRows').replaceChildren();
+      function cohortRate(row, days) {
+        var denominator = row['eligible_' + days];
+        return denominator ? (row['returned_' + days] / denominator * 100).toFixed(1) + '% (' + row['returned_' + days] + '/' + denominator + ')' : '—';
+      }
+      if (!data.cohorts.rows.length) {
+        var empty = document.createElement('tr'), cell = document.createElement('td');
+        cell.colSpan = 6; cell.textContent = '此區間沒有已報到的預約聯絡人 / No checked-in booking contacts in this period.';
+        empty.appendChild(cell); $('cohortRows').appendChild(empty);
+      }
+      data.cohorts.rows.forEach(function (cohort) {
+        var tr = document.createElement('tr');
+        [cohort.cohort_month.slice(0, 7), cohort.first_recorded, cohortRate(cohort, 30), cohortRate(cohort, 60),
+          cohortRate(cohort, 90), cohort.average_return_days === null ? '—' : cohort.average_return_days].forEach(function (value) {
+          var td = document.createElement('td'); td.textContent = value; tr.appendChild(td);
+        });
+        $('cohortRows').appendChild(tr);
+      });
       loadReportBookings();
     }).catch(function (err) { $('reportMessage').textContent = err.message; });
   }

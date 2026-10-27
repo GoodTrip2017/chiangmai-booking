@@ -397,6 +397,18 @@ test('清單與報表共用安全的時段、追蹤來源及排序篩選', async
   await assert.rejects(reporting.listBookings({ from: form.date, sort: 'b.name;DROP TABLE bookings' }), { status: 400 });
   await assert.rejects(reporting.analytics({ from: form.date, slot: 'x\';DROP TABLE bookings;--' }), { status: 400 });
 });
+test('30/60/90 天回訪分母只含完成觀察期的聯絡人', async () => {
+  const customerId = await require('../src/services/customers').ensureCustomer(pool, 'cohort@example.invalid');
+  for (const date of ['2020-01-05', '2020-01-20']) {
+    await pool.query("INSERT INTO bookings(name,pax,date,slot,email,status,customer_id,checked_in_at,actual_pax) VALUES ('return contact',1,$1,'14:00-15:30','cohort@example.invalid','COMPLETED',$2,now(),1)", [date, customerId]);
+  }
+  const report = await reporting.analytics({ from: '2020-01-01', to: '2020-01-31' });
+  assert.equal(report.cohorts.total.first_recorded, 1);
+  assert.equal(report.cohorts.total.eligible_30, 1);
+  assert.equal(report.cohorts.total.returned_30, 1);
+  assert.equal(report.cohorts.total.eligible_90, 1);
+  assert.equal(report.cohorts.total.returned_90, 1);
+});
 test('營業設定可產生重疊時段；關店異動先列出受影響預約且不靜默取消', async () => {
   const rules = require('../src/services/rules');
   const first = await booking.createManualBooking({ ...form, pax: 10 });
