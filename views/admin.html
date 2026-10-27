@@ -247,6 +247,10 @@
     <label>日期基準 / Date basis<select id="reportBasis"><option value="visit">預約到店日 / Visit date</option><option value="created">預約建立日 / Created date</option></select></label>
     <label>趨勢分組 / Trend group<select id="trendGroup"><option value="day">每日 / Daily</option><option value="week">每週 / Weekly</option><option value="month">每月 / Monthly</option></select></label>
     <label>狀態 / Status<select id="reportStatus"><option value="">全部 / All</option><option value="PENDING">待確認 / Pending</option><option value="CONFIRMED">已確認 / Confirmed</option><option value="CHECKED_IN">已到店 / Checked in</option><option value="COMPLETED">已完成 / Completed</option><option value="CANCELLED">已取消 / Cancelled</option><option value="NO_SHOW">未到店 / No-show</option></select></label>
+    <label>得知管道 / Discovery source<select id="reportDiscovery"><option value="">全部 / All</option></select></label>
+    <label>開始時段 / Start time<input id="reportSlot" type="text" placeholder="14:00-15:30" maxlength="11"></label>
+    <label>追蹤來源 / Tracked source<input id="reportTracking" type="text" maxlength="80" placeholder="instagram"></label>
+    <label class="chk"><input id="reportFailed" type="checkbox">只看 LINE 失敗 / LINE failures only</label>
     <button id="reportRefresh" type="button">查詢 / Apply</button>
     <button id="exportBookings" type="button" hidden>匯出預約 CSV / Export bookings CSV</button>
   </div>
@@ -264,9 +268,10 @@
   <p class="report-note">UTM 僅反映同一瀏覽器工作階段內最早可辨識的連結；跨裝置與未帶參數的來源仍屬未知。<br>UTM shows the first recognizable link in this browser session. Cross-device visits and untagged links remain unknown.</p>
   <div class="report-scroll"><table class="report-table"><thead><tr><th>UTM / Code</th><th>預約筆數 / Bookings</th><th>預約人數 / Guests</th><th>到店筆數 / Checked in</th></tr></thead><tbody id="trackingRows"></tbody></table></div>
   <h2>預約清單 / Bookings</h2>
-  <div class="report-filters"><label>編號、姓名或 Email / Search<input id="reportSearch" type="search" maxlength="120"></label><button id="searchBookings" type="button">搜尋 / Search</button></div>
+  <div class="report-filters"><label>編號、姓名或 Email / Search<input id="reportSearch" type="search" maxlength="120"></label><label>排序 / Sort<select id="reportSort"><option value="visit_desc">到店日新到舊 / Visit newest</option><option value="visit_asc">到店日舊到新 / Visit oldest</option><option value="created_desc">建立日新到舊 / Created newest</option><option value="created_asc">建立日舊到新 / Created oldest</option></select></label><button id="searchBookings" type="button">搜尋 / Search</button></div>
   <div class="report-scroll"><table class="report-table"><thead><tr><th>編號 / ID</th><th>到店日期 / Visit date</th><th>預約人 / Contact</th><th>人數 / Guests</th><th>狀態 / Status</th><th>來源 / Source</th><th>LINE 通知 / LINE status</th><th>負責人 / Assignee</th></tr></thead><tbody id="bookingRows"></tbody></table></div>
   <p id="bookingCount" class="report-note"></p>
+  <div class="report-filters"><button id="bookingPrevious" type="button">上一頁 / Previous</button><button id="bookingNext" type="button">下一頁 / Next</button></div>
 </section>
 
 <div id="loading">載入中…</div>

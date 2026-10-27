@@ -17,7 +17,13 @@ function filters(query = {}) {
   if (typeof discovery !== 'string' || discovery.length > 80 || !/^[a-z0-9-]*$/.test(discovery)) throw userError('來源篩選不正確 / Invalid source filter.');
   const search = query.search || '';
   if (typeof search !== 'string' || search.length > 120) throw userError('搜尋字串過長 / Search is too long.');
-  return { from, to, basis, status, discovery, search: search.trim() };
+  const slot = query.slot || '';
+  if (typeof slot !== 'string' || (slot && !/^\d{2}:\d{2}-\d{2}:\d{2}$/.test(slot))) throw userError('時段篩選不正確 / Invalid slot filter.');
+  const trackingSource = query.trackingSource || '';
+  if (typeof trackingSource !== 'string' || trackingSource.length > 80 || /[\u0000-\u001f\u007f]/.test(trackingSource)) throw userError('追蹤來源篩選不正確 / Invalid tracking source.');
+  const notificationFailed = query.notificationFailed === 'true';
+  if (query.notificationFailed && !['true','false'].includes(query.notificationFailed)) throw userError('通知篩選不正確 / Invalid notification filter.');
+  return { from, to, basis, status, discovery, slot, trackingSource, notificationFailed, search: search.trim() };
 }
 
 function where(f, { search = false, deidentified = false } = {}) {
@@ -26,6 +32,9 @@ function where(f, { search = false, deidentified = false } = {}) {
   const parts = [`${dateExpr} BETWEEN $1::date AND $2::date`];
   if (f.status) { values.push(f.status); parts.push(`b.status=$${values.length}`); }
   if (f.discovery) { values.push(f.discovery); parts.push(`b.discovery_source_id=$${values.length}`); }
+  if (f.slot) { values.push(f.slot); parts.push(`b.slot=$${values.length}`); }
+  if (f.trackingSource) { values.push(f.trackingSource); parts.push(`b.first_touch_source=$${values.length}`); }
+  if (f.notificationFailed) parts.push("(SELECT n.status FROM notification_events n WHERE n.booking_id=b.id AND n.recipient_kind='LINE_GROUP' ORDER BY n.id DESC LIMIT 1)='FAILED'");
   if (search && f.search) {
     values.push('%' + f.search.replace(/[\\%_]/g, '\\$&') + '%');
     parts.push(deidentified ? `b.id::text ILIKE $${values.length}` :
@@ -40,6 +49,11 @@ async function listBookings(query = {}, role = 'ADMIN') {
   const pageSize = Math.min(100, Number(query.pageSize || 25));
   if (!Number.isSafeInteger(page) || page < 1 || page > 10000 || !Number.isSafeInteger(pageSize) || pageSize < 1) throw userError('分頁參數不正確 / Invalid pagination.');
   const deidentified = role === 'ANALYST';
+  const sort = query.sort || 'visit_desc';
+  const order = { visit_desc: 'b.date DESC,b.slot DESC,b.created_at DESC,b.id DESC',
+    visit_asc: 'b.date ASC,b.slot ASC,b.created_at ASC,b.id ASC',
+    created_desc: 'b.created_at DESC,b.id DESC', created_asc: 'b.created_at ASC,b.id ASC' }[sort];
+  if (!order) throw userError('排序參數不正確 / Invalid sort order.');
   const w = where(f, { search: true, deidentified });
   const { rows } = await pool.query(
     `SELECT b.id,b.created_at,b.updated_at,b.revision,b.source,b.entry_source,b.name,b.pax,b.actual_pax,
@@ -51,7 +65,7 @@ async function listBookings(query = {}, role = 'ADMIN') {
      FROM bookings b LEFT JOIN discovery_sources d ON d.id=b.discovery_source_id
      LEFT JOIN staff_accounts s ON s.id=b.assigned_staff_id
      LEFT JOIN LATERAL (SELECT status FROM notification_events WHERE booking_id=b.id AND recipient_kind='LINE_GROUP' ORDER BY id DESC LIMIT 1) n ON true
-     WHERE ${w.clause} ORDER BY b.date DESC,b.slot DESC,b.created_at DESC,b.id DESC
+     WHERE ${w.clause} ORDER BY ${order}
      LIMIT $${w.values.length + 1} OFFSET $${w.values.length + 2}`,
     [...w.values, pageSize, (page - 1) * pageSize]
   );
@@ -61,7 +75,7 @@ async function listBookings(query = {}, role = 'ADMIN') {
     entry_source: row.entry_source, discovery_source_id: row.discovery_source_id,
     line_notification_status: row.line_notification_status,
     discovery_zh: row.discovery_zh, discovery_en: row.discovery_en })) : rows;
-  return { items, total: total.rows[0].total, page, pageSize, filters: f };
+  return { items, total: total.rows[0].total, page, pageSize, filters: f, sort };
 }
 
 async function bookingDetail(id) {

@@ -363,6 +363,17 @@ test('今日營運總覽與歷史分析分開，顯示未結案及通知失敗',
   assert.equal(result.data.metrics.booked_guests, 2);
   assert.ok(Number.isInteger(result.data.remaining_bookable_places));
 });
+test('清單與報表共用安全的時段、追蹤來源及排序篩選', async () => {
+  await booking.createManualBooking(form);
+  await booking.createManualBooking({ ...form, email: 'later@example.invalid', slot: '15:30-17:00' });
+  const first = await reporting.listBookings({ from: form.date, to: form.date, slot: '14:00-15:30', sort: 'visit_asc' });
+  assert.equal(first.total, 1);
+  assert.equal(first.items[0].slot, '14:00-15:30');
+  const filtered = await reporting.analytics({ from: form.date, to: form.date, trackingSource: 'instagram' });
+  assert.equal(filtered.summary.bookings, 0);
+  await assert.rejects(reporting.listBookings({ from: form.date, sort: 'b.name;DROP TABLE bookings' }), { status: 400 });
+  await assert.rejects(reporting.analytics({ from: form.date, slot: 'x\';DROP TABLE bookings;--' }), { status: 400 });
+});
 test('營業設定可產生重疊時段；關店異動先列出受影響預約且不靜默取消', async () => {
   const rules = require('../src/services/rules');
   const first = await booking.createManualBooking({ ...form, pax: 10 });

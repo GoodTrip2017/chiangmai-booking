@@ -6,6 +6,8 @@
   var monday = '';          // 空字串 = 讓後端用本週
   var editing = null;       // null = 新增模式
   var discoverySources = [];
+  var reportPage = 1;
+  var reportTotal = 0;
 
 
   var $ = function (id) { return document.getElementById(id); };
@@ -396,6 +398,10 @@
     var p = new URLSearchParams({ from: $('reportFrom').value, to: $('reportTo').value,
       basis: $('reportBasis').value, trendGroup: $('trendGroup').value });
     if ($('reportStatus').value) p.set('status', $('reportStatus').value);
+    if ($('reportDiscovery').value) p.set('discovery', $('reportDiscovery').value);
+    if ($('reportSlot').value.trim()) p.set('slot', $('reportSlot').value.trim());
+    if ($('reportTracking').value.trim()) p.set('trackingSource', $('reportTracking').value.trim());
+    if ($('reportFailed').checked) p.set('notificationFailed', 'true');
     return p;
   }
   function putMetric(label, value) {
@@ -406,6 +412,7 @@
   }
   function loadReport() {
     if (!$('reportFrom').value || !$('reportTo').value) return;
+    reportPage = 1;
     $('reportMessage').textContent = '載入中 / Loading…';
     api('/api/admin/analytics?' + reportQuery().toString()).then(function (data) {
       $('reportMessage').textContent = '清邁時間 / Asia/Bangkok · ' + data.filters.from + ' – ' + data.filters.to;
@@ -466,9 +473,13 @@
   }
   function loadReportBookings() {
     var query = reportQuery(); query.set('search', $('reportSearch').value.trim());
+    query.set('sort', $('reportSort').value); query.set('page', String(reportPage));
     api('/api/admin/bookings?' + query.toString()).then(function (data) {
       $('bookingRows').replaceChildren();
-      $('bookingCount').textContent = data.total + ' 筆結果 / results（顯示前 ' + data.items.length + ' 筆）';
+      reportTotal = data.total;
+      $('bookingCount').textContent = data.total + ' 筆結果 / results · 第 ' + data.page + ' 頁 / page';
+      $('bookingPrevious').disabled = reportPage <= 1;
+      $('bookingNext').disabled = reportPage * data.pageSize >= reportTotal;
       data.items.forEach(function (b) {
         var tr = document.createElement('tr');
         var link = document.createElement('button'); link.type = 'button'; link.textContent = b.id.slice(0, 8);
@@ -503,7 +514,9 @@
   $('customersTab').addEventListener('click', function () { setReportMode('customers'); });
   $('notificationsTab').addEventListener('click', function () { setReportMode('notifications'); });
   $('reportRefresh').addEventListener('click', loadReport);
-  $('searchBookings').addEventListener('click', loadReportBookings);
+  $('searchBookings').addEventListener('click', function () { reportPage = 1; loadReportBookings(); });
+  $('bookingPrevious').addEventListener('click', function () { if (reportPage > 1) { reportPage--; loadReportBookings(); } });
+  $('bookingNext').addEventListener('click', function () { if (reportPage * 25 < reportTotal) { reportPage++; loadReportBookings(); } });
   $('saveAdministration').addEventListener('click', function () {
     if (!editing) return;
     var reason = $('fAdministrationReason').value.trim();
@@ -824,6 +837,10 @@
         option.textContent = item.labelZh + ' / ' + item.labelEn + (item.active ? '' : '（已停用 / Inactive）');
         $('fDiscoverySource').appendChild(option);
       });
+      $('reportDiscovery').replaceChildren(new Option('全部 / All', ''));
+      data.sources.forEach(function (item) {
+        $('reportDiscovery').appendChild(new Option(item.labelZh + ' / ' + item.labelEn, item.id));
+      });
     }).catch(function (err) { console.error(err.message); });
   }
   api('/api/admin/session').then(function (session) {
@@ -838,6 +855,7 @@
     $('overviewTab').hidden = role === 'ANALYST';
     $('lineGroups').hidden = role !== 'ADMIN';
     ['prev','this','next','reload','calendarTab','addNew'].forEach(function (id) { if (role === 'ANALYST') $(id).hidden = true; });
-    if (role === 'ANALYST') setReportMode('analytics'); else { loadDiscoverySources(); load(); }
+    loadDiscoverySources();
+    if (role === 'ANALYST') setReportMode('analytics'); else load();
   })
     .catch(function (err) { $('loading').textContent = err.message; });
