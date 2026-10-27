@@ -11,20 +11,24 @@ const dt = require('../util/datetime');
 const { capacityCheck } = require('./availability');
 const { consumeLimit } = require('./rateLimits');
 const { sendConfirmation } = require('./mailer');
-const { notifyNewBooking, notifyUpdatedBooking, notifyCancelledBooking } = require('./lineNotify');
+const { enqueueGroup, cancelReminder, scheduleReminder, processPending } = require('./lineNotify');
+const { resolveSource } = require('./discovery');
+const { recordEvent } = require('./lifecycle');
+const { resolveTracking } = require('./tracking');
+const { ensureCustomer } = require('./customers');
 
 /** 表單欄位驗證，回傳整理過的資料或丟出錯誤 */
 function validateForm(form, opts = {}) {
-  if (!form || typeof form !== 'object' || Array.isArray(form)) throw userError('請求格式不正確。');
+  if (!form || typeof form !== 'object' || Array.isArray(form)) throw userError('請求格式不正確 / Invalid request.');
   const f = form;
   function textField(key) {
     const value = f[key] === undefined ? '' : f[key];
     if (typeof value !== 'string' || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value) ||
-        (key !== 'note' && /[\r\n\t]/.test(value))) throw userError('欄位格式不正確。');
+        (key !== 'note' && /[\r\n\t]/.test(value))) throw userError('欄位格式不正確 / Invalid field.');
     return value.trim();
   }
   const name = textField('name');
-  if (typeof f.pax !== 'number' && !(typeof f.pax === 'string' && /^\d+$/.test(f.pax))) throw userError('人數請填整數。');
+  if (typeof f.pax !== 'number' && !(typeof f.pax === 'string' && /^\d+$/.test(f.pax))) throw userError('人數請填整數 / Guests must be a whole number.');
   const pax = Number(f.pax);
   const dateStr = textField('date');
   const slot = textField('slot');
@@ -32,39 +36,50 @@ function validateForm(form, opts = {}) {
   const line = textField('line');
   const email = textField('email');
   const referral = textField('referral');
+  const discoverySourceId = textField('discoverySourceId');
+  const discoveryDetail = textField('discoveryDetail');
+  const firstTouchSource = textField('firstTouchSource');
+  const firstTouchMedium = textField('firstTouchMedium');
+  const firstTouchCampaign = textField('firstTouchCampaign');
+  const trackingCode = textField('trackingCode').toLowerCase();
 
-  if (!name) throw userError('請填寫預約人（綽號或本名）。');
-  if (name.length > 60) throw userError('預約人名稱過長。');
-  if (!Number.isSafeInteger(pax) || pax < 1) throw userError('人數請填 1 以上的整數。');
+  if (!name) throw userError('請填寫預約人（綽號或本名） / Enter the booking contact name.');
+  if (name.length > 60) throw userError('預約人名稱過長 / Booking contact name is too long.');
+  if (!Number.isSafeInteger(pax) || pax < 1) throw userError('人數請填 1 以上的整數 / Guests must be a positive whole number.');
   if (pax > CONFIG.MAX_PAX) {
-    throw Object.assign(userError(`線上預約每個時段最多接待 ${CONFIG.MAX_PAX} 人。多人團體歡迎先透過 LINE 私訊，由店員確認接待方式與可預約時段。`), {
+    throw Object.assign(userError(`線上預約每個時段最多接待 ${CONFIG.MAX_PAX} 人。多人團體請先透過 LINE 聯繫店員確認。 / Online capacity is ${CONFIG.MAX_PAX} guests per time slot. Larger groups may contact staff on LINE.`), {
       code: 'GROUP_CONTACT_REQUIRED', contactUrl: CONFIG.LINE_URL,
     });
   }
-  if (!dt.isValidDateStr(dateStr)) throw userError('請選擇預約日期。');
-  if (dt.isClosedDay(dateStr)) throw userError('每週二為固定公休日，請改選其他日期。');
-  if (!SLOTS.some(def => def.slot === slot) && opts.allowedLegacySlot !== slot) throw userError('請選擇預約時段。');
+  if (!dt.isValidDateStr(dateStr)) throw userError('請選擇預約日期 / Select a visit date.');
+  if (!dt.getSlotDef(slot)) throw userError('請選擇預約時段 / Select a time slot.');
   if (!opts.allowPast && dt.isSlotPast(dateStr, slot)) {
-    throw userError('該時段已經開始或已過，請改選其他時段。');
+    throw userError('該時段已經開始或已過，請改選其他時段 / This time slot has started or passed.');
   }
-  if (!email) throw userError('請填寫 Email，確認信會寄到這個信箱。');
-  if (!/^[^\s@<>(),;:\[\]\\"]+@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(email)) throw userError('Email 格式不正確。');
-  if (email.length > 120) throw userError('Email 過長。');
-  if (line.length > 80) throw userError('LINE 聯絡方式過長。');
-  if (firstTime !== '是' && firstTime !== '否') throw userError('請選擇是否為第一次接觸。');
-  if (!opts.referralOptional && !referral) throw userError('請選擇從哪邊知道我們的。');
-  if (referral && !REFERRAL_OPTIONS.includes(referral)) throw userError('「從哪邊知道我們的」選項不正確。');
+  if (!email) throw userError('請填寫 Email，確認信會寄到這個信箱 / Enter an email address for the confirmation.');
+  if (!/^[^\s@<>(),;:\[\]\\"]+@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(email)) throw userError('Email 格式不正確 / Invalid email address.');
+  if (email.length > 120) throw userError('Email 過長 / Email address is too long.');
+  if (line.length > 80) throw userError('LINE 聯絡方式過長 / LINE contact is too long.');
+  if (firstTime !== '是' && firstTime !== '否') throw userError('請選擇是否為第一次接觸 / Select whether this is your first contact.');
+  if (!opts.referralOptional && !referral && !discoverySourceId) throw userError('請選擇得知管道 / Please select how you heard about us.');
+  if (referral && !discoverySourceId && !REFERRAL_OPTIONS.includes(referral)) throw userError('得知管道選項不正確 / Invalid discovery source.');
+  if (discoverySourceId.length > 80 || !/^[a-z0-9-]*$/.test(discoverySourceId)) throw userError('得知管道 ID 格式不正確 / Invalid source ID.');
+  if (discoveryDetail.length > 120) throw userError('得知管道補充最多 120 字 / Source detail is too long.');
+  if ([firstTouchSource, firstTouchMedium, firstTouchCampaign].some(value => value.length > 80) || trackingCode.length > 40) {
+    throw userError('追蹤參數過長 / Tracking parameter is too long.');
+  }
 
   const note = textField('note');
-  if (note.length > 300) throw userError('備註過長（最多 300 字）。');
+  if (note.length > 300) throw userError('備註過長（最多 300 字） / Note is too long (maximum 300 characters).');
 
-  return { name, pax, date: dateStr, slot, firstTime, line, email, referral, note };
+  return { name, pax, date: dateStr, slot, firstTime, line, email, referral, discoverySourceId, discoveryDetail,
+    firstTouchSource, firstTouchMedium, firstTouchCampaign, trackingCode, note };
 }
 
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function validId(value) {
-  if (typeof value !== 'string' || !UUID.test(value)) throw userError('預約編號格式不正確。');
+  if (typeof value !== 'string' || !UUID.test(value)) throw userError('預約編號格式不正確 / Invalid booking ID.');
   return value;
 }
 async function lockSlots(client, entries) {
@@ -74,35 +89,51 @@ async function lockSlots(client, entries) {
   }
 }
 function rejectForce(payload) {
-  if (payload?.force) throw userError('每個時段最多接待 12 人，無法強制超額安排。');
+  if (payload?.force) throw userError('每個時段最多接待 12 人，無法強制超額安排 / The 12-person slot capacity cannot be overridden.');
 }
-async function insertBooking(data, source, requestId) {
+async function insertBooking(data, source, requestId, actor) {
   const key = requestId ? validId(requestId) : crypto.randomUUID();
   const hash = crypto.createHash('sha256').update(JSON.stringify({ data, source })).digest('hex');
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`request:${key}`]);
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['availability-settings']);
     const prior = await client.query('SELECT * FROM bookings WHERE request_key = $1', [key]);
     if (prior.rows.length) {
       const saved = prior.rows[0];
       // 舊請求不能讀到店員後續修正的個資，也不能把已取消預約顯示為成功。
-      const unchanged = Object.entries(data).every(([field, value]) => saved[field === 'firstTime' ? 'first_time' : field] === value);
+      const columns = { firstTime: 'first_time', discoverySourceId: 'discovery_source_id', discoveryDetail: 'discovery_detail',
+        firstTouchSource: 'first_touch_source', firstTouchMedium: 'first_touch_medium', firstTouchCampaign: 'first_touch_campaign' };
+      const unchanged = Object.entries(data).every(([field, value]) =>
+        (field === 'referral' && data.discoverySourceId) ||
+        (field === 'discoverySourceId' && !value) || field === 'trackingCode' || saved[columns[field] || field] === value);
       if (saved.request_hash !== hash || saved.status !== STATUS.CONFIRMED || !unchanged) {
-        throw userError('這次預約資料已變更，請透過 LINE 與店員確認目前的預約狀態。', 409);
+        throw userError('這次預約資料已變更，請透過 LINE 與店員確認目前狀態 / This booking changed; contact staff on LINE to confirm its status.', 409);
       }
       await client.query('COMMIT');
       return { booking: prior.rows[0], replayed: true };
     }
+    const discovery = await resolveSource(client, data, { optional: source !== 'WEB' });
+    const tracking = await resolveTracking(client, data);
+    const customerId = await ensureCustomer(client, data.email);
     await lockSlots(client, [[data.date, data.slot]]);
-    const check = await capacityCheck(client, data.date, data.slot, data.pax, null);
+    const check = await capacityCheck(client, data.date, data.slot, data.pax, null, { allowPast: source !== 'WEB' });
     if (!check.ok) throw userError(check.reason, 409);
     const { rows } = await client.query(
-      `INSERT INTO bookings (source, name, pax, date, slot, first_time, line, email, referral, status, note, request_key, request_hash)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      `INSERT INTO bookings (source, name, pax, date, slot, first_time, line, email, referral,
+        discovery_source_id, discovery_detail, entry_source, first_touch_source, first_touch_medium,
+        first_touch_campaign, partner_code, campaign_code, status, note, request_key, request_hash,
+        confirmed_at, capacity_at_booking, customer_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,now(),$22,$23) RETURNING *`,
       [source, data.name, data.pax, data.date, data.slot, data.firstTime, data.line,
-       data.email, data.referral, STATUS.CONFIRMED, data.note, key, hash]
+       data.email, data.referral || discovery.label, discovery.id, data.discoveryDetail, source,
+       data.firstTouchSource, data.firstTouchMedium, data.firstTouchCampaign, tracking.partnerCode, tracking.campaignCode,
+       STATUS.CONFIRMED, data.note, key, hash, check.state.maxPax, customerId]
     );
+    await recordEvent(client, rows[0].id, 'CREATED', null, rows[0], '', actor || (source === 'WEB' ? 'CUSTOMER' : 'ADMIN'));
+    await enqueueGroup(client, rows[0], 'BOOKING_CONFIRMED');
+    await scheduleReminder(client, rows[0]);
     await client.query('COMMIT');
     return { booking: rows[0], replayed: false };
   } catch (err) {
@@ -128,7 +159,7 @@ function summaryResponse(booking, mailStatus) {
   return {
     ok: true, mailSent: mailStatus === 'ACCEPTED', mailStatus,
     summary: {
-      name: booking.name, pax: booking.pax,
+      bookingId: booking.id, status: booking.status, name: booking.name, pax: booking.pax,
       dateLabel: dt.formatDateZh(booking.date), slotLabel: dt.slotLabelZh(booking.slot),
       email: booking.email, deadline: dt.graceDeadlineZh(booking.date, booking.slot),
       graceMinutes: CONFIG.GRACE_MINUTES,
@@ -139,87 +170,117 @@ async function submitBooking(form) {
   const data = validateForm(form);
   const { booking, replayed } = await insertBooking(data, 'WEB', form?.requestId);
   if (replayed) return summaryResponse(booking, booking.mail_status);
-  void notifyNewBooking(booking);
+  void processPending().catch(err => console.error('處理 LINE 通知失敗：', err.code || err.name));
   const mailStatus = await trySendConfirmation(booking, `confirmation/${booking.id}`);
   return summaryResponse(booking, mailStatus);
 }
-async function createManualBooking(payload) {
+async function createManualBooking(payload, actor) {
   const p = payload || {};
   rejectForce(p);
   const data = validateForm(p, { allowPast: true, referralOptional: true });
   const source = SOURCES.includes(p.source) ? p.source : 'WALK_IN';
-  const { booking, replayed } = await insertBooking(data, source, p.requestId);
-  if (!replayed) void notifyNewBooking(booking);
+  const { booking, replayed } = await insertBooking(data, source, p.requestId, actor);
+  if (!replayed) void processPending().catch(err => console.error('處理 LINE 通知失敗：', err.code || err.name));
   let mailStatus = booking.mail_status;
   if (!replayed && p.sendMail && booking.email) mailStatus = await trySendConfirmation(booking, `confirmation/${booking.id}`);
   return { ok: true, mailSent: mailStatus === 'ACCEPTED', mailStatus, id: booking.id };
 }
-async function updateBooking(payload) {
+async function updateBooking(payload, actor = 'ADMIN') {
   const p = payload || {};
   rejectForce(p);
+  const changeReason = typeof p.changeReason === 'string' ? p.changeReason.trim() : '';
+  if (changeReason.length > 300 || /[\u0000-\u001f\u007f]/.test(changeReason)) throw userError('修改原因格式不正確 / Invalid change reason.');
   const id = validId(p.id);
   const client = await pool.connect();
   let updated, previous;
   try {
     await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['availability-settings']);
     const { rows } = await client.query('SELECT * FROM bookings WHERE id = $1 FOR UPDATE', [id]);
     const booking = rows[0];
-    if (!booking) throw userError('找不到這筆預約。', 404);
-    if (booking.status !== STATUS.CONFIRMED) throw userError('這筆預約已取消，無法修改。', 409);
+    if (!booking) throw userError('找不到這筆預約 / Booking not found.', 404);
+    if (![STATUS.PENDING, STATUS.CONFIRMED].includes(booking.status)) throw userError('這筆預約目前不能直接修改 / This booking cannot be edited directly.', 409);
+    if (p.revision !== undefined && p.revision !== booking.revision) throw userError('預約已由其他人修改，請重新整理 / Booking changed; refresh and try again.', 409);
     const allowedLegacySlot = p.date === booking.date && LEGACY_SLOTS.some(def => def.slot === booking.slot)
       ? booking.slot : undefined;
     const data = validateForm(p, { allowPast: true, referralOptional: true, allowedLegacySlot });
+    const discovery = data.discoverySourceId || data.referral
+      ? await resolveSource(client, data, { optional: true, currentId: booking.discovery_source_id })
+      : { id: booking.discovery_source_id, label: booking.referral };
     await lockSlots(client, [[booking.date, booking.slot], [data.date, data.slot]]);
-    const check = await capacityCheck(client, data.date, data.slot, data.pax, id);
+    const check = await capacityCheck(client, data.date, data.slot, data.pax, id, { allowPast: true, allowLegacySlot: allowedLegacySlot });
     if (!check.ok) throw userError(check.reason, 409);
+    const customerId = data.email.toLowerCase() === booking.email.toLowerCase()
+      ? booking.customer_id || await ensureCustomer(client, data.email)
+      : await ensureCustomer(client, data.email);
     const mailChanged = ['name', 'pax', 'date', 'slot', 'email'].some(field => booking[field] !== data[field]);
     const result = await client.query(
       `UPDATE bookings SET name=$1, pax=$2, date=$3, slot=$4, first_time=$5,
-       line=$6, email=$7, referral=$8, note=$9, mail_status=$10 WHERE id=$11 RETURNING *`,
+       line=$6, email=$7, referral=$8, note=$9, mail_status=$10,
+       discovery_source_id=$11, discovery_detail=$12, updated_at=now(), revision=revision+1,
+       original_date=CASE WHEN date<>$3 AND original_date IS NULL THEN date ELSE original_date END,
+       original_slot=CASE WHEN slot<>$4 AND original_slot IS NULL THEN slot ELSE original_slot END,
+       capacity_at_booking=CASE WHEN date<>$3 OR slot<>$4 THEN $14 ELSE capacity_at_booking END,
+       customer_id=$15
+       WHERE id=$13 RETURNING *`,
       [data.name, data.pax, data.date, data.slot, data.firstTime, data.line, data.email,
-       data.referral, data.note, mailChanged ? 'NOT_REQUESTED' : booking.mail_status, id]
+       data.referral || discovery.label, data.note, mailChanged ? 'NOT_REQUESTED' : booking.mail_status,
+       discovery.id, data.discoveryDetail, id, check.state.maxPax, customerId]
     );
     updated = result.rows[0];
     previous = booking;
+    await recordEvent(client, id, booking.date !== data.date || booking.slot !== data.slot ? 'RESCHEDULED' : 'UPDATED', booking, updated, changeReason, actor);
+    await cancelReminder(client, id);
+    await enqueueGroup(client, updated, 'BOOKING_UPDATED', booking);
+    await scheduleReminder(client, updated);
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
   } finally { client.release(); }
-  void notifyUpdatedBooking(updated, previous);
-  return { ok: true };
+  void processPending().catch(err => console.error('處理 LINE 通知失敗：', err.code || err.name));
+  return { ok: true, revision: updated.revision };
 }
-async function cancelBooking(id) {
+async function cancelBooking(id, payload = {}, actor = 'ADMIN') {
   validId(id);
+  const reason = typeof payload.reason === 'string' ? payload.reason.trim() : 'Legacy administrative cancellation';
+  if (!reason || reason.length > 300 || /[\u0000-\u001f\u007f]/.test(reason)) throw userError('請填寫取消原因 / A cancellation reason is required.');
   const client = await pool.connect();
   let booking;
   try {
     await client.query('BEGIN');
     const { rows } = await client.query('SELECT * FROM bookings WHERE id=$1 FOR UPDATE', [id]);
     booking = rows[0];
-    if (!booking) throw userError('找不到這筆預約。', 404);
+    if (!booking) throw userError('找不到這筆預約 / Booking not found.', 404);
     if (booking.status === STATUS.CANCELLED) { await client.query('COMMIT'); return { ok: true }; }
+    if (![STATUS.PENDING, STATUS.CONFIRMED].includes(booking.status)) throw userError('這筆預約目前不能取消 / This booking cannot be cancelled.', 409);
+    if (payload.revision !== undefined && payload.revision !== booking.revision) throw userError('預約已由其他人修改，請重新整理 / Booking changed; refresh and try again.', 409);
     await lockSlots(client, [[booking.date, booking.slot]]);
-    await client.query('UPDATE bookings SET status=$1 WHERE id=$2', [STATUS.CANCELLED, id]);
+    const { rows: updated } = await client.query('UPDATE bookings SET status=$1, cancel_reason=$3, cancelled_at=now(), updated_at=now(), revision=revision+1 WHERE id=$2 RETURNING *', [STATUS.CANCELLED, id, reason]);
+    await recordEvent(client, id, 'STATUS_CHANGED', booking, updated[0], reason, actor);
+    await cancelReminder(client, id);
+    await enqueueGroup(client, updated[0], 'BOOKING_CANCELLED');
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
   } finally { client.release(); }
-  void notifyCancelledBooking(booking);
+  void processPending().catch(err => console.error('處理 LINE 通知失敗：', err.code || err.name));
   return { ok: true };
 }
 async function resendConfirmation(id) {
   validId(id);
   const { rows } = await pool.query('SELECT * FROM bookings WHERE id=$1', [id]);
   const booking = rows[0];
-  if (!booking) throw userError('找不到這筆預約。', 404);
-  if (booking.status !== STATUS.CONFIRMED) throw userError('這筆預約已取消，無法寄出確認信。', 409);
-  if (!booking.email) throw userError('這筆預約沒有留 Email。');
-  await consumeLimit(`resend:${booking.id}`, 1, 60000, '這筆確認信剛剛已送出寄信請求，請稍候一分鐘再試。');
-  await consumeLimit('resend-hour', 60, 3600000, '確認信寄送次數過多，請稍後再試。');
+  if (!booking) throw userError('找不到這筆預約 / Booking not found.', 404);
+  if (booking.status !== STATUS.CONFIRMED) throw userError('這筆預約不是已確認狀態，無法寄出確認信 / Only confirmed bookings can receive confirmation email.', 409);
+  if (!booking.email) throw userError('這筆預約沒有留 Email / This booking has no email address.');
+  await consumeLimit(`resend:${booking.id}`, 1, 60000, '這筆確認信剛剛已送出寄信請求，請稍候一分鐘再試 / A send request was just made; try again in one minute.');
+  await consumeLimit('resend-hour', 60, 3600000, '確認信寄送次數過多，請稍後再試 / Too many confirmation emails; try again later.');
   const mailStatus = await trySendConfirmation(booking, `resend/${crypto.randomUUID()}`);
-  if (mailStatus !== 'ACCEPTED') throw userError(mailStatus === 'NOT_CONFIGURED' ? '寄信服務尚未設定，預約仍保留。' : '確認信暫時無法寄出，預約仍保留。');
+  if (mailStatus !== 'ACCEPTED') throw userError(mailStatus === 'NOT_CONFIGURED'
+    ? '寄信服務尚未設定，預約仍保留 / Email service is not configured; the booking remains saved.'
+    : '確認信暫時無法寄出，預約仍保留 / Email could not be sent; the booking remains saved.');
   return { ok: true, mailStatus };
 }
 module.exports = { validateForm, submitBooking, createManualBooking, updateBooking, cancelBooking, resendConfirmation };

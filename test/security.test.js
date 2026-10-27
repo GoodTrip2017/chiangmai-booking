@@ -73,7 +73,8 @@ before(async () => {
   await restartApp();
 });
 beforeEach(async () => {
-  await pool.query('TRUNCATE bookings, admin_sessions, admin_login_limits');
+  await pool.query('TRUNCATE bookings, booking_events, notification_events, system_events, availability_rule_events, admin_sessions, staff_accounts, admin_login_limits, availability_exceptions, slot_overrides, tracking_links, customers');
+  await pool.query("UPDATE availability_settings SET open_time='14:00',close_time='23:00',service_minutes=90,interval_minutes=90,max_pax=12,closed_weekdays=ARRAY[2],max_advance_days=NULL,cutoff_minutes=0,finish_before_close=true WHERE id=1");
   await pool.query('TRUNCATE line_group_candidates');
   if ((await pool.query("SELECT to_regclass('request_limits') AS table_name")).rows[0].table_name) await pool.query('TRUNCATE request_limits');
 });
@@ -85,16 +86,27 @@ after(async () => {
 
 test('SEC-01: every admin endpoint rejects anonymous/forged credentials and never returns customer data', async () => {
   const b = await booking.createManualBooking(form);
-  const paths = [['GET','/admin'],['GET','/api/admin/week'],['GET','/api/admin/session'],['POST','/api/admin/bookings'],['PUT',`/api/admin/bookings/${b.id}`],['POST',`/api/admin/bookings/${b.id}/cancel`],['POST',`/api/admin/bookings/${b.id}/resend-mail`],['POST','/api/admin/logout']];
+  const paths = [['GET','/admin'],['GET','/api/admin/week'],['GET','/api/admin/session'],
+    ['GET','/api/admin/overview'],['GET','/api/admin/calendar?month=2099-01'],
+    ['GET','/api/admin/bookings.csv'],['GET','/api/admin/analytics.csv'],['GET','/api/admin/notification-settings'],
+    ['GET','/api/admin/system-events'],['GET','/api/admin/customers'],
+    ['GET',`/api/admin/bookings/${b.id}/notification-preview?eventType=REMINDER`],
+    ['POST','/api/admin/bookings'],['PUT',`/api/admin/bookings/${b.id}`],
+    ['POST',`/api/admin/bookings/${b.id}/cancel`],['POST',`/api/admin/bookings/${b.id}/correct-status`],
+    ['PATCH',`/api/admin/bookings/${b.id}/administration`],['POST',`/api/admin/bookings/${b.id}/resend-notification`],
+    ['POST',`/api/admin/bookings/${b.id}/resend-mail`],['POST','/api/admin/logout']];
   for (const [method,path] of paths) for (const cookie of ['', 'admin_session=' + 'a'.repeat(64), '__Host-admin_session=' + 'b'.repeat(64)]) {
-    const r = await request(path + '?token=legacy', { method, cookie, body: method === 'GET' ? undefined : form, headers: { 'X-Admin-Token':'legacy', Authorization:'Bearer legacy' } });
+    const r = await request(path + (path.includes('?') ? '&' : '?') + 'token=legacy', { method, cookie, body: method === 'GET' ? undefined : form, headers: { 'X-Admin-Token':'legacy', Authorization:'Bearer legacy' } });
     assert.ok([401,303].includes(r.status), path + ': ' + r.status); assert.ok(!r.text.includes(form.email));
   }
   assert.equal((await pool.query('SELECT count(*)::int AS n FROM bookings WHERE status=\'CONFIRMED\'')).rows[0].n, 1);
 });
 test('SEC-02: origin, content type, absent/mismatched/session-swapped CSRF cannot change bookings', async () => {
   const a = await login(), b = await login(), saved = await booking.createManualBooking(form);
-  const targets = [['POST','/api/admin/bookings'],['PUT',`/api/admin/bookings/${saved.id}`],['POST',`/api/admin/bookings/${saved.id}/cancel`],['POST',`/api/admin/bookings/${saved.id}/resend-mail`],['POST','/api/admin/logout']];
+  const targets = [['POST','/api/admin/bookings'],['PUT',`/api/admin/bookings/${saved.id}`],
+    ['POST',`/api/admin/bookings/${saved.id}/cancel`],['POST',`/api/admin/bookings/${saved.id}/correct-status`],
+    ['PATCH',`/api/admin/bookings/${saved.id}/administration`],['POST',`/api/admin/bookings/${saved.id}/resend-notification`],
+    ['PUT','/api/admin/notification-settings/REMINDER'],['POST',`/api/admin/bookings/${saved.id}/resend-mail`],['POST','/api/admin/logout']];
   const variants = [{ csrf:'' },{ csrf:'x'.repeat(64) },{ csrf:b.csrf },{ headers:{ Origin:'https://attacker.invalid' } },{ headers:{ Origin:'' } },{ headers:{ Origin:'null' } },{ headers:{ 'Content-Type':'text/plain' } },{ headers:{ 'Sec-Fetch-Site':'cross-site' } }];
   for (const variation of variants) for (const [method,path] of targets) {
     const r = await request(path, { ...a, method, body:form, ...variation });
@@ -266,7 +278,7 @@ test('SEC-17: production startup rejects missing/legacy hashes and unsafe origin
 test('SEC-18: prototype pollution and body identifier replacement cannot grant privileges or edit another booking', async () => {
   const first=await booking.createManualBooking(form), second=await booking.createManualBooking(form), session=await login();
   const input=JSON.parse(JSON.stringify({...form,id:second.id,status:'CANCELLED',source:'<script>alert(1)</script>'}).slice(0,-1)+',"__proto__":{"admin":true},"constructor":{"prototype":{"admin":true}}}');
-  const r=await request('/api/admin/bookings/'+first.id,{...session,method:'PUT',body:{...input,name:'Edited first'}});assert.equal(r.status,200);assert.equal({}.admin,undefined);
+  const r=await request('/api/admin/bookings/'+first.id,{...session,method:'PUT',body:{...input,name:'Edited first',revision:1,changeReason:'staff correction'}});assert.equal(r.status,200);assert.equal({}.admin,undefined);
   const rows=(await pool.query('SELECT id,name,status,source FROM bookings ORDER BY id')).rows;
   assert.equal(rows.find(b=>b.id===first.id).name,'Edited first');assert.equal(rows.find(b=>b.id===second.id).name,form.name);
   assert.ok(rows.every(b=>b.status==='CONFIRMED'&&b.source==='WALK_IN'));
@@ -275,7 +287,7 @@ test('SEC-18: prototype pollution and body identifier replacement cannot grant p
 test('SEC-19: admin edit/cancel/resend rejects invalid or nonexistent IDs and cancelled edits', async () => {
   const session=await login(), b=await booking.createManualBooking(form);
   for(const id of ['not-a-uuid',"x%27%3BOR%201%3D1--",crypto.randomUUID()]) for(const [method,suffix] of [['PUT',''],['POST','/cancel'],['POST','/resend-mail']]) {
-    const r=await request('/api/admin/bookings/'+id+suffix,{...session,method,body:form}); assert.ok([400,404].includes(r.status));
+    const r=await request('/api/admin/bookings/'+id+suffix,{...session,method,body:{...form,revision:1,reason:'test'}}); assert.ok([400,404].includes(r.status));
   }
   await booking.cancelBooking(b.id);await assert.rejects(booking.updateBooking({...form,id:b.id}),{status:409});await assert.rejects(booking.resendConfirmation(b.id),{status:409});
   assert.equal((await pool.query('SELECT status FROM bookings WHERE id=$1',[b.id])).rows[0].status,'CANCELLED');

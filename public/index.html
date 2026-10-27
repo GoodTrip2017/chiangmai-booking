@@ -38,6 +38,7 @@
   .service-list { list-style: none; padding: 0; margin: 0; }
   .service-list li { padding: 11px 0; border-bottom: 1px solid var(--line); font-size: 16px; font-weight: 400; }
   .service-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+  .service-list .en { color: var(--muted); font-size: 14px; }
   .details { margin: 0; }
   .info-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 18px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 16px; }
   .info-row dt { color: var(--muted); }
@@ -60,7 +61,7 @@
   label { display: block; font-size: 14px; margin: 16px 0 6px; font-weight: 600; }
   label .req { color: var(--accent); }
   .hint { font-weight: 400; color: var(--muted); font-size: 12.5px; }
-  input[type=text], input[type=email], input[type=number], input[type=date], textarea {
+  input[type=text], input[type=email], input[type=number], input[type=date], select, textarea {
     width: 100%;
     padding: 12px;
     font-size: 16px;
@@ -70,7 +71,7 @@
     border-radius: 10px;
     font-family: inherit;
   }
-  input:focus, textarea:focus { outline: 2px solid var(--accent-dark); outline-offset: 1px; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-dark); outline-offset: 1px; }
   .slots { display: grid; gap: 10px; margin-top: 6px; }
   .slot {
     display: flex; align-items: center; gap: 10px;
@@ -106,6 +107,12 @@
   .done dl { display: grid; grid-template-columns: 92px 1fr; gap: 6px 12px; font-size: 14.5px; margin: 16px 0; }
   .done dt { color: var(--muted); }
   .done dd { margin: 0; }
+  .review-details { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 12px; margin: 20px 0; font-size: 15px; }
+  .review-details dt { color: var(--muted); }
+  .review-details dd { margin: 0; overflow-wrap: anywhere; text-align: right; }
+  #reviewEdit { width: 100%; padding: 12px; color: var(--text); background: var(--card-2); border: 1px solid var(--line); border-radius: 10px; font: inherit; cursor: pointer; }
+  #reviewSubmit { margin-top: 12px; }
+  @media (max-width: 480px) { .review-details { grid-template-columns: 1fr; gap: 3px; } .review-details dd { text-align: left; margin-bottom: 9px; } }
   a { color: var(--accent); }
   .foot { color: var(--muted); font-size: 12.5px; text-align: center; margin-top: 24px; }
 </style>
@@ -114,32 +121,32 @@
 <div class="wrap">
   <header class="hero">
     <p class="brand">HERB UNCLE × GOODTRIP</p>
-    <h1>預約到店</h1>
-    <p class="lede">歡迎預約服務時段。到店前，請先查看以下服務內容與預約資訊。</p>
+    <h1>預約到店 / Book a Visit</h1>
+    <p class="lede">歡迎預約服務時段。到店前，請先查看以下服務內容與預約資訊。<br>Choose a visit time after reviewing the services and booking information below.</p>
   </header>
 
   <div class="intro">
     <section class="intro-section" aria-labelledby="services-title">
-      <h2 id="services-title">服務內容</h2>
+      <h2 id="services-title">服務內容 / Services</h2>
       <ul class="service-list">
-        <li>店內草本介紹</li>
-        <li>飛行基本知識</li>
-        <li>精緻飛行體驗</li>
-        <li>隨行器具租借</li>
+        <li>店內草本介紹 <span class="en">/ In-store herbal introduction</span></li>
+        <li>飛行基本知識 <span class="en">/ Flight basics</span></li>
+        <li>精緻飛行體驗 <span class="en">/ Curated flight experience</span></li>
+        <li>隨行器具租借 <span class="en">/ Equipment rental</span></li>
       </ul>
     </section>
 
     <section class="intro-section" aria-labelledby="visit-title">
-      <h2 id="visit-title">到店與預約資訊</h2>
+      <h2 id="visit-title">到店與預約資訊 / Visit & Booking</h2>
       <dl class="details">
-        <div class="info-row"><dt>營業時間</dt><dd>14:00–23:00</dd></div>
-        <div class="info-row"><dt>固定公休</dt><dd>每週二</dd></div>
-        <div class="info-row"><dt>每段預約</dt><dd>90 分鐘</dd></div>
-        <div class="info-row"><dt>預約起始時間</dt><dd>14:00</dd></div>
-        <div class="info-row"><dt>每時段接待上限</dt><dd>同一時段合計最多 12 人</dd></div>
+        <div class="info-row"><dt>營業時間 / Hours</dt><dd id="publicHours">14:00–23:00</dd></div>
+        <div class="info-row"><dt>固定公休 / Closed weekly</dt><dd id="publicClosedDays">每週二 / Tuesdays</dd></div>
+        <div class="info-row"><dt>每段預約 / Service length</dt><dd id="publicServiceMinutes">90 分鐘 / minutes</dd></div>
+        <div class="info-row"><dt>預約起始時間 / First start</dt><dd id="publicStartTime">14:00</dd></div>
+        <div class="info-row"><dt>每時段接待上限 / Shared capacity</dt><dd id="publicCapacity">同一時段合計最多 12 人 / 12 guests total at a time</dd></div>
       </dl>
-      <p class="local-time">所有預約時段均以清邁當地時間為準（GMT+7）。</p>
-      <p class="change-note">其他公休及臨時異動，請見 <a href="https://www.google.com/maps/search/?api=1&amp;query=GoodTrip+x+Herb+Uncle+Cannabis+CNX+Chiang+Mai" target="_blank" rel="noopener noreferrer">Google Maps</a> 或 Instagram 公告。</p>
+      <p class="local-time">所有預約時段均以清邁當地時間為準（GMT+7）。<br>All booking times follow Chiang Mai local time (GMT+7).</p>
+      <p class="change-note">其他公休及臨時異動，請見 <a href="https://www.google.com/maps/search/?api=1&amp;query=GoodTrip+x+Herb+Uncle+Cannabis+CNX+Chiang+Mai" target="_blank" rel="noopener noreferrer">Google Maps</a> 或 Instagram 公告。<br>For additional closures or temporary changes, check Google Maps or Instagram announcements.</p>
     </section>
   </div>
 
@@ -147,20 +154,20 @@
     <label for="name">預約人 / Name（綽號或本名）<span class="req">*</span></label>
     <input type="text" id="name" maxlength="60" placeholder="例如：Ken">
 
-    <label for="date">日期 / Date<span class="req">*</span> <span class="hint">（週二公休 / Closed Tuesdays）</span></label>
+    <label for="date">日期 / Date<span class="req">*</span> <span class="hint" id="dateClosedHint">（週二公休 / Closed Tuesdays）</span></label>
     <input type="date" id="date">
 
     <label>時段 / Time slot<span class="req">*</span></label>
     <div class="slots" id="slots">
-      <div class="msg info show" id="slotHint">請先選擇日期，即可查看各時段空位。</div>
+      <div class="msg info show" id="slotHint">請先選擇日期，即可查看各時段空位。 / Select a date to see available times.</div>
     </div>
 
     <label for="pax">人數 / Guests<span class="req">*</span> <span class="hint" id="paxHint"></span></label>
     <input type="number" id="pax" min="1" step="1" value="1" aria-describedby="paxHint groupNotice">
     <div id="groupNotice" class="msg info" role="status" aria-live="polite">
-      <strong>多人同行，歡迎先和我們聊聊！</strong>
-      <p style="margin:6px 0 10px">線上預約每個時段最多接待 12 人。超過 12 人的團體，歡迎先透過 LINE 私訊，由店員確認接待方式與可預約時段；聯絡後仍需等候店員確認安排。</p>
-      <a href="https://lin.ee/DcpM9f7" target="_blank" rel="noopener noreferrer">透過 LINE 洽詢多人預約 ↗</a>
+      <strong>多人同行，歡迎先和我們聊聊！ / Planning a larger group?</strong>
+      <p id="groupPolicyText" style="margin:6px 0 10px">線上預約每個時段最多接待 12 人。超過 12 人的團體，請透過 LINE 聯絡店員確認安排。 / Online bookings allow up to 12 guests at one time. Please contact our staff on LINE for larger groups.</p>
+      <a href="https://lin.ee/DcpM9f7" target="_blank" rel="noopener noreferrer">透過 LINE 洽詢多人預約 / Ask about group visits</a>
     </div>
 
     <label>是否為第一次接觸 / First-time experience<span class="req">*</span></label>
@@ -175,23 +182,29 @@
     <label for="email">電子郵件 / Email<span class="req">*</span></label>
     <input type="email" id="email" placeholder="you@example.com" required maxlength="120" autocomplete="email">
 
-    <label>從哪邊知道我們的？ / How did you hear about us?<span class="req">*</span></label>
-    <div class="radios grid2" id="referral">
-      <div class="slot" data-v="Instagram"><span class="t">Instagram</span></div>
-      <div class="slot" data-v="Threads"><span class="t">Threads</span></div>
-      <div class="slot" data-v="GoodTrip官網"><span class="t">GoodTrip官網 / Website</span></div>
-      <div class="slot" data-v="GoodTrip門市"><span class="t">GoodTrip門市 / Store</span></div>
-      <div class="slot" data-v="親友介紹"><span class="t">親友介紹 / Friends or family</span></div>
-      <div class="slot" data-v="網路搜尋"><span class="t">網路搜尋 / Online search</span></div>
+    <label for="discoverySource">您從哪裡得知我們？ / How did you hear about us?<span class="req">*</span></label>
+    <select id="discoverySource" required><option value="">請選擇 / Please select</option></select>
+    <div id="discoveryDetailWrap" hidden>
+      <label for="discoveryDetail" id="discoveryDetailLabel">補充說明 / Details <span class="hint">（選填 / Optional）</span></label>
+      <input type="text" id="discoveryDetail" maxlength="120">
     </div>
 
-    <button class="go" id="go">送出預約</button>
+    <button class="go" id="go">檢查預約資料 / Review booking</button>
     <div class="msg" id="msg"></div>
   </div>
 
+  <section id="reviewCard" class="card" hidden aria-labelledby="reviewTitle">
+    <h2 id="reviewTitle">確認預約資料 / Review booking</h2>
+    <dl id="reviewDetails" class="review-details"></dl>
+    <p class="hint">所有時間均以清邁當地時間為準（GMT+7）。<br>All times are in Chiang Mai local time (GMT+7).</p>
+    <button type="button" id="reviewEdit">返回修改 / Edit details</button>
+    <button type="button" class="go" id="reviewSubmit">確認送出 / Confirm booking</button>
+    <div class="msg" id="reviewMsg" role="alert"></div>
+  </section>
+
   <div id="doneCard" class="card done" style="display:none"></div>
 
-  <p class="foot">有任何問題歡迎透過 <a href="https://lin.ee/DcpM9f7" target="_blank">LINE</a> 與我們聯絡</p>
+  <p class="foot">有任何問題歡迎透過 <a href="https://lin.ee/DcpM9f7" target="_blank" rel="noopener noreferrer">LINE</a> 與我們聯絡<br>Questions? Contact us on LINE.</p>
 </div>
 
 <script src="/assets/booking.js" defer></script>

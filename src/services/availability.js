@@ -6,14 +6,16 @@ const { userError } = require('../util/errors');
 const { pool } = require('../db');
 const { CONFIG, SLOTS, STATUS } = require('../config');
 const dt = require('../util/datetime');
+const rulesService = require('./rules');
 
 /** 讀取某日所有已確認預約。容量須包含與目標時段重疊的舊預約。 */
 async function confirmedIn(db, dateStr, slot, excludeId) {
   const params = [dateStr];
-  let sql = `SELECT * FROM bookings WHERE status = '${STATUS.CONFIRMED}' AND date = $1`;
+  let sql = `SELECT *, GREATEST(pax,COALESCE(actual_pax,pax)) AS capacity_pax FROM bookings WHERE status = ANY($2::text[]) AND date = $1`;
+  params.push([STATUS.PENDING, STATUS.CONFIRMED, STATUS.CHECKED_IN, STATUS.COMPLETED]);
   if (excludeId) {
     params.push(excludeId);
-    sql += ' AND id <> $2';
+    sql += ' AND id <> $3';
   }
   sql += ' ORDER BY created_at';
   const { rows } = await db.query(sql, params);
@@ -26,6 +28,8 @@ async function confirmedIn(db, dateStr, slot, excludeId) {
 
 /** 某時段目前狀態 */
 async function slotState(db, dateStr, slot, excludeId) {
+  const rules = await rulesService.dayRules(db, dateStr);
+  const activeSlot = rules.slots.find(item => item.slot === slot);
   const list = await confirmedIn(db, dateStr, slot, excludeId);
   const target = dt.getSlotDef(slot);
   // 舊時段可能前後接到兩組新時段；計算任一時刻的最大同時人數，
@@ -38,66 +42,97 @@ async function slotState(db, dateStr, slot, excludeId) {
       const def = dt.getSlotDef(b.slot);
       return def.start <= point && point < def.end;
     });
-    const pax = active.reduce((sum, b) => sum + b.pax, 0);
+    const pax = active.reduce((sum, b) => sum + (b.capacity_pax ?? b.pax), 0);
     if (pax > totalPax) { totalPax = pax; groups = active.length; }
   }
-  const remaining = Math.max(0, CONFIG.MAX_PAX - totalPax);
+  const maxPax = activeSlot?.maxPax ?? rules.settings.max_pax;
+  const remaining = Math.max(0, maxPax - totalPax);
   return {
     slot,
     groups,
     totalPax,
     remaining,
-    overCapacity: totalPax > CONFIG.MAX_PAX,
+    maxPax, blocked: rules.closed || activeSlot?.blocked || !activeSlot,
+    overCapacity: totalPax > maxPax,
     bookings: list.filter(b => b.slot === slot),
   };
 }
 
 /** 容量判定。excludeId：修改既有預約時排除自己，避免自我衝突。 */
-async function capacityCheck(db, dateStr, slot, pax, excludeId) {
+async function capacityCheck(db, dateStr, slot, pax, excludeId, options = {}) {
+  const rules = await rulesService.dayRules(db, dateStr);
+  const bookable = rulesService.isBookableTime(rules, dateStr, slot, options);
+  if (!bookable.ok && !(options.allowLegacySlot === slot && !rules.closed)) return { ok: false, reason: bookable.reason, state: null };
   const state = await slotState(db, dateStr, slot, excludeId);
-  if (Number.isInteger(pax) && pax >= 1 && state.totalPax + pax <= CONFIG.MAX_PAX) return { ok: true, state };
+  const target = dt.getSlotDef(slot);
+  const overlapping = await confirmedIn(db, dateStr, slot, excludeId);
+  const points = [target.start,
+    ...overlapping.map(row => dt.getSlotDef(row.slot).start),
+    ...rules.slots.map(row => row.start)].filter(point => point >= target.start && point < target.end);
+  let limiting = null;
+  let minAvailable = state.maxPax;
+  for (const point of new Set(points)) {
+    const inUse = overlapping.filter(row => {
+      const def = dt.getSlotDef(row.slot);
+      return def.start <= point && point < def.end;
+    }).reduce((sum, row) => sum + (row.capacity_pax ?? row.pax), 0);
+    const caps = [state.maxPax, ...rules.slots.filter(row => row.start <= point && point < row.end)
+      .map(row => row.blocked ? 0 : row.maxPax)];
+    const cap = Math.min(...caps);
+    minAvailable = Math.min(minAvailable, cap - inUse);
+    if (inUse + pax > cap) { limiting = { inUse, cap }; break; }
+  }
+  state.effectiveRemaining = Math.max(0, minAvailable);
+  if (Number.isInteger(pax) && pax >= 1 && !limiting) return { ok: true, state };
+  const used = limiting?.inUse ?? state.totalPax;
+  const cap = limiting?.cap ?? state.maxPax;
   return {
     ok: false,
     state,
-    reason: `該時段已有 ${state.groups} 組預約、共 ${state.totalPax} 人。` +
-      `每個時段接待上限 ${CONFIG.MAX_PAX} 人，目前只剩 ` +
-      `${state.remaining} 個位子，無法容納 ${pax} 人。`,
+    reason: `重疊時間已有 ${used} 人；同時接待上限 ${cap} 人，` +
+      `目前只剩 ${Math.max(0, cap - used)} 位，無法容納 ${pax} 人。 / ` +
+      `Only ${Math.max(0, cap - used)} places remain for this overlapping visit time.`,
   };
 }
 
 /** 前台：取某一天六個時段的即時狀態 */
 async function getAvailability(dateStr) {
-  if (!dt.isValidDateStr(dateStr)) throw userError('日期格式不正確。');
+  if (!dt.isValidDateStr(dateStr)) throw userError('日期格式不正確 / Invalid date.');
+  const rules = await rulesService.dayRules(pool, dateStr);
 
   const result = {
     date: dateStr,
     dateLabel: dt.formatDateZh(dateStr),
-    closed: dt.isClosedDay(dateStr),
-    maxPax: CONFIG.MAX_PAX,
+    closed: rules.closed,
+    maxPax: rules.settings.max_pax,
     slots: [],
   };
   if (result.closed) {
-    result.message = '每週二為固定公休日，請改選其他日期。';
+    result.message = rules.reason || '此日期公休 / Closed on this date.';
     return result;
   }
 
-  for (const def of SLOTS) {
+  for (const def of rules.slots) {
     const st = await slotState(pool, dateStr, def.slot);
+    const checked = await capacityCheck(pool, dateStr, def.slot, 1);
+    const remaining = checked.state?.effectiveRemaining ?? 0;
     const past = dt.isSlotPast(dateStr, def.slot);
     let status, statusText, maxPax;
 
-    if (past) {
+    if (def.blocked || def.maxPax === 0) {
+      status = 'CLOSED'; statusText = def.reason || '暫停預約 / Unavailable'; maxPax = 0;
+    } else if (past || !rulesService.isBookableTime(rules, dateStr, def.slot).ok) {
       status = 'PAST';
       statusText = '已過時間';
       maxPax = 0;
-    } else if (st.groups === 0) {
+    } else if (st.groups === 0 && remaining > 0) {
       status = 'OPEN';
       statusText = '可預約';
-      maxPax = st.remaining;
-    } else if (st.remaining > 0) {
+      maxPax = remaining;
+    } else if (remaining > 0) {
       status = 'PARTIAL';
-      statusText = `剩餘 ${st.remaining} 位`;
-      maxPax = st.remaining;
+      statusText = `剩餘 ${remaining} 位 / ${remaining} places left`;
+      maxPax = remaining;
     } else {
       status = 'FULL';
       statusText = '已滿';

@@ -26,12 +26,13 @@
   <main>
     <img src="/logo.png" alt="GoodTrip x Herb Uncle">
     <h1>工作人員登入 / Staff login</h1>
-    <p>登入後可查看與管理預約。使用完畢請登出，尤其是共用裝置。</p>
+    <p>登入後可查看獲授權的預約資料。使用完畢請登出，尤其是共用裝置。<br>Sign out after use, especially on shared devices.</p>
     <form id="loginForm">
-      <input type="text" name="username" value="staff" autocomplete="username" hidden>
-      <label for="password">後台密碼 / Admin password</label>
+      <label for="username">帳號 / Username（原管理員可留空 / Leave blank for existing admin login）</label>
+      <input id="username" type="text" name="username" autocomplete="username" maxlength="40">
+      <label for="password">密碼 / Password</label>
       <input id="password" type="password" name="password" autocomplete="current-password" maxlength="256" required autofocus>
-      <button id="loginButton" type="submit">登入</button>
+      <button id="loginButton" type="submit">登入 / Sign in</button>
       <p id="error" role="alert" aria-live="polite"></p>
     </form>
     <a href="/">回預約頁</a>

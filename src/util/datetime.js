@@ -53,7 +53,12 @@ function isClosedDay(dateStr) {
 }
 
 function getSlotDef(slot) {
-  return SLOTS.find((s) => s.slot === slot) || LEGACY_SLOTS.find((s) => s.slot === slot) || null;
+  const known = SLOTS.find((s) => s.slot === slot) || LEGACY_SLOTS.find((s) => s.slot === slot);
+  if (known) return known;
+  if (typeof slot !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/.test(slot)) return null;
+  const [start, end] = slot.split('-');
+  if (end <= start) return null;
+  return { slot, start, end };
 }
 
 function addDaysStr(dateStr, days) {
@@ -112,5 +117,5 @@ function formatShortBkk(date) {
 module.exports = {
   todayStr, isValidDateStr, isoWeekday, weekdayZh, isClosedDay, getSlotDef,
   addDaysStr, mondayOf, isSlotPast, formatDateZh, formatTimeZh, slotLabelZh,
-  graceDeadlineZh, formatShortBkk,
+  graceDeadlineZh, formatShortBkk, toUtcMs,
 };

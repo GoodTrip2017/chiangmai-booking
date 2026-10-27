@@ -8,9 +8,25 @@ const { capacityCheck } = require('../src/services/availability');
 const mailer = require('../src/services/mailer');
 const { hashPassword } = require('../src/services/auth');
 const { pool } = require('../src/db');
+const { csvCell } = require('../src/services/reporting');
+const notificationPolicy = require('../src/services/notificationPolicy');
 const form = { name: '測試', pax: 2, date: '2099-01-01', slot: '14:00-15:30', firstTime: '否', email: 'test@example.invalid', referral: '網路搜尋' };
 
 after(() => pool.end());
+test('CSV 個資欄位不會成為試算表公式', () => {
+  for (const value of ['=IMPORTXML("https://bad.invalid")', '+1+1', '-1+1', '@SUM(1)', '  =1+1', '\t=1+1']) {
+    assert.ok(csvCell(value).startsWith('"\''), value);
+  }
+  assert.equal(csvCell('正常,名字'), '"正常,名字"');
+  assert.equal(csvCell('a"b'), '"a""b"');
+});
+test('LINE 範本只接受受控變數，預覽替入預約資料', () => {
+  assert.throws(() => notificationPolicy.validateTemplate('Hello {{password}}'), { status: 400 });
+  assert.throws(() => notificationPolicy.validateTemplate('Hello {{name'), { status: 400 });
+  const text = notificationPolicy.render('您好 {{name}}，{{date}} {{time}} 共 {{guests}} 人',
+    { id: 'A', name: '陳先生', date: '2026-10-27', slot: '14:00-15:30', pax: 2 });
+  assert.equal(text, '您好 陳先生，2026-10-27 14:00-15:30 共 2 人');
+});
 test('日期、清邁時區與保留時間', () => {
   assert.equal(dt.isClosedDay('2026-09-15'), true);
   assert.equal(dt.isValidDateStr('2026-02-30'), false);
@@ -21,13 +37,13 @@ test('日期、清邁時區與保留時間', () => {
     '14:00-15:30', '15:30-17:00', '17:00-18:30',
     '18:30-20:00', '20:00-21:30', '21:30-23:00',
   ]);
-  assert.throws(() => validateForm({ ...form, slot: '14:30-16:30' }), { status: 400 });
+  assert.throws(() => validateForm({ ...form, slot: 'invalid-slot' }), { status: 400 });
 });
-test('前後台表單均拒絕 13 人、60 人、非整數與週二', () => {
+test('前後台表單均拒絕 13 人、60 人與非整數；公休日由資料庫營業規則檢查', () => {
   for (const opts of [{}, { allowPast: true, emailOptional: true, referralOptional: true }]) {
     assert.equal(validateForm({ ...form, pax: 12 }, opts).pax, 12);
     for (const pax of [0, -1, 1.5, 13, 60, Infinity]) assert.throws(() => validateForm({ ...form, pax }, opts), { status: 400 });
-    assert.throws(() => validateForm({ ...form, date: '2026-09-15' }, opts));
+    assert.equal(validateForm({ ...form, date: '2026-09-15' }, { ...opts, allowPast: true }).date, '2026-09-15');
   }
 });
 test('Email 統一必填，後台或舊 emailOptional 選項也不能繞過', () => {
@@ -56,7 +72,7 @@ test('13 人以上提供 LINE 洽詢資訊，客人改回 12 人可恢復一般�
   assert.ok(fs.readFileSync('public/index.html', 'utf8').includes('透過 LINE 洽詢多人預約'));
 });
 test('第一組與多組共用同一個 12 人上限', async () => {
-  const check = (rows, pax) => capacityCheck({ query: async () => ({ rows }) }, form.date, form.slot, pax);
+  const check = (rows, pax) => capacityCheck(mockAvailabilityDb(rows), form.date, form.slot, pax);
   assert.equal((await check([], 12)).ok, true);
   assert.equal((await check([], 13)).ok, false);
   assert.equal((await check([], 60)).ok, false);
@@ -65,7 +81,7 @@ test('第一組與多組共用同一個 12 人上限', async () => {
   assert.equal((await check([{ pax: 13, slot: form.slot }], 1)).ok, false);
 });
 test('新時段扣除重疊舊預約，但不合計彼此不重疊的舊預約', async () => {
-  const db = rows => ({ query: async () => ({ rows }) });
+  const db = mockAvailabilityDb;
   const date = form.date;
   let check = await capacityCheck(db([{ slot: '14:30-16:30', pax: 10 }]), date, '14:00-15:30', 3);
   assert.equal(check.ok, false);
@@ -78,6 +94,29 @@ test('新時段扣除重疊舊預約，但不合計彼此不重疊的舊預約',
   check = await capacityCheck(db([{ slot: '14:30-16:30', pax: 12 }]), date, '17:00-18:30', 12);
   assert.equal(check.ok, true);
 });
+test('報到時增加的實際同行人數也占用後續重疊容量', async () => {
+  const booking = { slot: form.slot, pax: 2, actual_pax: 4, capacity_pax: 4 };
+  assert.equal((await capacityCheck(mockAvailabilityDb([booking]), form.date, form.slot, 8)).ok, true);
+  assert.equal((await capacityCheck(mockAvailabilityDb([booking]), form.date, form.slot, 9)).ok, false);
+});
+test('縮小營運容量前會列出實際到店人數高於預約人數的受影響預約', async () => {
+  const db = { query: async sql => ({ rows: sql.includes('FROM bookings')
+    ? [{ id: 'affected', date: form.date, slot: form.slot, pax: 2, actual_pax: 4, status: 'CHECKED_IN' }]
+    : [] }) };
+  const settings = { open_time: '14:00', close_time: '23:00', service_minutes: 90, interval_minutes: 90,
+    max_pax: 3, closed_weekdays: [2], max_advance_days: null, cutoff_minutes: 0, finish_before_close: true };
+  const affected = await require('../src/services/rules').affectedBookings(db, settings);
+  assert.equal(affected.length, 1);
+  assert.equal(affected[0].reason, 'CAPACITY_REDUCED');
+});
+function mockAvailabilityDb(bookings) {
+  return { query: async (sql) => {
+    if (sql.includes('FROM availability_settings')) return { rows: [{ open_time:'14:00', close_time:'23:00', service_minutes:90,
+      interval_minutes:90, max_pax:12, closed_weekdays:[2], max_advance_days:null, cutoff_minutes:0, finish_before_close:true }] };
+    if (sql.includes('FROM availability_exceptions') || sql.includes('FROM slot_overrides')) return { rows: [] };
+    return { rows: bookings };
+  } };
+}
 test('確認信安全跳脫姓名，文案由店員處理逾時', () => {
   const booking = { ...form, name: '<img src=x onerror=alert(1)>' };
   const html = mailer.buildConfirmationHtml(booking);
@@ -131,8 +170,10 @@ test('成功頁姓名與 Email 僅作文字；未送信不承諾 LINE 私訊', (
   const ctx = { document: doc, fetch: async () => ({ ok: true, json: async () => ({ today: '2026-09-14' }) }), window: { scrollTo() {} } };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync('public/assets/booking.js', 'utf8'), ctx);
-  ctx.onDone({ mailStatus: 'NOT_CONFIGURED', summary: { name: '<img onerror=alert(1)>', email: 'x<y@example.invalid', pax: 2, dateLabel: 'date', slotLabel: 'slot', deadline: '下午 2:40', graceMinutes: 10 } });
-  assert.equal(nodes.get('doneCard').children[1].children[1].text, '<img onerror=alert(1)>');
+  ctx.onDone({ mailStatus: 'NOT_CONFIGURED', summary: { bookingId: 'booking-123', name: '<img onerror=alert(1)>', email: 'x<y@example.invalid', pax: 2, dateLabel: 'date', slotLabel: 'slot', deadline: '下午 2:40', graceMinutes: 10 } });
+  const details = nodes.get('doneCard').children[1].children;
+  const nameIndex = details.findIndex((item) => item.text === '預約人 / Name');
+  assert.equal(details[nameIndex + 1].text, '<img onerror=alert(1)>');
   assert.match(nodes.get('doneCard').children[2].text, /預約已成立/);
   assert.doesNotMatch(nodes.get('doneCard').children[2].text, /我們會另外透過 LINE/);
 });
@@ -146,4 +187,27 @@ test('Railway 只信任邊緣 X-Real-IP，缺失或異常值共用受限桶', ()
     assert.equal(clientIp({ ip: '203.0.113.9', headers: { 'x-real-ip': value } }, env), 'unknown');
   }
   assert.equal(clientIp({ ip: '127.0.0.1', headers: { 'x-real-ip': '203.0.113.9' } }, { NODE_ENV: 'test' }), '127.0.0.1');
+});
+test('LINE 群組訊息使用雙語純文字，重試沿用固定 retry key', async () => {
+  const lineNotify = require('../src/services/lineNotify');
+  const sample = { id: '11111111-1111-4111-8111-111111111111', name: 'Test', pax: 2, date: '2099-01-01', slot: '14:00-15:30', source: 'WEB', note: '' };
+  const message = lineNotify.buildBookingMessage(sample);
+  assert.match(message, /Booking ID/);
+  assert.match(message, /新預約已確認/);
+  assert.doesNotMatch(message, /[🔔⭐✏️❌]/u);
+  const oldFetch = global.fetch;
+  const oldToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  let sent;
+  process.env.LINE_CHANNEL_ACCESS_TOKEN = 'unit-test';
+  global.fetch = async (url, options) => { sent = { url, options }; return { ok: true, status: 200, headers: new Headers() }; };
+  try {
+    const result = await lineNotify.pushToGroup(message, 'group-test', sample.id);
+    assert.equal(result.accepted, true);
+    assert.equal(sent.options.headers['X-Line-Retry-Key'], sample.id);
+    assert.equal(JSON.parse(sent.options.body).to, 'group-test');
+  } finally {
+    global.fetch = oldFetch;
+    if (oldToken === undefined) delete process.env.LINE_CHANNEL_ACCESS_TOKEN;
+    else process.env.LINE_CHANNEL_ACCESS_TOKEN = oldToken;
+  }
 });

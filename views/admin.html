@@ -82,6 +82,46 @@
   .chk { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; }
   .chk input { width: auto; }
   #loading { padding: 40px; text-align: center; color: var(--muted); }
+  .report { padding: 20px 24px; max-width: 1200px; margin: 0 auto; }
+  .report h2 { font-size: 20px; margin: 0 0 18px; }
+  .report-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 20px; }
+  .report-filters label { color: var(--muted); font-size: 12px; display: grid; gap: 5px; }
+  .report-filters input, .report-filters select { color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 7px; padding: 8px; font: inherit; }
+  .report-filters label { min-width: 0; }
+  .report-filters input, .report-filters select { max-width: 100%; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit,minmax(155px,1fr)); gap: 12px; }
+  .metric { background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 16px; }
+  .metric strong { display: block; font-size: 27px; margin-top: 7px; }
+  .metric span { color: var(--muted); font-size: 12px; }
+  .report-table { width: 100%; min-width: 700px; margin-top: 18px; }
+  .report-table td, .report-table th { width: auto; padding: 10px; }
+  .report-table td button { text-align: left; }
+  .report-scroll { overflow-x: auto; }
+  .report-note { color: var(--muted); line-height: 1.6; }
+  .calendar-controls { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 24px; align-items: center; }
+  .calendar-controls[hidden], .month-grid[hidden] { display: none; }
+  .calendar-controls input { color: var(--text); background: var(--card); border: 1px solid var(--line); padding: 7px; border-radius: 6px; }
+  .month-grid { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 6px; max-width: 1200px; margin: 0 auto; padding: 0 24px 30px; }
+  .month-grid > * { min-height: 90px; border: 1px solid var(--line); border-radius: 7px; padding: 8px; background: var(--card); color: var(--text); }
+  .month-grid .weekday { min-height: 28px; text-align: center; background: none; border: 0; color: var(--muted); }
+  .month-grid .blank { visibility: hidden; }
+  .month-grid .day { cursor: pointer; text-align: left; font: inherit; }
+  .month-grid .day strong { display: block; color: var(--accent); }
+  .month-grid .day span { display: block; font-size: 12px; color: var(--muted); }
+  @media (max-width: 620px) { .month-grid { gap: 3px; padding: 0 8px 20px; } .month-grid > * { min-height: 78px; padding: 5px; font-size: 12px; } .month-grid .day span { font-size: 10px; } }
+  .trend-row { display: grid; grid-template-columns: 120px minmax(80px,1fr) 90px; gap: 10px; align-items: center; margin: 8px 0; font-size: 13px; }
+  .trend-bar { background: var(--accent); min-width: 2px; height: 12px; border-radius: 3px; }
+  .trend-track { background: var(--card2); border-radius: 3px; overflow: hidden; }
+  @media (max-width: 560px) { .trend-row { grid-template-columns: 85px minmax(45px,1fr) 60px; font-size: 12px; } }
+  @media (max-width: 620px) {
+    .report { padding: 20px 16px; }
+    .report-filters { gap: 10px; }
+    .report-filters label:not(.chk) { flex: 1 1 100%; }
+    .report-filters input, .report-filters select { width: 100%; min-height: 42px; font-size: 15px; }
+    .report-filters button { min-height: 42px; white-space: normal; }
+    .modal { width: calc(100vw - 24px); padding: 16px; }
+    .acts button { white-space: normal; }
+  }
 </style>
 </head>
 <body>
@@ -91,6 +131,14 @@
   <button id="this" disabled>本週</button>
   <button id="next" disabled>下一週 →</button>
   <button id="reload">重新整理</button>
+  <button id="overviewTab" type="button">營運總覽 / Overview</button>
+  <button id="calendarTab" type="button">預約日曆 / Calendar</button>
+  <button id="analyticsTab" type="button">數據分析 / Analytics</button>
+  <button id="accountsTab" type="button" hidden>人員權限 / Accounts</button>
+  <button id="availabilityTab" type="button" hidden>營業與容量 / Availability</button>
+  <button id="sourcesTab" type="button" hidden>來源與合作 / Sources</button>
+  <button id="customersTab" type="button">顧客紀錄 / Customers</button>
+  <button id="notificationsTab" type="button" hidden>LINE 通知 / LINE Notifications</button>
   <button id="lineGroups" type="button">LINE 群組設定</button>
   <button class="primary" id="addNew" disabled>＋ 手動新增</button>
   <button id="logout">登出</button>
@@ -106,7 +154,175 @@
   </div>
 </section>
 
+<section id="customersPanel" class="report" hidden>
+  <h2>顧客紀錄 / Customers</h2>
+  <p class="report-note">以標準化 Email 對應顧客 ID；不依姓名合併。同行者未個別識別，回訪數僅代表預約聯絡人。<br>Customer IDs are linked by normalized email, never by name. Return counts represent booking contacts, not unidentified companions.</p>
+  <div class="report-filters"><label>顧客 ID 或 Email / Search<input id="customerSearch" type="search" maxlength="120"></label><button id="customerSearchButton" type="button">搜尋 / Search</button></div>
+  <p id="customerMessage" role="status"></p>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>Email</th><th>預約 / Bookings</th><th>到店 / Checked in</th><th>取消 / Cancelled</th><th>未到 / No-show</th><th>首次記錄 / First recorded</th><th>最近到店 / Last visit</th><th>LINE</th></tr></thead><tbody id="customerRows"></tbody></table></div>
+  <div id="customerDetail" class="report-note"></div>
+</section>
+
+<section id="notificationsPanel" class="report" hidden>
+  <h2>LINE 工作群組通知 / LINE staff-group notifications</h2>
+  <p class="report-note">只有工作群組會收到訊息；LINE API 接受不代表實際送達或已讀。行前提醒在預約改期、取消、報到或標記未到時取消舊排程。<br>Messages go only to the staff group. API acceptance does not prove delivery or reading. Old reminders are cancelled when a booking changes or closes.</p>
+  <p id="notificationVariables" class="report-note"></p>
+  <p id="notificationMessage" role="status"></p>
+  <div id="notificationSettings"></div>
+</section>
+
+<section id="sourcesPanel" class="report" hidden>
+  <h2>得知管道選項 / Discovery source options</h2>
+  <p class="report-note">選項使用固定 ID；改名、調整排序或停用不會刪除歷史統計。<br>Stable IDs preserve historical reporting after renaming, reordering, or deactivation.</p>
+  <div class="report-filters">
+    <label>中文名稱 / Chinese label<input id="sourceZh" type="text" maxlength="80"></label>
+    <label>英文名稱 / English label<input id="sourceEn" type="text" maxlength="80"></label>
+    <label>排序 / Order<input id="sourceOrder" type="number" min="-10000" max="10000" value="130"></label>
+    <button id="createSource" type="button">新增來源 / Add source</button>
+  </div>
+  <p id="sourcesMessage" role="status"></p>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>中文 / Chinese</th><th>英文 / English</th><th>排序 / Order</th><th>啟用 / Active</th><th>操作 / Action</th></tr></thead><tbody id="sourceOptionsRows"></tbody></table></div>
+  <h2 style="margin-top:32px">合作與活動追蹤連結 / Tracking links</h2>
+  <div class="report-filters">
+    <label>代碼 / Code<input id="trackingCode" type="text" maxlength="40" placeholder="hotel-example"></label>
+    <label>名稱 / Name<input id="trackingName" type="text" maxlength="80"></label>
+    <label>類型 / Type<select id="trackingKind"><option value="PARTNER">合作 / Partner</option><option value="CAMPAIGN">活動 / Campaign</option><option value="QR">QR</option></select></label>
+    <label>UTM source<input id="trackingUtmSource" type="text" maxlength="80"></label>
+    <label>UTM medium<input id="trackingUtmMedium" type="text" maxlength="80"></label>
+    <label>UTM campaign<input id="trackingUtmCampaign" type="text" maxlength="80"></label>
+    <button id="createTracking" type="button">建立連結 / Create link</button>
+  </div>
+  <p id="trackingMessage" role="status"></p>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>代碼 / Code</th><th>名稱 / Name</th><th>類型 / Type</th><th>網址 / URL</th><th>狀態 / Status</th><th>操作 / Action</th></tr></thead><tbody id="trackingLinkRows"></tbody></table></div>
+</section>
+
+<section id="availabilityPanel" class="report" hidden>
+  <h2>營業與容量 / Availability & Capacity</h2>
+  <p class="report-note">同一時間所有重疊預約合計不得超過設定容量，硬上限為 12 人。調整若影響既有預約，會先列出預約編號供確認；不會自動取消或改期。<br>Overlapping bookings share the same capacity, capped at 12 guests. Existing affected bookings are shown before applying changes.</p>
+  <div class="report-filters">
+    <label>開始營業 / Open<input id="settingOpen" type="time"></label>
+    <label>結束營業 / Close<input id="settingClose" type="time"></label>
+    <label>服務分鐘 / Service minutes<input id="settingService" type="number" min="15" max="240"></label>
+    <label>開始間隔分鐘 / Start interval<input id="settingInterval" type="number" min="15" max="240"></label>
+    <label>同時上限 / Capacity<input id="settingCapacity" type="number" min="1" max="12"></label>
+    <label>提前截止分鐘 / Cutoff minutes<input id="settingCutoff" type="number" min="0" max="1440"></label>
+    <label>最遠預約天數 / Maximum advance days<input id="settingAdvance" type="number" min="1" max="730" placeholder="不限 / Unlimited"></label>
+  </div>
+  <div class="report-filters" id="closedWeekdays"></div>
+  <label class="chk"><input id="settingFinish" type="checkbox" checked>完整服務須在打烊前結束 / Full service must finish by closing</label>
+  <label class="chk"><input id="settingAcknowledge" type="checkbox">已檢查受影響預約 / I reviewed affected bookings</label>
+  <p id="availabilityImpact" class="report-note" role="status"></p>
+  <button id="saveAvailability" type="button">儲存營業規則 / Save rules</button>
+  <h2 style="margin-top:32px">特定日期 / Date exception</h2>
+  <div class="report-filters">
+    <label>日期 / Date<input id="exceptionDate" type="date"></label>
+    <label>特殊開門 / Special open<input id="exceptionOpen" type="time"></label>
+    <label>特殊關門 / Special close<input id="exceptionClose" type="time"></label>
+    <label>特殊容量 / Capacity<input id="exceptionCapacity" type="number" min="1" max="12"></label>
+    <label>原因 / Reason<input id="exceptionReason" type="text" maxlength="200"></label>
+    <label class="chk"><input id="exceptionClosed" type="checkbox">停開 / Closed</label>
+    <button id="saveException" type="button">儲存日期設定 / Save date</button>
+  </div>
+  <h2>時段調整 / Slot override</h2>
+  <div class="report-filters">
+    <label>日期 / Date<input id="overrideDate" type="date"></label>
+    <label>時段 / Slot<input id="overrideSlot" type="text" placeholder="14:00-15:30"></label>
+    <label>容量 / Capacity<input id="overrideCapacity" type="number" min="0" max="12"></label>
+    <label>原因 / Reason<input id="overrideReason" type="text" maxlength="200"></label>
+    <label class="chk"><input id="overrideBlocked" type="checkbox">封鎖 / Block</label>
+    <button id="saveOverride" type="button">儲存時段設定 / Save slot</button>
+  </div>
+  <p id="availabilityMessage" role="status"></p>
+</section>
+
+<section id="accountsPanel" class="report" hidden>
+  <h2>人員權限 / Staff accounts</h2>
+  <p class="report-note">現有管理員密碼仍可用留空帳號的方式登入。新增帳號須使用至少 16 字元密碼。<br>The existing administrator password remains available with a blank username. New accounts need a password of at least 16 characters.</p>
+  <div class="report-filters">
+    <label>帳號 / Username<input id="newUsername" type="text" maxlength="40" autocomplete="off"></label>
+    <label>顯示名稱 / Display name<input id="newDisplayName" type="text" maxlength="80"></label>
+    <label>角色 / Role<select id="newRole"><option value="STAFF">門市人員 / Staff</option><option value="ANALYST">唯讀分析 / Analyst</option><option value="ADMIN">管理員 / Administrator</option></select></label>
+    <label>密碼 / Password<input id="newPassword" type="password" minlength="16" maxlength="256" autocomplete="new-password"></label>
+    <button id="createAccount" type="button">新增帳號 / Create account</button>
+  </div>
+  <p id="accountsMessage" role="status"></p>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>帳號 / Username</th><th>名稱 / Name</th><th>角色 / Role</th><th>狀態 / Status</th><th>操作 / Action</th></tr></thead><tbody id="accountRows"></tbody></table></div>
+  <h2 style="margin-top:32px">管理操作紀錄 / Administration audit</h2>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>時間（清邁） / Time</th><th>操作者 / Actor</th><th>操作 / Action</th><th>對象 / Target</th></tr></thead><tbody id="systemEventRows"></tbody></table></div>
+</section>
+
+<section id="overviewPanel" class="report" hidden>
+  <h2>今日營運 / Today's operations</h2>
+  <p id="overviewMessage" class="report-note" role="status"></p>
+  <div id="overviewMetrics" class="metrics"></div>
+  <p id="overviewCapacityNote" class="report-note"></p>
+  <h2>各時段剩餘名額 / Remaining places by time</h2>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>時段 / Slot</th><th>狀態 / Status</th><th>可再預約 / Places left</th></tr></thead><tbody id="overviewSlots"></tbody></table></div>
+  <button id="overviewBookings" type="button">查看今日預約 / View today's bookings</button>
+</section>
+
+<section id="reportPanel" class="report" hidden>
+  <h2 id="reportTitle">營運總覽 / Overview</h2>
+  <div class="report-filters">
+    <label>開始日期 / From<input id="reportFrom" type="date"></label>
+    <label>結束日期 / To<input id="reportTo" type="date"></label>
+    <label>日期基準 / Date basis<select id="reportBasis"><option value="visit">預約到店日 / Visit date</option><option value="created">預約建立日 / Created date</option></select></label>
+    <label>趨勢分組 / Trend group<select id="trendGroup"><option value="day">每日 / Daily</option><option value="week">每週 / Weekly</option><option value="month">每月 / Monthly</option></select></label>
+    <label>狀態 / Status<select id="reportStatus"><option value="">全部 / All</option><option value="PENDING">待確認 / Pending</option><option value="CONFIRMED">已確認 / Confirmed</option><option value="CHECKED_IN">已到店 / Checked in</option><option value="COMPLETED">已完成 / Completed</option><option value="CANCELLED">已取消 / Cancelled</option><option value="NO_SHOW">未到店 / No-show</option></select></label>
+    <label>得知管道 / Discovery source<select id="reportDiscovery"><option value="">全部 / All</option></select></label>
+    <label>開始時段 / Start time<input id="reportSlot" type="text" placeholder="14:00-15:30" maxlength="11"></label>
+    <label>追蹤來源 / Tracked source<input id="reportTracking" type="text" maxlength="80" placeholder="instagram"></label>
+    <label id="reportAssigneeWrap">負責人員 / Assigned staff<select id="reportAssignee"><option value="">全部 / All</option></select></label>
+    <label>既往到店紀錄 / Prior recorded visit<select id="reportVisitHistory"><option value="">全部 / All</option><option value="returning">此前曾記錄到店 / Recorded prior visit</option><option value="no_recorded_prior_visit">此前無到店紀錄 / No recorded prior visit</option><option value="unknown">無法辨識聯絡人 / Unknown contact</option></select></label>
+    <label class="chk"><input id="reportFailed" type="checkbox">只看 LINE 失敗 / LINE failures only</label>
+    <button id="reportRefresh" type="button">查詢 / Apply</button>
+    <button id="exportAnalytics" type="button">匯出分析 CSV / Export analytics CSV</button>
+    <button id="exportBookings" type="button" hidden>匯出預約 CSV / Export bookings CSV</button>
+  </div>
+  <p id="reportMessage" role="status"></p>
+  <div id="metrics" class="metrics"></div>
+  <p id="previousComparison" class="report-note"></p>
+  <h2>預約趨勢 / Booking trend</h2>
+  <div id="bookingTrend" role="img" aria-label="預約趨勢 / Booking trend"></div>
+  <p class="report-note">實際人數只統計已報到並記錄的人數；未處理紀錄不會自動當作未到店。<br>Actual guests count recorded check-ins only. Unresolved bookings are not treated as no-shows.</p>
+  <h2>得知管道 / Discovery sources</h2>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>得知管道 / Source</th><th>預約筆數 / Bookings</th><th>預約占比 / Share</th><th>預約人數 / Guests</th><th>到店筆數 / Checked in</th><th>實際人數 / Actual guests</th><th>取消率 / Cancellation rate</th><th>未到率 / No-show rate</th></tr></thead><tbody id="sourceRows"></tbody></table></div>
+  <h2>預約入口 / Booking entry</h2>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>入口 / Entry</th><th>預約筆數 / Bookings</th><th>預約人數 / Guests</th></tr></thead><tbody id="entryRows"></tbody></table></div>
+  <h2>追蹤來源與合作代碼 / Tracked links & partners</h2>
+  <p class="report-note">UTM 僅反映同一瀏覽器工作階段內最早可辨識的連結；跨裝置與未帶參數的來源仍屬未知。<br>UTM shows the first recognizable link in this browser session. Cross-device visits and untagged links remain unknown.</p>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>UTM / Code</th><th>預約筆數 / Bookings</th><th>預約占比 / Share</th><th>預約人數 / Guests</th><th>到店筆數 / Checked in</th><th>取消率 / Cancellation rate</th><th>未到率 / No-show rate</th></tr></thead><tbody id="trackingRows"></tbody></table></div>
+  <h2>可追溯首次到店後的回訪 / Return after first recorded visit</h2>
+  <p id="cohortDefinition" class="report-note"></p>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>首次到店月份 / First visit month</th><th>人數 / Contacts</th><th>30 天 / 30 days</th><th>60 天 / 60 days</th><th>90 天 / 90 days</th><th>平均間隔 / Average days</th></tr></thead><tbody id="cohortRows"></tbody></table></div>
+  <h2>星期與開始時段 / Weekday & Start time</h2>
+  <p id="operationsDefinition" class="report-note"></p>
+  <div class="report-scroll"><table class="report-table" id="heatmapTable"></table></div>
+  <h2>同行規模 / Party size</h2>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>人數級距 / Guests</th><th>預約筆數 / Bookings</th><th>預約人數 / Booked guests</th></tr></thead><tbody id="partyRows"></tbody></table></div>
+  <h2>提前預約天數 / Booking lead time</h2>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>天數 / Days</th><th>預約筆數 / Bookings</th></tr></thead><tbody id="leadRows"></tbody></table></div>
+  <h2>取消原因與改期 / Cancellation reasons & Reschedules</h2>
+  <p id="rescheduleSummary" class="report-note"></p>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>原因 / Reason</th><th>取消筆數 / Cancelled bookings</th></tr></thead><tbody id="cancellationRows"></tbody></table></div>
+  <h2>取消距離到店時間 / Cancellation timing</h2>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>距離到店 / Before visit</th><th>取消筆數 / Cancelled bookings</th></tr></thead><tbody id="cancellationTimingRows"></tbody></table></div>
+  <h2>未到店來源 / No-show by discovery source</h2>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>來源 / Source</th><th>未到筆數 / No-shows</th></tr></thead><tbody id="noShowSourceRows"></tbody></table></div>
+  <h2>預約清單 / Bookings</h2>
+  <div class="report-filters"><label>編號、姓名或 Email / Search<input id="reportSearch" type="search" maxlength="120"></label><label>排序 / Sort<select id="reportSort"><option value="visit_desc">到店日新到舊 / Visit newest</option><option value="visit_asc">到店日舊到新 / Visit oldest</option><option value="created_desc">建立日新到舊 / Created newest</option><option value="created_asc">建立日舊到新 / Created oldest</option></select></label><button id="searchBookings" type="button">搜尋 / Search</button></div>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>編號 / ID</th><th>到店日期 / Visit date</th><th>預約人 / Contact</th><th>人數 / Guests</th><th>狀態 / Status</th><th>來源 / Source</th><th>LINE 通知 / LINE status</th><th>負責人 / Assignee</th></tr></thead><tbody id="bookingRows"></tbody></table></div>
+  <p id="bookingCount" class="report-note"></p>
+  <div class="report-filters"><button id="bookingPrevious" type="button">上一頁 / Previous</button><button id="bookingNext" type="button">下一頁 / Next</button></div>
+</section>
+
 <div id="loading">載入中…</div>
+<div id="calendarControls" class="calendar-controls">
+  <button id="calendarDayView" type="button">日 / Day</button><button id="calendarWeekView" type="button">週 / Week</button><button id="calendarMonthView" type="button">月 / Month</button>
+  <label>選擇日期 / Date <input id="calendarDate" type="date"></label>
+  <label>選擇月份 / Month <input id="calendarMonthInput" type="month"></label>
+</div>
+<div id="monthGrid" class="month-grid" hidden></div>
 <div class="scroll" id="scroll" style="display:none"><table id="grid"></table></div>
 
 <div class="mask" id="mask"></div>
@@ -162,8 +378,54 @@
     <option value="親友介紹">親友介紹 / Friends or family</option>
     <option value="網路搜尋">網路搜尋 / Online search</option>
   </select>
+  <label for="fDiscoverySource">得知管道 / Discovery source</label>
+  <select id="fDiscoverySource"><option value="">未提供 / Not provided</option></select>
+  <label for="fDiscoveryDetail">來源補充 / Source detail</label>
+  <input type="text" id="fDiscoveryDetail" maxlength="120">
   <label for="fNote">備註 / Notes</label>
   <input type="text" id="fNote" maxlength="300">
+  <label for="fEditReason">修改原因 / Change reason（編輯時必填 / Required when editing）</label>
+  <input type="text" id="fEditReason" maxlength="300">
+  <div id="statusPanel" style="display:none">
+    <p id="statusCurrent"></p>
+    <label for="fActualPax">實際到店人數 / Actual guests</label>
+    <input type="number" id="fActualPax" min="1" max="12" step="1">
+    <label for="fStatusReason">操作原因或備註 / Reason or note</label>
+    <input type="text" id="fStatusReason" maxlength="300">
+    <div class="acts" id="statusActions"></div>
+  </div>
+  <section id="correctionPanel" hidden>
+    <h3>管理員狀態更正 / Administrator correction</h3>
+    <p class="report-note">更正會保留原狀態、操作者與原因。恢復有效預約前會重新檢查容量。<br>Corrections retain the previous state, actor and reason. Capacity is checked before reopening a booking.</p>
+    <label for="correctionStatus">更正為 / Correct to</label>
+    <select id="correctionStatus"></select>
+    <label for="correctionReason">更正原因 / Correction reason</label>
+    <input id="correctionReason" type="text" maxlength="300">
+    <button id="saveCorrection" type="button">更正狀態 / Correct status</button>
+  </section>
+  <section id="bookingDetailPanel" hidden>
+    <h3>內部管理 / Internal management</h3>
+    <label for="fAssignee">負責人員 / Assigned staff</label>
+    <select id="fAssignee"><option value="">未指派 / Unassigned</option></select>
+    <label for="fInternalNote">內部備註 / Internal note（不對客人顯示 / Staff only）</label>
+    <textarea id="fInternalNote" maxlength="2000" rows="3"></textarea>
+    <label for="fAdministrationReason">變更原因 / Change reason</label>
+    <input id="fAdministrationReason" maxlength="300" type="text">
+    <button id="saveAdministration" type="button">儲存內部資料 / Save internal details</button>
+    <div id="manualNotificationPanel" hidden>
+      <h3>重送工作群組通知 / Resend staff-group notification</h3>
+      <label for="manualNotificationType">通知事件 / Event</label>
+      <select id="manualNotificationType"><option value="BOOKING_CONFIRMED">預約確認 / Booking confirmed</option><option value="BOOKING_UPDATED">預約修改 / Booking updated</option><option value="BOOKING_CANCELLED">預約取消 / Booking cancelled</option><option value="REMINDER">行前提醒 / Reminder</option></select>
+      <button id="previewManualNotification" type="button">預覽對象與內容 / Preview recipient and message</button>
+      <p id="manualNotificationRecipient" class="report-note"></p>
+      <pre id="manualNotificationText" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+      <button id="sendManualNotification" type="button" disabled>送至工作群組 / Send to staff group</button>
+    </div>
+    <h3>LINE 通知紀錄 / LINE notification history</h3>
+    <div id="bookingNotifications" class="report-note"></div>
+    <h3>異動歷程 / Change history</h3>
+    <div id="bookingHistory" class="report-note"></div>
+  </section>
   <div class="chk" id="mailChk"><input type="checkbox" id="fSendMail"><label for="fSendMail" style="margin:0">新增後寄出確認信</label></div>
   <div class="mmsg" id="mMsg"></div>
   <div class="acts">

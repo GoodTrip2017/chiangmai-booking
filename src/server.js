@@ -16,10 +16,15 @@ async function start() {
   }
   await migrate();
   const server = createApp().listen(Number(process.env.PORT || 3000), '0.0.0.0', () => console.log('預約系統已啟動。'));
+  const notificationTimer = setInterval(() => {
+    void require('./services/lineNotify').processPending().catch(err => console.error('LINE 通知處理失敗：', err.code || err.name));
+  }, 30000);
+  notificationTimer.unref();
   let closing = false;
   async function shutdown() {
     if (closing) return;
     closing = true;
+    clearInterval(notificationTimer);
     const timeout = setTimeout(() => process.exit(1), 15000);
     timeout.unref();
     server.close(async () => { await pool.end(); clearTimeout(timeout); process.exit(0); });
