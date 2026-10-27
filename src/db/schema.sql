@@ -248,6 +248,16 @@ CREATE TABLE IF NOT EXISTS availability_settings (
 );
 INSERT INTO availability_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
+CREATE TABLE IF NOT EXISTS availability_rule_events (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  rule_type TEXT NOT NULL,
+  target TEXT NOT NULL DEFAULT '',
+  before_data JSONB,
+  after_data JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_availability_rule_events_created ON availability_rule_events (created_at DESC,id DESC);
+
 CREATE TABLE IF NOT EXISTS availability_exceptions (
   date TEXT PRIMARY KEY,
   closed BOOLEAN NOT NULL DEFAULT false,
@@ -271,3 +281,11 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS capacity_at_booking INTEGER;
 -- Keep existing two-state rows intact; new lifecycle states are added without rewriting history.
 CREATE INDEX IF NOT EXISTS idx_bookings_capacity_active ON bookings (date, slot)
   WHERE status IN ('PENDING', 'CONFIRMED', 'CHECKED_IN', 'COMPLETED');
+
+INSERT INTO availability_rule_events(rule_type,target,before_data,after_data)
+SELECT 'INITIAL_BASELINE','',NULL,jsonb_build_object(
+  'settings',(SELECT to_jsonb(s) FROM availability_settings s WHERE s.id=1),
+  'exceptions',(SELECT COALESCE(jsonb_agg(to_jsonb(e)),'[]'::jsonb) FROM availability_exceptions e),
+  'overrides',(SELECT COALESCE(jsonb_agg(to_jsonb(o)),'[]'::jsonb) FROM slot_overrides o)
+)
+WHERE NOT EXISTS (SELECT 1 FROM availability_rule_events WHERE rule_type='INITIAL_BASELINE');

@@ -45,6 +45,7 @@ before(async () => {
   await pool.query(initialSql);
   await pool.query("INSERT INTO bookings(name,pax,date,slot) VALUES ('legacy',20,'2099-01-01','14:30-16:30')");
   await migrate(); await migrate();
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM availability_rule_events WHERE rule_type='INITIAL_BASELINE'")).rows[0].n, 1);
   const legacy = (await pool.query("SELECT id, pax FROM bookings WHERE name='legacy'")).rows[0];
   assert.equal(legacy.pax, 20);
   await booking.cancelBooking(legacy.id);
@@ -56,7 +57,7 @@ before(async () => {
   process.env.APP_ORIGIN = origin;
 });
 beforeEach(async () => {
-  await pool.query('TRUNCATE bookings, booking_events, notification_events, system_events, admin_sessions, staff_accounts, admin_login_limits, request_limits, availability_exceptions, slot_overrides, tracking_links, customers');
+  await pool.query('TRUNCATE bookings, booking_events, notification_events, system_events, availability_rule_events, admin_sessions, staff_accounts, admin_login_limits, request_limits, availability_exceptions, slot_overrides, tracking_links, customers');
   await pool.query("UPDATE availability_settings SET open_time='14:00',close_time='23:00',service_minutes=90,interval_minutes=90,max_pax=12,closed_weekdays=ARRAY[2],max_advance_days=NULL,cutoff_minutes=0,finish_before_close=true WHERE id=1");
 });
 after(async () => {
@@ -447,6 +448,11 @@ test('營業設定可產生重疊時段；關店異動先列出受影響預約�
   assert.equal((await pool.query('SELECT status FROM bookings WHERE id=$1', [first.id])).rows[0].status, 'CONFIRMED');
   const applied = await rules.upsertException({ date: form.date, closed: true, reason: 'staff holiday', acknowledgeAffected: true });
   assert.equal(applied.ok, true);
+  const ruleEvents = await pool.query('SELECT rule_type,target,before_data,after_data FROM availability_rule_events ORDER BY id');
+  assert.deepEqual(ruleEvents.rows.map(row => row.rule_type), ['SETTINGS','DATE_EXCEPTION']);
+  assert.equal(ruleEvents.rows[0].before_data.interval_minutes, 90);
+  assert.equal(ruleEvents.rows[0].after_data.interval_minutes, 60);
+  assert.equal(ruleEvents.rows[1].target, form.date);
   assert.equal((await request('/api/availability?date=' + form.date)).data.closed, true);
   await assert.rejects(booking.createManualBooking({ ...form, pax: 1 }), { status: 409 });
   assert.equal((await pool.query('SELECT status FROM bookings WHERE id=$1', [first.id])).rows[0].status, 'CONFIRMED');

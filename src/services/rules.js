@@ -120,7 +120,8 @@ async function updateSettings(input) {
   try {
     await client.query('BEGIN');
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['availability-settings']);
-    const previouslyAffected = new Set((await affectedBookings(client, await readSettings(client))).map(row => row.id));
+    const previousSettings = await readSettings(client);
+    const previouslyAffected = new Set((await affectedBookings(client, previousSettings)).map(row => row.id));
     const affected = (await affectedBookings(client, settings)).filter(row => !previouslyAffected.has(row.id));
     if (affected.length && input.acknowledgeAffected !== true) {
       await client.query('ROLLBACK');
@@ -133,6 +134,8 @@ async function updateSettings(input) {
       [settings.open_time, settings.close_time, settings.service_minutes, settings.interval_minutes,
         settings.max_pax, settings.closed_weekdays, settings.max_advance_days, settings.cutoff_minutes, settings.finish_before_close]
     );
+    await client.query('INSERT INTO availability_rule_events(rule_type,target,before_data,after_data) VALUES($1,$2,$3,$4)',
+      ['SETTINGS', '', previousSettings, rows[0]]);
     await client.query('COMMIT');
     return { ok: true, settings: rows[0], affected };
   } catch (err) { await client.query('ROLLBACK'); throw err; }
@@ -150,6 +153,7 @@ async function upsertException(input) {
   await client.query('BEGIN');
   await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`booking-date:${input.date}`]);
   const settings = await readSettings(client);
+  const before = (await client.query('SELECT * FROM availability_exceptions WHERE date=$1', [input.date])).rows[0] || null;
   const previous = new Set((await affectedBookings(client, settings)).filter(row => row.date === input.date).map(row => row.id));
   const { rows } = await client.query(
     `INSERT INTO availability_exceptions(date,closed,open_time,close_time,max_pax,reason)
@@ -162,6 +166,8 @@ async function upsertException(input) {
   if (affected.length && input.acknowledgeAffected !== true) {
     await client.query('ROLLBACK'); return { ok: false, affected };
   }
+  await client.query('INSERT INTO availability_rule_events(rule_type,target,before_data,after_data) VALUES($1,$2,$3,$4)',
+    ['DATE_EXCEPTION', input.date, before, rows[0]]);
   await client.query('COMMIT');
   return { ok: true, exception: rows[0], affected };
   } catch (err) { await client.query('ROLLBACK'); throw err; }
@@ -178,6 +184,7 @@ async function upsertSlotOverride(input) {
   await client.query('BEGIN');
   await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`booking-date:${input.date}`]);
   const settings = await readSettings(client);
+  const before = (await client.query('SELECT * FROM slot_overrides WHERE date=$1 AND slot=$2', [input.date, input.slot])).rows[0] || null;
   const previous = new Set((await affectedBookings(client, settings)).filter(row => row.date === input.date).map(row => row.id));
   const { rows } = await client.query(
     `INSERT INTO slot_overrides(date,slot,max_pax,blocked,reason) VALUES ($1,$2,$3,$4,$5)
@@ -189,6 +196,8 @@ async function upsertSlotOverride(input) {
   if (affected.length && input.acknowledgeAffected !== true) {
     await client.query('ROLLBACK'); return { ok: false, affected };
   }
+  await client.query('INSERT INTO availability_rule_events(rule_type,target,before_data,after_data) VALUES($1,$2,$3,$4)',
+    ['SLOT_OVERRIDE', input.date + '/' + input.slot, before, rows[0]]);
   await client.query('COMMIT');
   return { ok: true, override: rows[0], affected };
   } catch (err) { await client.query('ROLLBACK'); throw err; }
