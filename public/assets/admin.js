@@ -355,10 +355,11 @@
     $('availabilityPanel').hidden = mode !== 'availability';
     $('sourcesPanel').hidden = mode !== 'sources';
     $('customersPanel').hidden = mode !== 'customers';
+    $('notificationsPanel').hidden = mode !== 'notifications';
     $('scroll').style.display = mode === 'calendar' ? 'block' : 'none';
     $('loading').style.display = mode === 'calendar' ? 'block' : 'none';
     $('reportTitle').textContent = mode === 'analytics' ? '數據分析 / Analytics' : '營運總覽 / Overview';
-    if (visible) loadReport(); else if (mode === 'accounts') loadAccounts(); else if (mode === 'availability') loadAvailability(); else if (mode === 'sources') loadSourceOptions(); else if (mode === 'customers') loadCustomers(); else load();
+    if (visible) loadReport(); else if (mode === 'accounts') loadAccounts(); else if (mode === 'availability') loadAvailability(); else if (mode === 'sources') loadSourceOptions(); else if (mode === 'customers') loadCustomers(); else if (mode === 'notifications') loadNotifications(); else load();
   }
   function reportQuery() {
     var p = new URLSearchParams({ from: $('reportFrom').value, to: $('reportTo').value,
@@ -444,7 +445,8 @@
         else link.disabled = true;
         var idCell = document.createElement('td'); idCell.appendChild(link); tr.appendChild(idCell);
         [b.date + ' ' + b.slot, b.name || '—', b.actual_pax === null ? b.pax + ' / —' : b.pax + ' / ' + b.actual_pax,
-          statusLabel(b.status), (b.discovery_zh || '未知') + ' / ' + (b.discovery_en || 'Unknown')].forEach(function (value) {
+          statusLabel(b.status), (b.discovery_zh || '未知') + ' / ' + (b.discovery_en || 'Unknown'),
+          b.line_notification_status || '未排程 / Not scheduled', b.assigned_staff_name || '未指派 / Unassigned'].forEach(function (value) {
           var td = document.createElement('td'); td.textContent = value; tr.appendChild(td);
         });
         $('bookingRows').appendChild(tr);
@@ -467,6 +469,7 @@
   $('availabilityTab').addEventListener('click', function () { setReportMode('availability'); });
   $('sourcesTab').addEventListener('click', function () { setReportMode('sources'); });
   $('customersTab').addEventListener('click', function () { setReportMode('customers'); });
+  $('notificationsTab').addEventListener('click', function () { setReportMode('notifications'); });
   $('reportRefresh').addEventListener('click', loadReport);
   $('searchBookings').addEventListener('click', loadReportBookings);
   $('saveAdministration').addEventListener('click', function () {
@@ -500,6 +503,53 @@
       $('reportMessage').textContent = 'CSV 已下載 / CSV downloaded.';
     } catch (err) { $('reportMessage').textContent = err.message; }
   });
+  function loadNotifications() {
+    $('notificationMessage').textContent = '載入中 / Loading…';
+    api('/api/admin/notification-settings').then(function (data) {
+      $('notificationMessage').textContent = '';
+      $('notificationVariables').textContent = '可用變數 / Available variables: ' + data.variables.map(function (v) { return '{{' + v + '}}'; }).join('  ');
+      $('notificationSettings').replaceChildren();
+      var titles = { BOOKING_CONFIRMED: '預約確認 / Booking confirmed', BOOKING_UPDATED: '預約修改 / Booking updated',
+        BOOKING_CANCELLED: '預約取消 / Booking cancelled', REMINDER: '行前提醒 / Reminder' };
+      data.items.forEach(function (item) {
+        var card = document.createElement('div'); card.className = 'metric'; card.style.marginBottom = '18px';
+        var title = document.createElement('h3'); title.textContent = titles[item.event_type] || item.event_type; card.appendChild(title);
+        var toggleLabel = document.createElement('label'); toggleLabel.className = 'chk';
+        var toggle = document.createElement('input'); toggle.type = 'checkbox'; toggle.checked = item.enabled;
+        toggleLabel.append(toggle, document.createTextNode('啟用 / Enabled')); card.appendChild(toggleLabel);
+        function field(labelText, value) {
+          var label = document.createElement('label'); label.textContent = labelText; label.style.display = 'grid'; label.style.gap = '6px'; label.style.margin = '12px 0';
+          var box = document.createElement('textarea'); box.rows = 5; box.maxLength = 2000; box.value = value;
+          box.style.width = '100%'; box.style.background = 'var(--card2)'; box.style.color = 'var(--text)'; box.style.padding = '10px';
+          label.appendChild(box); card.appendChild(label); return box;
+        }
+        var zh = field('繁體中文範本 / Chinese template', item.template_zh);
+        var en = field('英文範本 / English template', item.template_en);
+        var minutes = document.createElement('input'); minutes.type = 'number'; minutes.min = 30; minutes.max = 10080;
+        minutes.value = item.reminder_minutes; minutes.style.width = '100px';
+        if (item.event_type === 'REMINDER') {
+          var lead = document.createElement('label'); lead.textContent = '提前分鐘 / Minutes before visit: '; lead.appendChild(minutes); card.appendChild(lead);
+        }
+        var preview = document.createElement('pre'); preview.style.whiteSpace = 'pre-wrap'; preview.style.overflowWrap = 'anywhere';
+        var previewButton = document.createElement('button'); previewButton.type = 'button'; previewButton.textContent = '預覽 / Preview';
+        previewButton.addEventListener('click', function () {
+          api('/api/admin/notification-settings/' + item.event_type + '/preview', { method: 'POST',
+            body: JSON.stringify({ templateZh: zh.value, templateEn: en.value }) })
+            .then(function (result) { preview.textContent = result.preview; })
+            .catch(function (err) { preview.textContent = err.message; });
+        });
+        var save = document.createElement('button'); save.type = 'button'; save.textContent = '儲存範本 / Save template';
+        save.addEventListener('click', function () {
+          save.disabled = true;
+          api('/api/admin/notification-settings/' + item.event_type, { method: 'PUT', body: JSON.stringify({
+            enabled: toggle.checked, templateZh: zh.value, templateEn: en.value, reminderMinutes: Number(minutes.value)
+          }) }).then(function () { $('notificationMessage').textContent = '通知設定已儲存 / Notification settings saved.'; save.disabled = false; })
+            .catch(function (err) { $('notificationMessage').textContent = err.message; save.disabled = false; });
+        });
+        card.append(previewButton, save, preview); $('notificationSettings').appendChild(card);
+      });
+    }).catch(function (err) { $('notificationMessage').textContent = err.message; });
+  }
   function loadAccounts() {
     api('/api/admin/accounts').then(function (data) {
       $('accountRows').replaceChildren();
@@ -738,6 +788,7 @@
     csrfToken = session.csrfToken; role = session.role;
     $('reportFrom').value = session.today; $('reportTo').value = session.today;
     $('accountsTab').hidden = role !== 'ADMIN';
+    $('notificationsTab').hidden = role !== 'ADMIN';
     $('exportBookings').hidden = role !== 'ADMIN';
     $('availabilityTab').hidden = role !== 'ADMIN';
     $('sourcesTab').hidden = role !== 'ADMIN';

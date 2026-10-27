@@ -116,6 +116,7 @@
   <button id="availabilityTab" type="button" hidden>營業與容量 / Availability</button>
   <button id="sourcesTab" type="button" hidden>來源與合作 / Sources</button>
   <button id="customersTab" type="button">顧客紀錄 / Customers</button>
+  <button id="notificationsTab" type="button" hidden>LINE 通知 / LINE Notifications</button>
   <button id="lineGroups" type="button">LINE 群組設定</button>
   <button class="primary" id="addNew" disabled>＋ 手動新增</button>
   <button id="logout">登出</button>
@@ -138,6 +139,14 @@
   <p id="customerMessage" role="status"></p>
   <div class="report-scroll"><table class="report-table"><thead><tr><th>Email</th><th>預約 / Bookings</th><th>到店 / Checked in</th><th>取消 / Cancelled</th><th>未到 / No-show</th><th>首次記錄 / First recorded</th><th>最近到店 / Last visit</th><th>LINE</th></tr></thead><tbody id="customerRows"></tbody></table></div>
   <div id="customerDetail" class="report-note"></div>
+</section>
+
+<section id="notificationsPanel" class="report" hidden>
+  <h2>LINE 工作群組通知 / LINE staff-group notifications</h2>
+  <p class="report-note">只有工作群組會收到訊息；LINE API 接受不代表實際送達或已讀。行前提醒在預約改期、取消、報到或標記未到時取消舊排程。<br>Messages go only to the staff group. API acceptance does not prove delivery or reading. Old reminders are cancelled when a booking changes or closes.</p>
+  <p id="notificationVariables" class="report-note"></p>
+  <p id="notificationMessage" role="status"></p>
+  <div id="notificationSettings"></div>
 </section>
 
 <section id="sourcesPanel" class="report" hidden>
@@ -244,7 +253,7 @@
   <div class="report-scroll"><table class="report-table"><thead><tr><th>UTM / Code</th><th>預約筆數 / Bookings</th><th>預約人數 / Guests</th><th>到店筆數 / Checked in</th></tr></thead><tbody id="trackingRows"></tbody></table></div>
   <h2>預約清單 / Bookings</h2>
   <div class="report-filters"><label>編號、姓名或 Email / Search<input id="reportSearch" type="search" maxlength="120"></label><button id="searchBookings" type="button">搜尋 / Search</button></div>
-  <div class="report-scroll"><table class="report-table"><thead><tr><th>編號 / ID</th><th>到店日期 / Visit date</th><th>預約人 / Contact</th><th>人數 / Guests</th><th>狀態 / Status</th><th>來源 / Source</th></tr></thead><tbody id="bookingRows"></tbody></table></div>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>編號 / ID</th><th>到店日期 / Visit date</th><th>預約人 / Contact</th><th>人數 / Guests</th><th>狀態 / Status</th><th>來源 / Source</th><th>LINE 通知 / LINE status</th><th>負責人 / Assignee</th></tr></thead><tbody id="bookingRows"></tbody></table></div>
   <p id="bookingCount" class="report-note"></p>
 </section>
 

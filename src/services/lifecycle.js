@@ -3,6 +3,7 @@ const { STATUS, CONFIG } = require('../config');
 const { userError } = require('../util/errors');
 const { getSlotDef, toUtcMs } = require('../util/datetime');
 const { capacityCheck } = require('./availability');
+const { enqueueGroup, cancelReminder, scheduleReminder, processPending } = require('./lineNotify');
 
 const TRANSITIONS = Object.freeze({
   [STATUS.PENDING]: [STATUS.CONFIRMED, STATUS.CHECKED_IN, STATUS.CANCELLED],
@@ -78,7 +79,15 @@ async function changeStatus(id, body = {}, actor = 'ADMIN') {
       [id, target, guests, reason]
     );
     await recordEvent(client, id, 'STATUS_CHANGED', before, updated[0], reason, actor);
+    if ([STATUS.CANCELLED, STATUS.NO_SHOW, STATUS.CHECKED_IN, STATUS.COMPLETED].includes(target)) await cancelReminder(client, id);
+    if (target === STATUS.CANCELLED) await enqueueGroup(client, updated[0], 'BOOKING_CANCELLED');
+    if (target === STATUS.CONFIRMED && before.status === STATUS.PENDING) {
+      await enqueueGroup(client, updated[0], 'BOOKING_CONFIRMED');
+      await cancelReminder(client, id);
+      await scheduleReminder(client, updated[0]);
+    }
     await client.query('COMMIT');
+    void processPending().catch(err => console.error('LINE 通知處理失敗：', err.code || err.name));
     return { ok: true, booking: updated[0] };
   } catch (err) { await client.query('ROLLBACK'); throw err; }
   finally { client.release(); }

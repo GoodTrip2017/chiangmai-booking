@@ -11,6 +11,7 @@ const rules = require('../services/rules');
 const tracking = require('../services/tracking');
 const QRCode = require('qrcode');
 const customers = require('../services/customers');
+const notificationPolicy = require('../services/notificationPolicy');
 
 const router = express.Router();
 const actorFor = req => ({ type: req.adminSession.role, id: req.adminSession.account_id || 'environment-admin' });
@@ -27,6 +28,24 @@ router.get('/line/groups', auth.requireRole('ADMIN'), async (req, res, next) => 
   } catch (err) { next(err); }
 });
 router.post('/logout', auth.logout);
+router.get('/notification-settings', auth.requireRole('ADMIN'), async (req, res, next) => {
+  try { res.json({ items: await notificationPolicy.listPolicies(), variables: notificationPolicy.VARIABLES }); }
+  catch (err) { next(err); }
+});
+router.put('/notification-settings/:eventType', auth.requireRole('ADMIN'), async (req, res, next) => {
+  try { res.json(await notificationPolicy.updatePolicy(req.params.eventType, req.body)); }
+  catch (err) { next(err); }
+});
+router.post('/notification-settings/:eventType/preview', auth.requireRole('ADMIN'), async (req, res, next) => {
+  try {
+    if (!notificationPolicy.EVENTS.includes(req.params.eventType)) throw require('../util/errors').userError('通知事件不正確 / Invalid event.');
+    const template_zh = notificationPolicy.validateTemplate(req.body?.templateZh);
+    const template_en = notificationPolicy.validateTemplate(req.body?.templateEn);
+    const sample = { id: 'SAMPLE-BOOKING', name: 'Sample Contact', date: '2026-10-27', slot: '14:00-15:30',
+      pax: 2, email: 'sample@example.invalid', line: '', note: '' };
+    res.json({ preview: notificationPolicy.preview({ template_zh, template_en }, sample) });
+  } catch (err) { next(err); }
+});
 
 router.get('/discovery-sources', async (req, res, next) => {
   try { res.json({ sources: await discovery.listSources(true) }); }

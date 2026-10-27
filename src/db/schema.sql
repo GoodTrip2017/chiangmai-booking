@@ -201,8 +201,24 @@ CREATE TABLE IF NOT EXISTS notification_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_notification_events_schedule ON notification_events (status, scheduled_at);
+CREATE INDEX IF NOT EXISTS idx_notification_events_booking ON notification_events (booking_id, id DESC);
 ALTER TABLE notification_events ADD COLUMN IF NOT EXISTS recipient_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE notification_events ADD COLUMN IF NOT EXISTS retry_key UUID NOT NULL DEFAULT gen_random_uuid();
+
+CREATE TABLE IF NOT EXISTS notification_settings (
+  event_type TEXT PRIMARY KEY,
+  enabled BOOLEAN NOT NULL DEFAULT true,
+  template_zh TEXT NOT NULL,
+  template_en TEXT NOT NULL,
+  reminder_minutes INTEGER NOT NULL DEFAULT 1440 CHECK (reminder_minutes BETWEEN 30 AND 10080),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO notification_settings (event_type,template_zh,template_en) VALUES
+  ('BOOKING_CONFIRMED',E'新預約已確認\n預約編號：{{booking_id}}\n預約人：{{name}}\n到店：{{date}} {{time}}（清邁時間）\n人數：{{guests}}\nEmail：{{email}}',E'New booking confirmed\nBooking ID: {{booking_id}}\nContact: {{name}}\nVisit: {{date}} {{time}} (Bangkok time)\nGuests: {{guests}}'),
+  ('BOOKING_UPDATED',E'預約已修改\n預約編號：{{booking_id}}\n預約人：{{name}}\n原時段：{{previous_date}} {{previous_time}}\n新時段：{{date}} {{time}}\n人數：{{guests}}',E'Booking updated\nBooking ID: {{booking_id}}\nContact: {{name}}\nPrevious: {{previous_date}} {{previous_time}}\nNew: {{date}} {{time}}\nGuests: {{guests}}'),
+  ('BOOKING_CANCELLED',E'預約已取消\n預約編號：{{booking_id}}\n預約人：{{name}}\n原訂到店：{{date}} {{time}}',E'Booking cancelled\nBooking ID: {{booking_id}}\nContact: {{name}}\nOriginal visit: {{date}} {{time}}'),
+  ('REMINDER',E'行前提醒：即將有預約到店\n預約編號：{{booking_id}}\n預約人：{{name}}\n到店：{{date}} {{time}}（清邁時間）\n人數：{{guests}}',E'Upcoming booking reminder\nBooking ID: {{booking_id}}\nContact: {{name}}\nVisit: {{date}} {{time}} (Bangkok time)\nGuests: {{guests}}')
+ON CONFLICT (event_type) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS availability_settings (
   id SMALLINT PRIMARY KEY CHECK (id = 1),

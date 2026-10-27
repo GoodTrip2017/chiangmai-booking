@@ -150,6 +150,43 @@ test('負責人及內部備註有版本檢查、權限與操作者歷程', async
   assert.equal(detail.data.history[0].event_type, 'ADMINISTRATION_UPDATED');
   assert.equal(detail.data.history[0].reason, payload.reason);
 });
+test('LINE 雙語範本、預覽權限與提醒排程取消', async () => {
+  const administrator = await login();
+  const settings = await request('/api/admin/notification-settings', administrator);
+  assert.equal(settings.status, 200);
+  assert.equal(settings.data.items.length, 4);
+  const originalReminder = settings.data.items.find(item => item.event_type === 'REMINDER');
+  assert.equal((await request('/api/admin/notification-settings/REMINDER/preview', {
+    ...administrator, method: 'POST', body: { templateZh: '您好 {{unknown}}', templateEn: 'Hello' },
+  })).status, 400);
+  const preview = await request('/api/admin/notification-settings/REMINDER/preview', {
+    ...administrator, method: 'POST', body: { templateZh: '提醒 {{name}}', templateEn: 'Reminder {{date}}' },
+  });
+  assert.equal(preview.status, 200);
+  assert.match(preview.data.preview, /Reminder 2026-10-27/);
+  const savedPolicy = await request('/api/admin/notification-settings/REMINDER', { ...administrator, method: 'PUT', body: {
+    enabled: true, templateZh: '提醒 {{name}}', templateEn: 'Reminder {{date}}', reminderMinutes: 1440,
+  } });
+  assert.equal(savedPolicy.status, 200);
+  assert.equal(savedPolicy.data.template_en, 'Reminder {{date}}');
+  const bookingRow = await booking.createManualBooking(form);
+  const saved = (await pool.query('SELECT * FROM bookings WHERE id=$1', [bookingRow.id])).rows[0];
+  const line = require('../src/services/lineNotify');
+  process.env.LINE_CHANNEL_ACCESS_TOKEN = 'integration-only'; process.env.LINE_GROUP_ID = 'group-integration-only';
+  try {
+    await line.scheduleReminder(pool, saved);
+    const reminders = await pool.query("SELECT status,scheduled_at FROM notification_events WHERE booking_id=$1 AND event_type='REMINDER'", [saved.id]);
+    assert.equal(reminders.rows.length, 1);
+    assert.equal(reminders.rows[0].status, 'QUEUED');
+    assert.equal(reminders.rows[0].scheduled_at.toISOString(), '2098-12-31T07:00:00.000Z');
+    await line.cancelReminder(pool, saved.id);
+    assert.equal((await pool.query("SELECT status FROM notification_events WHERE booking_id=$1 AND event_type='REMINDER'", [saved.id])).rows[0].status, 'SKIPPED');
+  } finally {
+    delete process.env.LINE_CHANNEL_ACCESS_TOKEN; delete process.env.LINE_GROUP_ID;
+    await pool.query('UPDATE notification_settings SET enabled=$1,template_zh=$2,template_en=$3,reminder_minutes=$4 WHERE event_type=$5',
+      [originalReminder.enabled, originalReminder.template_zh, originalReminder.template_en, originalReminder.reminder_minutes, 'REMINDER']);
+  }
+});
 test('工作階段逾時及密碼輪替使舊登入立即失效', async () => {
   let session = await login();
   await pool.query("UPDATE admin_sessions SET expires_at=now()-interval '1 second'");

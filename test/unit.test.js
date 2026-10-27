@@ -9,6 +9,7 @@ const mailer = require('../src/services/mailer');
 const { hashPassword } = require('../src/services/auth');
 const { pool } = require('../src/db');
 const { csvCell } = require('../src/services/reporting');
+const notificationPolicy = require('../src/services/notificationPolicy');
 const form = { name: '測試', pax: 2, date: '2099-01-01', slot: '14:00-15:30', firstTime: '否', email: 'test@example.invalid', referral: '網路搜尋' };
 
 after(() => pool.end());
@@ -18,6 +19,13 @@ test('CSV 個資欄位不會成為試算表公式', () => {
   }
   assert.equal(csvCell('正常,名字'), '"正常,名字"');
   assert.equal(csvCell('a"b'), '"a""b"');
+});
+test('LINE 範本只接受受控變數，預覽替入預約資料', () => {
+  assert.throws(() => notificationPolicy.validateTemplate('Hello {{password}}'), { status: 400 });
+  assert.throws(() => notificationPolicy.validateTemplate('Hello {{name'), { status: 400 });
+  const text = notificationPolicy.render('您好 {{name}}，{{date}} {{time}} 共 {{guests}} 人',
+    { id: 'A', name: '陳先生', date: '2026-10-27', slot: '14:00-15:30', pax: 2 });
+  assert.equal(text, '您好 陳先生，2026-10-27 14:00-15:30 共 2 人');
 });
 test('日期、清邁時區與保留時間', () => {
   assert.equal(dt.isClosedDay('2026-09-15'), true);

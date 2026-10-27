@@ -44,9 +44,12 @@ async function listBookings(query = {}, role = 'ADMIN') {
     `SELECT b.id,b.created_at,b.updated_at,b.revision,b.source,b.entry_source,b.name,b.pax,b.actual_pax,
       b.date,b.slot,b.email,b.line,b.status,b.referral,b.discovery_source_id,b.discovery_detail,
       b.note,b.internal_note,b.cancel_reason,b.no_show_note,b.mail_status,b.assigned_staff_id,
+      s.display_name AS assigned_staff_name,n.status AS line_notification_status,
       b.first_touch_source,b.first_touch_medium,b.first_touch_campaign,b.partner_code,b.campaign_code,
       d.label_zh AS discovery_zh,d.label_en AS discovery_en
      FROM bookings b LEFT JOIN discovery_sources d ON d.id=b.discovery_source_id
+     LEFT JOIN staff_accounts s ON s.id=b.assigned_staff_id
+     LEFT JOIN LATERAL (SELECT status FROM notification_events WHERE booking_id=b.id AND recipient_kind='LINE_GROUP' ORDER BY id DESC LIMIT 1) n ON true
      WHERE ${w.clause} ORDER BY b.date DESC,b.slot DESC,b.created_at DESC,b.id DESC
      LIMIT $${w.values.length + 1} OFFSET $${w.values.length + 2}`,
     [...w.values, pageSize, (page - 1) * pageSize]
@@ -55,6 +58,7 @@ async function listBookings(query = {}, role = 'ADMIN') {
   const items = deidentified ? rows.map(row => ({ id: row.id, created_at: row.created_at,
     date: row.date, slot: row.slot, status: row.status, pax: row.pax, actual_pax: row.actual_pax,
     entry_source: row.entry_source, discovery_source_id: row.discovery_source_id,
+    line_notification_status: row.line_notification_status,
     discovery_zh: row.discovery_zh, discovery_en: row.discovery_en })) : rows;
   return { items, total: total.rows[0].total, page, pageSize, filters: f };
 }

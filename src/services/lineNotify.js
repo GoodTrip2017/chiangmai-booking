@@ -4,6 +4,7 @@
  */
 const dt = require('../util/datetime');
 const { pool } = require('../db');
+const policy = require('./notificationPolicy');
 
 function isConfigured() {
   return !!(process.env.LINE_CHANNEL_ACCESS_TOKEN && process.env.LINE_GROUP_ID);
@@ -72,14 +73,37 @@ async function pushToGroup(text, recipient = process.env.LINE_GROUP_ID, retryKey
   }
 }
 
-async function enqueueGroup(client, booking, eventType, message) {
+async function enqueueGroup(client, booking, eventType, previous = null) {
+  const setting = await policy.getPolicy(client, eventType);
+  if (!setting.enabled) return;
   const recipient = process.env.LINE_GROUP_ID || '';
   const configured = isConfigured();
+  const rendered = policy.preview(setting, booking, typeof previous === 'object' ? previous : null);
+  const tooLong = rendered.length > 5000;
   await client.query(
     `INSERT INTO notification_events (booking_id,event_type,recipient_kind,recipient_id,idempotency_key,status,
       failure_reason,message_preview) VALUES ($1,$2,'LINE_GROUP',$3,$4,$5,$6,$7) ON CONFLICT (idempotency_key) DO NOTHING`,
     [booking.id, eventType, recipient, `line-group/${booking.id}/${booking.revision}/${eventType}`,
-      configured ? 'QUEUED' : 'FAILED', configured ? '' : 'NOT_CONFIGURED', message]
+      configured && !tooLong ? 'QUEUED' : 'FAILED', tooLong ? 'MESSAGE_TOO_LONG' : configured ? '' : 'NOT_CONFIGURED', rendered]
+  );
+}
+
+async function cancelReminder(client, bookingId) {
+  await client.query("UPDATE notification_events SET status='SKIPPED',failure_reason='BOOKING_CHANGED' WHERE booking_id=$1 AND event_type='REMINDER' AND status IN ('QUEUED','RETRY')", [bookingId]);
+}
+
+async function scheduleReminder(client, booking) {
+  const setting = await policy.getPolicy(client, 'REMINDER');
+  if (!setting.enabled || !isConfigured()) return;
+  const sendAt = new Date(dt.toUtcMs(booking.date, booking.slot.slice(0, 5)) - setting.reminder_minutes * 60000);
+  if (sendAt.getTime() <= Date.now()) return;
+  const text = policy.preview(setting, booking);
+  if (text.length > 5000) return;
+  await client.query(
+    `INSERT INTO notification_events (booking_id,event_type,recipient_kind,recipient_id,idempotency_key,status,
+      failure_reason,message_preview,scheduled_at) VALUES ($1,'REMINDER','LINE_GROUP',$2,$3,'QUEUED','',$4,$5)
+      ON CONFLICT (idempotency_key) DO NOTHING`,
+    [booking.id, process.env.LINE_GROUP_ID, `line-group/${booking.id}/${booking.revision}/REMINDER`, text, sendAt]
   );
 }
 
@@ -100,6 +124,16 @@ async function processPending(limit = 10) {
   for (let i = 0; i < limit; i++) {
     const item = await claimNext();
     if (!item) return;
+    if (item.event_type === 'REMINDER') {
+      const { rows } = await pool.query('SELECT status,revision FROM bookings WHERE id=$1', [item.booking_id]);
+      const current = rows[0];
+      const setting = await policy.getPolicy(pool, 'REMINDER');
+      if (!current || !['PENDING','CONFIRMED'].includes(current.status) ||
+          item.idempotency_key !== `line-group/${item.booking_id}/${current.revision}/REMINDER` || !setting.enabled) {
+        await pool.query("UPDATE notification_events SET status='SKIPPED',failure_reason='BOOKING_CHANGED' WHERE id=$1", [item.id]);
+        continue;
+      }
+    }
     const outcome = await pushToGroup(item.message_preview, item.recipient_id, item.retry_key);
     const withinRetryWindow = Date.now() - new Date(item.created_at).getTime() < 23 * 60 * 60 * 1000;
     const retry = !outcome.accepted && outcome.retryable && item.attempt_count < 6 && withinRetryWindow;
@@ -116,5 +150,5 @@ async function processPending(limit = 10) {
 
 module.exports = {
   buildBookingMessage, buildUpdateMessage, buildCancelMessage,
-  enqueueGroup, processPending, pushToGroup, isConfigured,
+  enqueueGroup, cancelReminder, scheduleReminder, processPending, pushToGroup, isConfigured,
 };

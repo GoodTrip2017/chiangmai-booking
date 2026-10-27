@@ -11,7 +11,7 @@ const dt = require('../util/datetime');
 const { capacityCheck } = require('./availability');
 const { consumeLimit } = require('./rateLimits');
 const { sendConfirmation } = require('./mailer');
-const { buildBookingMessage, buildUpdateMessage, buildCancelMessage, enqueueGroup, processPending } = require('./lineNotify');
+const { enqueueGroup, cancelReminder, scheduleReminder, processPending } = require('./lineNotify');
 const { resolveSource } = require('./discovery');
 const { recordEvent } = require('./lifecycle');
 const { resolveTracking } = require('./tracking');
@@ -132,7 +132,8 @@ async function insertBooking(data, source, requestId, actor) {
        STATUS.CONFIRMED, data.note, key, hash, check.state.maxPax, customerId]
     );
     await recordEvent(client, rows[0].id, 'CREATED', null, rows[0], '', actor || (source === 'WEB' ? 'CUSTOMER' : 'ADMIN'));
-    await enqueueGroup(client, rows[0], 'BOOKING_CONFIRMED', buildBookingMessage(rows[0]));
+    await enqueueGroup(client, rows[0], 'BOOKING_CONFIRMED');
+    await scheduleReminder(client, rows[0]);
     await client.query('COMMIT');
     return { booking: rows[0], replayed: false };
   } catch (err) {
@@ -229,7 +230,9 @@ async function updateBooking(payload, actor = 'ADMIN') {
     updated = result.rows[0];
     previous = booking;
     await recordEvent(client, id, booking.date !== data.date || booking.slot !== data.slot ? 'RESCHEDULED' : 'UPDATED', booking, updated, changeReason, actor);
-    await enqueueGroup(client, updated, 'BOOKING_UPDATED', buildUpdateMessage(updated, booking));
+    await cancelReminder(client, id);
+    await enqueueGroup(client, updated, 'BOOKING_UPDATED', booking);
+    await scheduleReminder(client, updated);
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -255,7 +258,8 @@ async function cancelBooking(id, payload = {}, actor = 'ADMIN') {
     await lockSlots(client, [[booking.date, booking.slot]]);
     const { rows: updated } = await client.query('UPDATE bookings SET status=$1, cancel_reason=$3, cancelled_at=now(), updated_at=now(), revision=revision+1 WHERE id=$2 RETURNING *', [STATUS.CANCELLED, id, reason]);
     await recordEvent(client, id, 'STATUS_CHANGED', booking, updated[0], reason, actor);
-    await enqueueGroup(client, updated[0], 'BOOKING_CANCELLED', buildCancelMessage(updated[0]));
+    await cancelReminder(client, id);
+    await enqueueGroup(client, updated[0], 'BOOKING_CANCELLED');
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
