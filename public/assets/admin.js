@@ -477,6 +477,7 @@
     if ($('reportDiscovery').value) p.set('discovery', $('reportDiscovery').value);
     if ($('reportSlot').value.trim()) p.set('slot', $('reportSlot').value.trim());
     if ($('reportTracking').value.trim()) p.set('trackingSource', $('reportTracking').value.trim());
+    if ($('reportAssignee').value) p.set('assignedStaffId', $('reportAssignee').value);
     if ($('reportFailed').checked) p.set('notificationFailed', 'true');
     return p;
   }
@@ -1100,6 +1101,13 @@
     $('customersTab').hidden = role === 'ANALYST';
     $('overviewTab').hidden = role === 'ANALYST';
     $('lineGroups').hidden = role !== 'ADMIN';
+    $('reportAssigneeWrap').hidden = role === 'ANALYST';
+    if (role !== 'ANALYST') api('/api/admin/assignees').then(function (data) {
+      $('reportAssignee').replaceChildren(new Option('全部 / All', ''));
+      data.items.forEach(function (person) {
+        $('reportAssignee').appendChild(new Option(person.display_name, person.id));
+      });
+    }).catch(function (err) { $('reportMessage').textContent = err.message; });
     ['prev','this','next','reload','calendarTab','addNew'].forEach(function (id) { if (role === 'ANALYST') $(id).hidden = true; });
     loadDiscoverySources();
     if (role === 'ANALYST') setReportMode('analytics'); else load();

@@ -158,6 +158,11 @@ test('負責人及內部備註有版本檢查、權限與操作者歷程', async
   assert.equal(detail.data.booking.internal_note, payload.internalNote);
   assert.equal(detail.data.history[0].event_type, 'ADMINISTRATION_UPDATED');
   assert.equal(detail.data.history[0].reason, payload.reason);
+  const assignedFilter = { from: form.date, assignedStaffId: staff.data.id };
+  assert.equal((await reporting.listBookings(assignedFilter)).total, 1);
+  assert.equal((await reporting.analytics(assignedFilter)).summary.bookings, 1);
+  assert.equal((await reporting.listBookings({ ...assignedFilter, assignedStaffId: crypto.randomUUID() })).total, 0);
+  await assert.rejects(reporting.listBookings({ ...assignedFilter, assignedStaffId: "' OR true --" }), { status: 400 });
 });
 test('LINE 雙語範本、預覽權限與提醒排程取消', async () => {
   const administrator = await login();

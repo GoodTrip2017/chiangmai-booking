@@ -21,9 +21,12 @@ function filters(query = {}) {
   if (typeof slot !== 'string' || (slot && !/^\d{2}:\d{2}-\d{2}:\d{2}$/.test(slot))) throw userError('時段篩選不正確 / Invalid slot filter.');
   const trackingSource = query.trackingSource || '';
   if (typeof trackingSource !== 'string' || trackingSource.length > 80 || /[\u0000-\u001f\u007f]/.test(trackingSource)) throw userError('追蹤來源篩選不正確 / Invalid tracking source.');
+  const assignedStaffId = query.assignedStaffId || '';
+  if (typeof assignedStaffId !== 'string' || (assignedStaffId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(assignedStaffId)))
+    throw userError('負責人員篩選不正確 / Invalid assignee filter.');
   const notificationFailed = query.notificationFailed === 'true';
   if (query.notificationFailed && !['true','false'].includes(query.notificationFailed)) throw userError('通知篩選不正確 / Invalid notification filter.');
-  return { from, to, basis, status, discovery, slot, trackingSource, notificationFailed, search: search.trim() };
+  return { from, to, basis, status, discovery, slot, trackingSource, assignedStaffId, notificationFailed, search: search.trim() };
 }
 
 function where(f, { search = false, deidentified = false } = {}) {
@@ -34,6 +37,7 @@ function where(f, { search = false, deidentified = false } = {}) {
   if (f.discovery) { values.push(f.discovery); parts.push(`b.discovery_source_id=$${values.length}`); }
   if (f.slot) { values.push(f.slot); parts.push(`b.slot=$${values.length}`); }
   if (f.trackingSource) { values.push(f.trackingSource); parts.push(`b.first_touch_source=$${values.length}`); }
+  if (f.assignedStaffId) { values.push(f.assignedStaffId); parts.push(`b.assigned_staff_id=$${values.length}::uuid`); }
   if (f.notificationFailed) parts.push("(SELECT n.status FROM notification_events n WHERE n.booking_id=b.id AND n.recipient_kind='LINE_GROUP' ORDER BY n.id DESC LIMIT 1)='FAILED'");
   if (search && f.search) {
     values.push('%' + f.search.replace(/[\\%_]/g, '\\$&') + '%');
@@ -334,6 +338,13 @@ async function exportBookingsCsv(query = {}) {
     ['匯出時間 / Exported at', new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Bangkok', year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23' }).format(new Date())],
     ['日期基準 / Date basis', f.basis === 'visit' ? '到店日期 / Visit date' : '建立日期 / Created date'],
     ['區間 / Range', f.from + ' – ' + f.to],
+    ['狀態 / Status filter',f.status || 'ALL'],
+    ['得知管道 / Discovery filter',f.discovery || 'ALL'],
+    ['追蹤來源 / Tracking source filter',f.trackingSource || 'ALL'],
+    ['時段 / Slot filter',f.slot || 'ALL'],
+    ['負責人員 ID / Assigned staff ID filter',f.assignedStaffId || 'ALL'],
+    ['LINE 失敗 / LINE failures only',f.notificationFailed ? 'YES' : 'NO'],
+    ['搜尋 / Search',f.search || 'ALL'],
     ['定義 / Definition','每一列代表一筆預約；實際到店人數未記錄時留空 / One row per booking; unknown actual guests remain blank.'],
     [],
     ['預約編號 / Booking ID','到店日期 / Visit Date','時段 / Time Slot','姓名 / Name','Email',
@@ -356,8 +367,11 @@ async function exportAnalyticsCsv(query = {}, role = 'ADMIN') {
     ['匯出時間 / Exported at',new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23' }).format(new Date())],
     ['日期基準 / Date basis',data.filters.basis === 'visit' ? '到店日期 / Visit date' : '建立日期 / Created date'],
     ['區間 / Range',data.filters.from + ' – ' + data.filters.to],
+    ['狀態 / Status filter',data.filters.status || 'ALL'],
     ['得知管道 / Discovery filter',data.filters.discovery || 'ALL'],
     ['追蹤來源 / Tracking source filter',data.filters.trackingSource || 'ALL'],
+    ['負責人員 ID / Assigned staff ID filter',data.filters.assignedStaffId || 'ALL'],
+    ['LINE 失敗 / LINE failures only',data.filters.notificationFailed ? 'YES' : 'NO'],
     ['時段 / Slot filter',data.filters.slot || 'ALL'],
     [],
     ['指標 / Metric','數值 / Value','定義 / Definition'],
