@@ -689,11 +689,11 @@ test('確認信附自助取消連結：客人可在到店前自行取消，寄�
     const created = await booking.submitBooking({ ...form });
     assert.equal(created.mailStatus, 'ACCEPTED');
     assert.equal(sent.length, 1);
-    const link = (sent[0].text.match(/https?:\/\/\S+\/cancel\.html\?booking=\S+/) || [])[0];
-    assert.ok(link, 'confirmation email must contain the cancel link');
+    const link = (sent[0].text.match(/https?:\/\/\S+\/cancel\.html#booking=\S+/) || [])[0];
+    assert.ok(link, 'confirmation email must contain the cancel link in the fragment');
     assert.ok(sent[0].html.includes(link.replace(/&/g, '&amp;')) || sent[0].html.includes(link));
-    const url = new URL(link);
-    const id = url.searchParams.get('booking'); const token = url.searchParams.get('token');
+    const fragment = new URLSearchParams(new URL(link).hash.slice(1));
+    const id = fragment.get('booking'); const token = fragment.get('token');
     assert.equal(id, created.summary.bookingId);
     assert.match(token, /^[0-9a-f]{32}$/);
     assert.equal((await request('/cancel.html')).status, 200);
@@ -739,4 +739,29 @@ test('確認信附自助取消連結：客人可在到店前自行取消，寄�
     const legacy = (await pool.query("SELECT cancel_token FROM bookings WHERE name='legacy'")).rows;
     for (const item of legacy) assert.match(item.cancel_token || '', /^[0-9a-f]{32}$/);
   } finally { global.fetch = previousFetch; delete process.env.RESEND_API_KEY; delete process.env.MAIL_FROM; }
+});
+test('後台 API 與稽核紀錄不含取消 token 與重放鍵；排序與編號的異常輸入回 400 而不是 500', async () => {
+  const administrator = await login();
+  const created = await booking.createManualBooking(form);
+  const detail = await request('/api/admin/bookings/' + created.id, administrator);
+  assert.equal(detail.status, 200);
+  for (const field of ['cancel_token', 'request_hash', 'request_key']) {
+    assert.ok(!(field in detail.data.booking), field + ' must not be returned');
+    for (const event of detail.data.history) {
+      assert.ok(!event.after_data || !(field in event.after_data), field + ' must not be in after_data');
+      assert.ok(!event.before_data || !(field in event.before_data), field + ' must not be in before_data');
+    }
+  }
+  const stored = await pool.query("SELECT after_data FROM booking_events WHERE booking_id=$1 AND event_type='CREATED'", [created.id]);
+  assert.ok(!('cancel_token' in stored.rows[0].after_data), 'audit row must not store the token');
+  assert.match((await pool.query('SELECT cancel_token FROM bookings WHERE id=$1', [created.id])).rows[0].cancel_token, /^[0-9a-f]{32}$/);
+  const status = await request('/api/admin/bookings/' + created.id + '/status', { ...administrator, method: 'POST', body: { status: 'CHECKED_IN', revision: 1, actualPax: 2 } });
+  assert.equal(status.status, 200);
+  assert.ok(!('cancel_token' in status.data.booking));
+  assert.equal((await request('/api/admin/bookings?from=' + form.date + '&sort=constructor', administrator)).status, 400);
+  assert.equal((await request('/api/admin/bookings?from=' + form.date + '&sort=__proto__', administrator)).status, 400);
+  assert.equal((await request('/api/admin/bookings?from=' + form.date + '&sort=visit_asc', administrator)).status, 200);
+  assert.equal((await request('/api/admin/bookings/not-a-uuid/notification-preview?eventType=REMINDER', administrator)).status, 400);
+  assert.equal((await request('/api/admin/bookings/not-a-uuid/resend-notification', { ...administrator, method: 'POST', body: { eventType: 'REMINDER', requestId: crypto.randomUUID() } })).status, 400);
+  assert.equal((await request('/api/admin/accounts/' + '-'.repeat(36), { ...administrator, method: 'PATCH', body: { active: false } })).status, 400);
 });

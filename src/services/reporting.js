@@ -3,6 +3,14 @@ const { STATUS } = require('../config');
 const dt = require('../util/datetime');
 const { userError } = require('../util/errors');
 const { getAvailability } = require('./availability');
+const { sanitizeBooking } = require('./bookingView');
+
+const SORT_ORDERS = Object.freeze({
+  visit_desc: 'b.date DESC,b.slot DESC,b.created_at DESC,b.id DESC',
+  visit_asc: 'b.date ASC,b.slot ASC,b.created_at ASC,b.id ASC',
+  created_desc: 'b.created_at DESC,b.id DESC',
+  created_asc: 'b.created_at ASC,b.id ASC',
+});
 
 function filters(query = {}) {
   const from = query.from || dt.todayStr();
@@ -63,10 +71,9 @@ async function listBookings(query = {}, role = 'ADMIN') {
   if (!Number.isSafeInteger(page) || page < 1 || page > 10000 || !Number.isSafeInteger(pageSize) || pageSize < 1) throw userError('分頁參數不正確 / Invalid pagination.');
   const deidentified = role === 'ANALYST';
   const sort = query.sort || 'visit_desc';
-  const order = { visit_desc: 'b.date DESC,b.slot DESC,b.created_at DESC,b.id DESC',
-    visit_asc: 'b.date ASC,b.slot ASC,b.created_at ASC,b.id ASC',
-    created_desc: 'b.created_at DESC,b.id DESC', created_asc: 'b.created_at ASC,b.id ASC' }[sort];
-  if (!order) throw userError('排序參數不正確 / Invalid sort order.');
+  // 只接受自有屬性，避免 constructor 之類的繼承屬性名被拼進 SQL。
+  if (typeof sort !== 'string' || !Object.hasOwn(SORT_ORDERS, sort)) throw userError('排序參數不正確 / Invalid sort order.');
+  const order = SORT_ORDERS[sort];
   const w = where(f, { search: true, deidentified });
   const { rows } = await pool.query(
     `SELECT b.id,b.created_at,b.updated_at,b.revision,b.source,b.entry_source,b.name,b.pax,b.actual_pax,
@@ -99,7 +106,12 @@ async function bookingDetail(id) {
     pool.query('SELECT id,event_type,recipient_kind,status,attempt_count,response_code,failure_reason,scheduled_at,attempted_at FROM notification_events WHERE booking_id=$1 ORDER BY id DESC LIMIT 100', [id]),
   ]);
   if (!booking.rows[0]) throw userError('找不到這筆預約 / Booking not found.', 404);
-  return { booking: booking.rows[0], history: history.rows, notifications: notifications.rows };
+  // 秘密欄位不出後台 API；舊的稽核列可能仍含這些欄位，輸出時一併剔除。
+  return {
+    booking: sanitizeBooking(booking.rows[0]),
+    history: history.rows.map(row => ({ ...row, before_data: sanitizeBooking(row.before_data), after_data: sanitizeBooking(row.after_data) })),
+    notifications: notifications.rows,
+  };
 }
 
 async function operationalOverview() {

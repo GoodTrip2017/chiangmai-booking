@@ -139,7 +139,7 @@ async function createAccount(input) {
   }
 }
 async function setAccountActive(id, active) {
-  if (!/^[0-9a-f-]{36}$/i.test(id) || typeof active !== 'boolean') throw userError('帳號資料不正確 / Invalid account.');
+  if (typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) || typeof active !== 'boolean') throw userError('帳號資料不正確 / Invalid account.');
   const { rows } = await pool.query('UPDATE staff_accounts SET active=$2,updated_at=now() WHERE id=$1 RETURNING id,username,display_name,role,active', [id, active]);
   if (!rows[0]) throw userError('找不到帳號 / Account not found.', 404);
   return rows[0];

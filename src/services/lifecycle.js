@@ -5,6 +5,7 @@ const { getSlotDef, toUtcMs } = require('../util/datetime');
 const { capacityCheck } = require('./availability');
 const { enqueueGroup, cancelReminder, scheduleReminder, processPending } = require('./lineNotify');
 const { notifyCancellation } = require('./customerMail');
+const { sanitizeBooking } = require('./bookingView');
 
 /** 舊的 13 人以上預約可以報到其原人數；新預約維持 12 人硬上限。 */
 function guestCeiling(booking) { return Math.max(CONFIG.MAX_PAX, booking.legacy_pax || 0); }
@@ -33,9 +34,10 @@ function clean(value, max = 300) {
 async function recordEvent(client, bookingId, eventType, before, after, reason = '', actor = 'ADMIN') {
   const actorType = typeof actor === 'string' ? actor : actor?.type || 'ADMIN';
   const actorId = typeof actor === 'string' ? '' : actor?.id || '';
+  // 稽核列不保存 token 與重放鍵；長效秘密不該落在歷程表裡。
   await client.query(
     'INSERT INTO booking_events (booking_id, event_type, actor_type, actor_id, reason, before_data, after_data) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-    [bookingId, eventType, actorType, actorId, reason, before, after]
+    [bookingId, eventType, actorType, actorId, reason, sanitizeBooking(before), sanitizeBooking(after)]
   );
 }
 
@@ -97,7 +99,7 @@ async function changeStatus(id, body = {}, actor = 'ADMIN') {
     void processPending().catch(err => console.error('LINE 通知處理失敗：', err.code || err.name));
     // 取消後寄客人取消通知；寄信結果不影響已完成的取消。
     const mailStatus = target === STATUS.CANCELLED ? await notifyCancellation(updated[0]) : undefined;
-    return { ok: true, booking: updated[0], ...(mailStatus ? { mailStatus } : {}) };
+    return { ok: true, booking: sanitizeBooking(updated[0]), ...(mailStatus ? { mailStatus } : {}) };
   } catch (err) { await client.query('ROLLBACK'); throw err; }
   finally { client.release(); }
 }
@@ -188,7 +190,7 @@ async function correctStatus(id, body = {}, actor = 'ADMIN') {
     }
     await client.query('COMMIT');
     void processPending().catch(err => console.error('LINE 通知處理失敗：', err.code || err.name));
-    return { ok: true, booking: updated[0] };
+    return { ok: true, booking: sanitizeBooking(updated[0]) };
   } catch (err) { await client.query('ROLLBACK'); throw err; }
   finally { client.release(); }
 }

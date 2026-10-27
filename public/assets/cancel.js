@@ -29,10 +29,15 @@
   $('langZh').addEventListener('click', function () { applyLanguage('zh'); });
   $('langEn').addEventListener('click', function () { applyLanguage('en'); });
 
-  // 連結裡的參數只讀一次，然後從網址列移除，避免被分享或留在歷史紀錄。
-  var params = new URLSearchParams(location.search);
-  var bookingId = params.get('booking') || '';
-  var token = params.get('token') || '';
+  // 連結參數放在 # 之後（不會送到伺服器或進入存取紀錄）；仍相容早期信件的 ? 形式。只讀一次，然後從網址列移除。
+  function readParams() {
+    var raw = location.hash && location.hash.length > 1 ? location.hash.slice(1) : String(location.search || '').replace(/^\?/, '');
+    var params = new URLSearchParams(raw);
+    return { bookingId: params.get('booking') || '', token: params.get('token') || '' };
+  }
+  var linkParams = readParams();
+  var bookingId = linkParams.bookingId;
+  var token = linkParams.token;
   try { history.replaceState(null, '', location.pathname); } catch (err) { /* ignore */ }
 
   function showStatus(text, kind) {
