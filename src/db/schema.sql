@@ -41,6 +41,19 @@ CREATE TABLE IF NOT EXISTS admin_sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_admin_sessions_expiry ON admin_sessions (expires_at);
 
+CREATE TABLE IF NOT EXISTS staff_accounts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  username TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('ADMIN','STAFF','ANALYST')),
+  password_hash TEXT NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE admin_sessions ADD COLUMN IF NOT EXISTS account_id UUID REFERENCES staff_accounts(id);
+ALTER TABLE admin_sessions ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'ADMIN';
+
 CREATE TABLE IF NOT EXISTS admin_login_limits (
   bucket TEXT PRIMARY KEY,
   attempts INTEGER NOT NULL,

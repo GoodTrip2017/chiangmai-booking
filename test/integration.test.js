@@ -55,7 +55,7 @@ before(async () => {
   origin = 'http://127.0.0.1:' + server.address().port;
   process.env.APP_ORIGIN = origin;
 });
-beforeEach(async () => { await pool.query('TRUNCATE bookings, booking_events, notification_events, admin_sessions, admin_login_limits, request_limits'); });
+beforeEach(async () => { await pool.query('TRUNCATE bookings, booking_events, notification_events, admin_sessions, staff_accounts, admin_login_limits, request_limits'); });
 after(async () => {
   if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
   await pool.end();
@@ -85,6 +85,40 @@ test('密碼登入、Cookie、CSRF、跨站拒絕與登出撤銷', async () => {
   assert.equal(created.status, 200);
   assert.equal((await request('/api/admin/logout', { ...session, method: 'POST' })).status, 200);
   assert.equal((await request('/api/admin/week', session)).status, 401);
+});
+test('門市與分析帳號在伺服器端分權；停用帳號立即使工作階段失效', async () => {
+  const administrator = await login();
+  const staffPassword = 'staff-password-123456789';
+  const analystPassword = 'analyst-password-123456789';
+  const staff = await request('/api/admin/accounts', { ...administrator, method: 'POST', body: {
+    username: 'frontdesk', displayName: 'Front Desk', role: 'STAFF', password: staffPassword,
+  } });
+  assert.equal(staff.status, 201);
+  const analyst = await request('/api/admin/accounts', { ...administrator, method: 'POST', body: {
+    username: 'reports', displayName: 'Reports', role: 'ANALYST', password: analystPassword,
+  } });
+  assert.equal(analyst.status, 201);
+  const staffLogin = await request('/api/admin/login', { method: 'POST', body: { username: 'frontdesk', password: staffPassword } });
+  assert.equal(staffLogin.status, 200);
+  const staffSession = { cookie: staffLogin.headers.get('set-cookie').split(';')[0], csrf: staffLogin.data.csrfToken };
+  assert.equal((await request('/api/admin/week', staffSession)).status, 200);
+  assert.equal((await request('/api/admin/accounts', staffSession)).status, 403);
+  assert.equal((await request('/api/admin/discovery-sources', { ...staffSession, method: 'POST', body: { labelZh: 'new', labelEn: 'new', sortOrder: 1 } })).status, 403);
+  const item = await booking.createManualBooking(form);
+  const analystLogin = await request('/api/admin/login', { method: 'POST', body: { username: 'reports', password: analystPassword } });
+  assert.equal(analystLogin.status, 200);
+  const analystSession = { cookie: analystLogin.headers.get('set-cookie').split(';')[0], csrf: analystLogin.data.csrfToken };
+  assert.equal((await request('/api/admin/week', analystSession)).status, 403);
+  assert.equal((await request('/api/admin/bookings/' + item.id, analystSession)).status, 403);
+  assert.equal((await request('/api/admin/bookings', { ...analystSession, method: 'POST', body: form })).status, 403);
+  const list = await request('/api/admin/bookings?from=' + form.date, analystSession);
+  assert.equal(list.status, 200);
+  assert.equal(list.data.items.length, 1);
+  assert.equal(list.data.items[0].email, undefined);
+  assert.equal(list.data.items[0].name, undefined);
+  assert.equal((await request('/api/admin/analytics?from=' + form.date, analystSession)).status, 200);
+  assert.equal((await request('/api/admin/accounts/' + analyst.data.id, { ...administrator, method: 'PATCH', body: { active: false } })).status, 200);
+  assert.equal((await request('/api/admin/analytics?from=' + form.date, analystSession)).status, 401);
 });
 test('工作階段逾時及密碼輪替使舊登入立即失效', async () => {
   let session = await login();

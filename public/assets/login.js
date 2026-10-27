@@ -2,6 +2,7 @@ document.getElementById('loginForm').addEventListener('submit', async function (
   event.preventDefault();
   const button = document.getElementById('loginButton');
   const password = document.getElementById('password');
+  const username = document.getElementById('username');
   const error = document.getElementById('error');
   if (button.disabled) return;
   button.disabled = true;
@@ -11,7 +12,7 @@ document.getElementById('loginForm').addEventListener('submit', async function (
     const response = await fetch('/api/admin/login', {
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: password.value }),
+      body: JSON.stringify({ username: username.value.trim(), password: password.value }),
     });
     password.value = '';
     const result = await response.json();

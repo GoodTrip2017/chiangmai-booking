@@ -33,8 +33,8 @@ async function hashPassword(password) {
   const key = await scrypt(password, salt, 64, SCRYPT_OPTIONS);
   return `scrypt:16384:8:5:${salt}:${key.toString('hex')}`;
 }
-async function checkPassword(password) {
-  const match = passwordHash().match(HASH_PATTERN);
+async function checkPassword(password, storedHash = passwordHash()) {
+  const match = storedHash.match(HASH_PATTERN);
   if (!match || typeof password !== 'string' || password.length < 16 || password.length > 256) return false;
   if (activeChecks >= 2) throw Object.assign(userError('登入忙碌中，請稍後再試。', 429), { retryAfter: 5 });
   activeChecks++;
@@ -60,13 +60,17 @@ function requireSameOrigin(req, res, next) {
 async function login(req, res, next) {
   try {
     await limitLogin(clientIp(req));
-    if (!await checkPassword(req.body?.password)) throw userError('密碼不正確。', 401);
+    const username = typeof req.body?.username === 'string' ? req.body.username.trim().toLowerCase() : '';
+    if (username && !/^[a-z0-9._-]{3,40}$/.test(username)) throw userError('帳號或密碼不正確 / Invalid credentials.', 401);
+    const account = username ? (await pool.query('SELECT * FROM staff_accounts WHERE username=$1 AND active=true', [username])).rows[0] : null;
+    const hash = username ? (account?.password_hash || passwordHash()) : passwordHash();
+    if (!await checkPassword(req.body?.password, hash) || (username && !account)) throw userError('帳號或密碼不正確 / Invalid credentials.', 401);
     const token = crypto.randomBytes(32).toString('hex');
     const csrfToken = crypto.randomBytes(32).toString('hex');
-    await pool.query('DELETE FROM admin_sessions WHERE expires_at <= now() OR credential_version <> $1', [digest(passwordHash())]);
+    await pool.query('DELETE FROM admin_sessions WHERE expires_at <= now()');
     await pool.query(
-      'INSERT INTO admin_sessions (token_hash, csrf_token, credential_version, expires_at) VALUES ($1, $2, $3, $4)',
-      [digest(token), csrfToken, digest(passwordHash()), new Date(Date.now() + SESSION_MS)]
+      'INSERT INTO admin_sessions (token_hash, csrf_token, credential_version, expires_at, account_id, role) VALUES ($1, $2, $3, $4, $5, $6)',
+      [digest(token), csrfToken, digest(hash), new Date(Date.now() + SESSION_MS), account?.id || null, account?.role || 'ADMIN']
     );
     // 登入時一定換發憑證，不沿用客戶端提供的 session。
     const old = readToken(req);
@@ -85,10 +89,17 @@ async function sessionFor(req) {
   const token = readToken(req);
   if (!token) return null;
   const { rows } = await pool.query(
-    'SELECT token_hash, csrf_token FROM admin_sessions WHERE token_hash = $1 AND expires_at > now() AND credential_version = $2',
-    [digest(token), digest(passwordHash())]
+    `SELECT s.token_hash,s.csrf_token,s.role,s.account_id,s.credential_version,
+      a.username,a.display_name,a.password_hash,a.active,a.role AS current_role
+     FROM admin_sessions s LEFT JOIN staff_accounts a ON a.id=s.account_id
+     WHERE s.token_hash=$1 AND s.expires_at>now()`,
+    [digest(token)]
   );
-  return rows[0] || null;
+  const session = rows[0];
+  if (!session) return null;
+  const currentHash = session.account_id ? (session.active ? session.password_hash : '') : passwordHash();
+  if (!currentHash || (session.account_id && session.role !== session.current_role)) return null;
+  return secureEqual(session.credential_version, digest(currentHash)) ? session : null;
 }
 async function requireAdmin(req, res, next) {
   try {
@@ -106,6 +117,33 @@ function requireCsrf(req, res, next) {
     next();
   });
 }
+function requireRole(...roles) {
+  return (req, res, next) => roles.includes(req.adminSession?.role)
+    ? next() : res.status(403).json({ error: '此帳號沒有操作權限 / Insufficient permissions.' });
+}
+async function createAccount(input) {
+  const username = typeof input?.username === 'string' ? input.username.trim().toLowerCase() : '';
+  const displayName = typeof input?.displayName === 'string' ? input.displayName.trim() : '';
+  if (!/^[a-z0-9._-]{3,40}$/.test(username) || !displayName || displayName.length > 80 || /[\u0000-\u001f\u007f]/.test(displayName)) throw userError('帳號或顯示名稱格式不正確 / Invalid account fields.');
+  if (!['ADMIN','STAFF','ANALYST'].includes(input.role)) throw userError('角色不正確 / Invalid role.');
+  const hash = await hashPassword(input.password);
+  try {
+    const { rows } = await pool.query(
+      'INSERT INTO staff_accounts(username,display_name,role,password_hash) VALUES ($1,$2,$3,$4) RETURNING id,username,display_name,role,active,created_at',
+      [username, displayName, input.role, hash]
+    );
+    return rows[0];
+  } catch (err) {
+    if (err.code === '23505') throw userError('帳號已存在 / Username already exists.', 409);
+    throw err;
+  }
+}
+async function setAccountActive(id, active) {
+  if (!/^[0-9a-f-]{36}$/i.test(id) || typeof active !== 'boolean') throw userError('帳號資料不正確 / Invalid account.');
+  const { rows } = await pool.query('UPDATE staff_accounts SET active=$2,updated_at=now() WHERE id=$1 RETURNING id,username,display_name,role,active', [id, active]);
+  if (!rows[0]) throw userError('找不到帳號 / Account not found.', 404);
+  return rows[0];
+}
 async function logout(req, res, next) {
   try {
     await pool.query('DELETE FROM admin_sessions WHERE token_hash = $1', [req.adminSession.token_hash]);
@@ -113,4 +151,4 @@ async function logout(req, res, next) {
     res.json({ ok: true });
   } catch (err) { next(err); }
 }
-module.exports = { assertAuthConfig, hashPassword, sessionFor, requireAdmin, requireCsrf, requireSameOrigin, login, logout };
+module.exports = { assertAuthConfig, hashPassword, sessionFor, requireAdmin, requireCsrf, requireRole, requireSameOrigin, login, logout, createAccount, setAccountActive };

@@ -1,5 +1,6 @@
 
   var csrfToken = '';
+  var role = 'ADMIN';
   var submission = null;
   var week = null;
   var monday = '';          // 空字串 = 讓後端用本週
@@ -300,12 +301,13 @@
   var reportMode = 'calendar';
   function setReportMode(mode) {
     reportMode = mode;
-    var visible = mode !== 'calendar';
+    var visible = mode === 'overview' || mode === 'analytics';
     $('reportPanel').hidden = !visible;
-    $('scroll').style.display = visible ? 'none' : 'block';
-    $('loading').style.display = visible ? 'none' : 'block';
+    $('accountsPanel').hidden = mode !== 'accounts';
+    $('scroll').style.display = mode === 'calendar' ? 'block' : 'none';
+    $('loading').style.display = mode === 'calendar' ? 'block' : 'none';
     $('reportTitle').textContent = mode === 'analytics' ? '數據分析 / Analytics' : '營運總覽 / Overview';
-    if (visible) loadReport(); else load();
+    if (visible) loadReport(); else if (mode === 'accounts') loadAccounts(); else load();
   }
   function reportQuery() {
     var p = new URLSearchParams({ from: $('reportFrom').value, to: $('reportTo').value, basis: $('reportBasis').value });
@@ -348,9 +350,10 @@
       data.items.forEach(function (b) {
         var tr = document.createElement('tr');
         var link = document.createElement('button'); link.type = 'button'; link.textContent = b.id.slice(0, 8);
-        link.addEventListener('click', function () { showBookingDetail(b.id); });
+        if (role !== 'ANALYST') link.addEventListener('click', function () { showBookingDetail(b.id); });
+        else link.disabled = true;
         var idCell = document.createElement('td'); idCell.appendChild(link); tr.appendChild(idCell);
-        [b.date + ' ' + b.slot, b.name, b.actual_pax === null ? b.pax + ' / —' : b.pax + ' / ' + b.actual_pax,
+        [b.date + ' ' + b.slot, b.name || '—', b.actual_pax === null ? b.pax + ' / —' : b.pax + ' / ' + b.actual_pax,
           statusLabel(b.status), (b.discovery_zh || '未知') + ' / ' + (b.discovery_en || 'Unknown')].forEach(function (value) {
           var td = document.createElement('td'); td.textContent = value; tr.appendChild(td);
         });
@@ -370,8 +373,37 @@
   $('overviewTab').addEventListener('click', function () { setReportMode('overview'); });
   $('calendarTab').addEventListener('click', function () { setReportMode('calendar'); });
   $('analyticsTab').addEventListener('click', function () { setReportMode('analytics'); });
+  $('accountsTab').addEventListener('click', function () { setReportMode('accounts'); });
   $('reportRefresh').addEventListener('click', loadReport);
   $('searchBookings').addEventListener('click', loadReportBookings);
+  function loadAccounts() {
+    api('/api/admin/accounts').then(function (data) {
+      $('accountRows').replaceChildren();
+      data.accounts.forEach(function (account) {
+        var tr = document.createElement('tr');
+        [account.username, account.display_name, account.role,
+          account.active ? '啟用 / Active' : '停用 / Disabled'].forEach(function (value) {
+          var td = document.createElement('td'); td.textContent = value; tr.appendChild(td);
+        });
+        var cell = document.createElement('td'); var button = document.createElement('button');
+        button.type = 'button'; button.textContent = account.active ? '停用 / Disable' : '啟用 / Enable';
+        button.addEventListener('click', function () {
+          api('/api/admin/accounts/' + encodeURIComponent(account.id), { method: 'PATCH', body: JSON.stringify({ active: !account.active }) })
+            .then(function () { loadAccounts(); }).catch(function (err) { $('accountsMessage').textContent = err.message; });
+        });
+        cell.appendChild(button); tr.appendChild(cell); $('accountRows').appendChild(tr);
+      });
+    }).catch(function (err) { $('accountsMessage').textContent = err.message; });
+  }
+  $('createAccount').addEventListener('click', function () {
+    var password = $('newPassword').value;
+    if (password.length < 16) { $('accountsMessage').textContent = '密碼至少 16 字元 / Password must have at least 16 characters.'; return; }
+    var body = { username: $('newUsername').value.trim(), displayName: $('newDisplayName').value.trim(), role: $('newRole').value, password: password };
+    $('newPassword').value = '';
+    api('/api/admin/accounts', { method: 'POST', body: JSON.stringify(body) })
+      .then(function () { $('accountsMessage').textContent = '帳號已建立 / Account created.'; loadAccounts(); })
+      .catch(function (err) { $('accountsMessage').textContent = err.message; });
+  });
   function loadLineGroups() {
     $('lineStatus').textContent = '讀取中…';
     api('/api/admin/line/groups').then(function (data) {
@@ -421,5 +453,12 @@
       });
     }).catch(function (err) { console.error(err.message); });
   }
-  api('/api/admin/session').then(function (session) { csrfToken = session.csrfToken; loadDiscoverySources(); load(); })
+  api('/api/admin/session').then(function (session) {
+    csrfToken = session.csrfToken; role = session.role;
+    $('reportFrom').value = session.today; $('reportTo').value = session.today;
+    $('accountsTab').hidden = role !== 'ADMIN';
+    $('lineGroups').hidden = role !== 'ADMIN';
+    ['prev','this','next','reload','calendarTab','addNew'].forEach(function (id) { if (role === 'ANALYST') $(id).hidden = true; });
+    if (role === 'ANALYST') setReportMode('analytics'); else { loadDiscoverySources(); load(); }
+  })
     .catch(function (err) { $('loading').textContent = err.message; });

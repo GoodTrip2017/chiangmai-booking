@@ -108,6 +108,7 @@
   <button id="overviewTab" type="button">營運總覽 / Overview</button>
   <button id="calendarTab" type="button">預約日曆 / Calendar</button>
   <button id="analyticsTab" type="button">數據分析 / Analytics</button>
+  <button id="accountsTab" type="button" hidden>人員權限 / Accounts</button>
   <button id="lineGroups" type="button">LINE 群組設定</button>
   <button class="primary" id="addNew" disabled>＋ 手動新增</button>
   <button id="logout">登出</button>
@@ -121,6 +122,20 @@
     <button id="lineRefresh" type="button">重新讀取群組</button>
     <div id="lineGroupList"></div>
   </div>
+</section>
+
+<section id="accountsPanel" class="report" hidden>
+  <h2>人員權限 / Staff accounts</h2>
+  <p class="report-note">現有管理員密碼仍可用留空帳號的方式登入。新增帳號須使用至少 16 字元密碼。<br>The existing administrator password remains available with a blank username. New accounts need a password of at least 16 characters.</p>
+  <div class="report-filters">
+    <label>帳號 / Username<input id="newUsername" type="text" maxlength="40" autocomplete="off"></label>
+    <label>顯示名稱 / Display name<input id="newDisplayName" type="text" maxlength="80"></label>
+    <label>角色 / Role<select id="newRole"><option value="STAFF">門市人員 / Staff</option><option value="ANALYST">唯讀分析 / Analyst</option><option value="ADMIN">管理員 / Administrator</option></select></label>
+    <label>密碼 / Password<input id="newPassword" type="password" minlength="16" maxlength="256" autocomplete="new-password"></label>
+    <button id="createAccount" type="button">新增帳號 / Create account</button>
+  </div>
+  <p id="accountsMessage" role="status"></p>
+  <div class="report-scroll"><table class="report-table"><thead><tr><th>帳號 / Username</th><th>名稱 / Name</th><th>角色 / Role</th><th>狀態 / Status</th><th>操作 / Action</th></tr></thead><tbody id="accountRows"></tbody></table></div>
 </section>
 
 <section id="reportPanel" class="report" hidden>

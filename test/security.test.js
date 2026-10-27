@@ -73,7 +73,7 @@ before(async () => {
   await restartApp();
 });
 beforeEach(async () => {
-  await pool.query('TRUNCATE bookings, booking_events, notification_events, admin_sessions, admin_login_limits');
+  await pool.query('TRUNCATE bookings, booking_events, notification_events, admin_sessions, staff_accounts, admin_login_limits');
   await pool.query('TRUNCATE line_group_candidates');
   if ((await pool.query("SELECT to_regclass('request_limits') AS table_name")).rows[0].table_name) await pool.query('TRUNCATE request_limits');
 });

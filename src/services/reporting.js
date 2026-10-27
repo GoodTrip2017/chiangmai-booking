@@ -19,7 +19,7 @@ function filters(query = {}) {
   return { from, to, basis, status, discovery, search: search.trim() };
 }
 
-function where(f, { search = false } = {}) {
+function where(f, { search = false, deidentified = false } = {}) {
   const dateExpr = f.basis === 'created' ? "(b.created_at AT TIME ZONE 'Asia/Bangkok')::date" : 'b.date::date';
   const values = [f.from, f.to];
   const parts = [`${dateExpr} BETWEEN $1::date AND $2::date`];
@@ -27,17 +27,19 @@ function where(f, { search = false } = {}) {
   if (f.discovery) { values.push(f.discovery); parts.push(`b.discovery_source_id=$${values.length}`); }
   if (search && f.search) {
     values.push('%' + f.search.replace(/[\\%_]/g, '\\$&') + '%');
-    parts.push(`(b.id::text ILIKE $${values.length} OR b.name ILIKE $${values.length} OR b.email ILIKE $${values.length})`);
+    parts.push(deidentified ? `b.id::text ILIKE $${values.length}` :
+      `(b.id::text ILIKE $${values.length} OR b.name ILIKE $${values.length} OR b.email ILIKE $${values.length})`);
   }
   return { clause: parts.join(' AND '), values };
 }
 
-async function listBookings(query = {}) {
+async function listBookings(query = {}, role = 'ADMIN') {
   const f = filters(query);
   const page = Number(query.page || 1);
   const pageSize = Math.min(100, Number(query.pageSize || 25));
   if (!Number.isSafeInteger(page) || page < 1 || page > 10000 || !Number.isSafeInteger(pageSize) || pageSize < 1) throw userError('分頁參數不正確 / Invalid pagination.');
-  const w = where(f, { search: true });
+  const deidentified = role === 'ANALYST';
+  const w = where(f, { search: true, deidentified });
   const { rows } = await pool.query(
     `SELECT b.id,b.created_at,b.updated_at,b.revision,b.source,b.entry_source,b.name,b.pax,b.actual_pax,
       b.date,b.slot,b.email,b.line,b.status,b.referral,b.discovery_source_id,b.discovery_detail,
@@ -49,7 +51,11 @@ async function listBookings(query = {}) {
     [...w.values, pageSize, (page - 1) * pageSize]
   );
   const total = await pool.query(`SELECT count(*)::int AS total FROM bookings b WHERE ${w.clause}`, w.values);
-  return { items: rows, total: total.rows[0].total, page, pageSize, filters: f };
+  const items = deidentified ? rows.map(row => ({ id: row.id, created_at: row.created_at,
+    date: row.date, slot: row.slot, status: row.status, pax: row.pax, actual_pax: row.actual_pax,
+    entry_source: row.entry_source, discovery_source_id: row.discovery_source_id,
+    discovery_zh: row.discovery_zh, discovery_en: row.discovery_en })) : rows;
+  return { items, total: total.rows[0].total, page, pageSize, filters: f };
 }
 
 async function bookingDetail(id) {
