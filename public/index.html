@@ -6,12 +6,12 @@
 <title>GoodTrip x Herb Uncle 清邁尼曼店 — 預約飛行體驗</title>
 <style>
   :root {
-    --bg: #12100e;
-    --card: #1c1a17;
-    --card-2: #24211d;
-    --line: #37322b;
-    --text: #f3efe7;
-    --muted: #a79f92;
+    --bg: #1c1b18;
+    --card: #25241f;
+    --card-2: #2d2b26;
+    --line: #403d36;
+    --text: #f2eee6;
+    --muted: #b8b2a7;
     --accent: #7fc04a;
     --accent-dark: #5d9a30;
     --warn: #e0a33c;
@@ -26,10 +26,29 @@
     line-height: 1.7;
     -webkit-text-size-adjust: 100%;
   }
-  .wrap { max-width: 620px; margin: 0 auto; padding: 24px 18px 60px; }
-  .logo { display: block; margin: 4px auto 18px; width: min(240px, 60%); }
-  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: .5px; }
-  .sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+  .wrap { max-width: 668px; margin: 0 auto; padding: 36px 24px 64px; }
+  .hero { padding: 0 0 36px; }
+  .hero .brand { margin: 0 0 16px; color: #c6aa78; font-size: 12px; font-weight: 600; letter-spacing: .14em; line-height: 1.4; }
+  .hero h1 { margin: 0 0 16px; font-size: clamp(28px, 7vw, 32px); font-weight: 600; letter-spacing: .02em; line-height: 1.3; }
+  .hero .lede { max-width: 36em; margin: 0; color: var(--muted); font-size: 16px; font-weight: 400; line-height: 1.75; }
+  .intro { margin-bottom: 40px; }
+  .intro-section { border-top: 1px solid var(--line); padding-top: 24px; }
+  .intro-section + .intro-section { margin-top: 36px; }
+  .intro-section h2 { margin: 0 0 14px; font-size: 18px; font-weight: 600; line-height: 1.5; }
+  .service-list { list-style: none; padding: 0; margin: 0; }
+  .service-list li { padding: 11px 0; border-bottom: 1px solid var(--line); font-size: 16px; font-weight: 400; }
+  .service-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+  .details { margin: 0; }
+  .info-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 18px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 16px; }
+  .info-row dt { color: var(--muted); }
+  .info-row dd { margin: 0; text-align: right; color: var(--text); }
+  .local-time { margin: 20px 0 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
+  .change-note { margin: 10px 0 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
+  .change-note a { color: #c6aa78; text-decoration-color: #857153; text-underline-offset: 3px; }
+  @media (max-width: 480px) {
+    .info-row { grid-template-columns: 1fr; gap: 2px; }
+    .info-row dd { text-align: left; }
+  }
   .card {
     background: var(--card);
     border: 1px solid var(--line);
@@ -37,9 +56,6 @@
     padding: 18px;
     margin-bottom: 16px;
   }
-  .intro { font-size: 14.5px; }
-  .intro ul { list-style: none; padding: 0; margin: 10px 0; }
-  .intro li { margin: 4px 0; }
   .notice { color: var(--warn); font-size: 13.5px; }
   label { display: block; font-size: 14px; margin: 16px 0 6px; font-weight: 600; }
   label .req { color: var(--accent); }
@@ -96,25 +112,35 @@
 </head>
 <body>
 <div class="wrap">
-  <img class="logo" src="/logo.png" alt="GoodTrip x Herb Uncle 清邁尼曼店">
-  <h1>GoodTrip x Herb Uncle 清邁尼曼店</h1>
-  <p class="sub">頂級飛行體驗 · 線上預約</p>
+  <header class="hero">
+    <p class="brand">HERB UNCLE × GOODTRIP</p>
+    <h1>預約到店</h1>
+    <p class="lede">歡迎預約服務時段。到店前，請先查看以下服務內容與預約資訊。</p>
+  </header>
 
-  <div class="card intro">
-    <p style="margin-top:0">Hello🙏</p>
-    <p>歡迎預約服務時段，體驗 Herb Uncle x GoodTrip 帶來的頂級草本與精品器具，感受舒適滿足的飛行！</p>
-    <ul>
-      <li>✅ 店內草本介紹</li>
-      <li>✅ 飛行基本知識</li>
-      <li>✅ 精緻飛行體驗</li>
-      <li>✅ 隨行器具租借</li>
-    </ul>
-    <p class="notice">
-      預約時間以清邁本地時間為主（GMT+7）<br>
-      每週二固定公休｜營業時間：14:00 - 23:00<br>
-      預約每段 90 分鐘，自 14:00 開始<br>
-      每個時段合計最多接待 12 人<br>其餘公休時間另於 Google Maps 和 IG 公告
-    </p>
+  <div class="intro">
+    <section class="intro-section" aria-labelledby="services-title">
+      <h2 id="services-title">服務內容</h2>
+      <ul class="service-list">
+        <li>店內草本介紹</li>
+        <li>飛行基本知識</li>
+        <li>精緻飛行體驗</li>
+        <li>隨行器具租借</li>
+      </ul>
+    </section>
+
+    <section class="intro-section" aria-labelledby="visit-title">
+      <h2 id="visit-title">到店與預約資訊</h2>
+      <dl class="details">
+        <div class="info-row"><dt>營業時間</dt><dd>14:00–23:00</dd></div>
+        <div class="info-row"><dt>固定公休</dt><dd>每週二</dd></div>
+        <div class="info-row"><dt>每段預約</dt><dd>90 分鐘</dd></div>
+        <div class="info-row"><dt>預約起始時間</dt><dd>14:00</dd></div>
+        <div class="info-row"><dt>每時段接待上限</dt><dd>同一時段合計最多 12 人</dd></div>
+      </dl>
+      <p class="local-time">所有預約時段均以清邁當地時間為準（GMT+7）。</p>
+      <p class="change-note">其他公休及臨時異動，請見 <a href="https://www.google.com/maps/search/?api=1&amp;query=GoodTrip+x+Herb+Uncle+Cannabis+CNX+Chiang+Mai" target="_blank" rel="noopener noreferrer">Google Maps</a> 或 Instagram 公告。</p>
+    </section>
   </div>
 
   <div id="formCard" class="card">
