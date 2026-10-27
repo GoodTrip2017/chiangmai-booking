@@ -15,6 +15,13 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/** 自助取消連結；只有在設定正式網址且預約有 token 時才附上。 */
+function cancelUrl(booking) {
+  const origin = process.env.APP_ORIGIN;
+  if (!origin || !booking.cancel_token) return '';
+  return `${origin}/cancel.html?booking=${encodeURIComponent(booking.id)}&token=${encodeURIComponent(booking.cancel_token)}`;
+}
+
 function mailSubject(booking) {
   return `【${CONFIG.SENDER_NAME}】預約確認 / Booking confirmation — ` +
     `${dt.formatDateZh(booking.date)} ${dt.formatTimeZh(dt.getSlotDef(booking.slot).start)}`;
@@ -56,6 +63,11 @@ function buildConfirmationText(booking) {
     `3. 聯繫方式： 如行程有變動，或交通上的延誤，歡迎隨時透過 LINE (${CONFIG.LINE_URL}) ` +
       '與我們聯絡，確認是否能調整。',
     `   If your plans change, contact us on LINE (${CONFIG.LINE_URL}) to ask about available alternatives.`,
+    ...(cancelUrl(booking) ? [
+      '',
+      `4. 取消預約： 若確定無法前來，可在預約時間開始前點下列連結自行取消：${cancelUrl(booking)}`,
+      `   To cancel before your visit starts, use this link: ${cancelUrl(booking)}`,
+    ] : []),
     '',
     '期待在清邁與您見面。 / We look forward to welcoming you in Chiang Mai.',
     '',
@@ -93,6 +105,9 @@ function buildConfirmationHtml(booking) {
           `可能需要重新候位。 / Please arrive by ${deadlineEn} (Chiang Mai time). If delayed, contact staff on LINE; late arrivals depend on availability.</li>` +
         '<li style="margin:8px 0"><strong>聯繫方式：</strong> 如行程有變動，或交通上的延誤，' +
           `歡迎隨時透過 <a href="${CONFIG.LINE_URL}">LINE</a> 與我們聯絡，確認是否能調整。 / Contact us on LINE if your plans change.</li>` +
+        (cancelUrl(booking)
+          ? `<li style="margin:8px 0"><strong>取消預約 / Cancel:</strong> 若確定無法前來，可在預約時間開始前 <a href="${escapeHtml(cancelUrl(booking))}">點此自行取消</a>。 / If you cannot make it, <a href="${escapeHtml(cancelUrl(booking))}">cancel here</a> before your visit starts.</li>`
+          : '') +
       '</ol>' +
       '<p>期待在清邁與您見面。 / We look forward to welcoming you in Chiang Mai.</p>' +
       `<p style="margin-top:20px">${escapeHtml(CONFIG.SENDER_NAME)} 敬上</p>` +
@@ -177,4 +192,4 @@ async function sendCancellation(booking, requestKey) {
   });
 }
 module.exports = { sendConfirmation, sendCancellation, isConfigured, buildConfirmationHtml, buildConfirmationText,
-  buildCancellationText, buildCancellationHtml, cancellationSubject };
+  buildCancellationText, buildCancellationHtml, cancellationSubject, cancelUrl };

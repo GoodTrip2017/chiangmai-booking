@@ -1,8 +1,8 @@
 /** 前台 API */
 const express = require('express');
-const { limitBooking, limitAvailability } = require('../services/rateLimits');
+const { limitBooking, limitAvailability, limitCancellation } = require('../services/rateLimits');
 const { getAvailability } = require('../services/availability');
-const { submitBooking } = require('../services/booking');
+const { submitBooking, previewSelfCancellation, cancelBySelf } = require('../services/booking');
 const { CONFIG } = require('../config');
 const dt = require('../util/datetime');
 const discovery = require('../services/discovery');
@@ -42,6 +42,14 @@ router.post('/bookings', limitBooking, async (req, res, next) => {
   try {
     res.json(await submitBooking(req.body));
   } catch (err) { next(err); }
+});
+
+/** 客人自助取消：token 走 JSON body，不放在 API 的網址裡。找不到或 token 不符一律 404。 */
+router.post('/bookings/:id/cancellation/preview', limitCancellation, async (req, res, next) => {
+  try { res.json(await previewSelfCancellation(req.params.id, req.body?.token)); } catch (err) { next(err); }
+});
+router.post('/bookings/:id/cancellation', limitCancellation, async (req, res, next) => {
+  try { res.json(await cancelBySelf(req.params.id, req.body?.token)); } catch (err) { next(err); }
 });
 
 module.exports = router;

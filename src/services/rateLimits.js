@@ -40,4 +40,11 @@ async function limitAvailability(req, res, next) {
     next();
   } catch (err) { next(err); }
 }
-module.exports = { consumeLimit, ipDigest, limitBooking, limitAvailability };
+/** 自助取消連結：token 本身不可猜，但仍限制同一 IP 每分鐘 20 次。 */
+async function limitCancellation(req, res, next) {
+  try {
+    await consumeLimit(`cancel-minute:${ipDigest(clientIp(req))}`, 20, 60000, '操作太頻繁，請稍候再試 / Too many requests; try again shortly.');
+    next();
+  } catch (err) { next(err); }
+}
+module.exports = { consumeLimit, ipDigest, limitBooking, limitAvailability, limitCancellation };

@@ -126,12 +126,12 @@ async function insertBooking(data, source, requestId, actor) {
       `INSERT INTO bookings (source, name, pax, date, slot, first_time, line, email, referral,
         discovery_source_id, discovery_detail, entry_source, first_touch_source, first_touch_medium,
         first_touch_campaign, partner_code, campaign_code, status, note, request_key, request_hash,
-        confirmed_at, capacity_at_booking, customer_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,now(),$22,$23) RETURNING *`,
+        confirmed_at, capacity_at_booking, customer_id, cancel_token)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,now(),$22,$23,$24) RETURNING *`,
       [source, data.name, data.pax, data.date, data.slot, data.firstTime, data.line,
        data.email, data.referral || discovery.label, discovery.id, data.discoveryDetail, source,
        data.firstTouchSource, data.firstTouchMedium, data.firstTouchCampaign, tracking.partnerCode, tracking.campaignCode,
-       STATUS.CONFIRMED, data.note, key, hash, check.state.maxPax, customerId]
+       STATUS.CONFIRMED, data.note, key, hash, check.state.maxPax, customerId, crypto.randomBytes(16).toString('hex')]
     );
     await recordEvent(client, rows[0].id, 'CREATED', null, rows[0], '', actor || (source === 'WEB' ? 'CUSTOMER' : 'ADMIN'));
     // 補登已開始或已過的時段（店員事後記錄）不推播「新預約已確認」。
@@ -280,6 +280,66 @@ async function cancelBooking(id, payload = {}, actor = 'ADMIN') {
   const mailStatus = await notifyCancellation(cancelled);
   return { ok: true, mailStatus };
 }
+// ---- 客人自助取消（確認信連結）
+const SELF_CANCEL_REASON = '客人透過確認信連結自行取消 / Cancelled by the customer via the email link';
+const LINK_INVALID = '找不到這筆預約或連結已失效 / Booking not found or the link is no longer valid.';
+function validToken(value) {
+  if (typeof value !== 'string' || !/^[0-9a-f]{32}$/.test(value)) throw userError(LINK_INVALID, 404);
+  return value;
+}
+function tokenMatches(booking, token) {
+  const stored = String(booking.cancel_token || '');
+  return stored.length === token.length && crypto.timingSafeEqual(Buffer.from(stored), Buffer.from(token));
+}
+function selfCancelView(booking) {
+  const open = [STATUS.PENDING, STATUS.CONFIRMED].includes(booking.status);
+  const started = dt.isSlotPast(booking.date, booking.slot);
+  return {
+    bookingId: booking.id, name: booking.name, pax: booking.pax, date: booking.date, slot: booking.slot,
+    dateLabel: dt.formatDateZh(booking.date), slotLabel: dt.slotLabelZh(booking.slot), status: booking.status,
+    cancellable: open && !started,
+    reason: booking.status === STATUS.CANCELLED ? 'ALREADY_CANCELLED' : !open ? 'NOT_OPEN' : started ? 'VISIT_STARTED' : '',
+  };
+}
+async function previewSelfCancellation(id, token) {
+  validId(id); validToken(token);
+  const { rows } = await pool.query('SELECT * FROM bookings WHERE id=$1', [id]);
+  if (!rows[0] || !tokenMatches(rows[0], token)) throw userError(LINK_INVALID, 404);
+  return selfCancelView(rows[0]);
+}
+/** 到店時間開始前，客人可用確認信裡的連結自行取消；之後只能聯絡店員。已取消的連結重複使用視為成功，不再寄信。 */
+async function cancelBySelf(id, token) {
+  validId(id); validToken(token);
+  const client = await pool.connect();
+  let cancelled;
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT * FROM bookings WHERE id=$1 FOR UPDATE', [id]);
+    const booking = rows[0];
+    if (!booking || !tokenMatches(booking, token)) throw userError(LINK_INVALID, 404);
+    const view = selfCancelView(booking);
+    if (booking.status === STATUS.CANCELLED) { await client.query('COMMIT'); return { ok: true, alreadyCancelled: true, booking: view }; }
+    if (!view.cancellable) {
+      throw userError(view.reason === 'VISIT_STARTED'
+        ? '預約時間已開始，無法線上取消；請透過 LINE 聯絡店員 / The visit has already started and cannot be cancelled online; please contact staff on LINE.'
+        : '這筆預約目前無法線上取消，請透過 LINE 聯絡店員 / This booking cannot be cancelled online; please contact staff on LINE.', 409);
+    }
+    await lockSlots(client, [[booking.date, booking.slot]]);
+    const { rows: updated } = await client.query('UPDATE bookings SET status=$1, cancel_reason=$3, cancelled_at=now(), updated_at=now(), revision=revision+1 WHERE id=$2 RETURNING *', [STATUS.CANCELLED, id, SELF_CANCEL_REASON]);
+    cancelled = updated[0];
+    await recordEvent(client, id, 'STATUS_CHANGED', booking, cancelled, SELF_CANCEL_REASON, 'CUSTOMER');
+    await cancelReminder(client, id);
+    await enqueueGroup(client, cancelled, 'BOOKING_CANCELLED');
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally { client.release(); }
+  void processPending().catch(err => console.error('處理 LINE 通知失敗：', err.code || err.name));
+  const mailStatus = await notifyCancellation(cancelled);
+  return { ok: true, alreadyCancelled: false, mailStatus, booking: selfCancelView(cancelled) };
+}
+
 async function resendConfirmation(id) {
   validId(id);
   const { rows } = await pool.query('SELECT * FROM bookings WHERE id=$1', [id]);
@@ -295,4 +355,5 @@ async function resendConfirmation(id) {
     : '確認信暫時無法寄出，預約仍保留 / Email could not be sent; the booking remains saved.');
   return { ok: true, mailStatus };
 }
-module.exports = { validateForm, submitBooking, createManualBooking, updateBooking, cancelBooking, resendConfirmation };
+module.exports = { validateForm, submitBooking, createManualBooking, updateBooking, cancelBooking, resendConfirmation,
+  previewSelfCancellation, cancelBySelf };
