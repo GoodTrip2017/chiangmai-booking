@@ -113,6 +113,7 @@ test('門市與分析帳號在伺服器端分權；停用帳號立即使工作�
   const analystSession = { cookie: analystLogin.headers.get('set-cookie').split(';')[0], csrf: analystLogin.data.csrfToken };
   assert.equal((await request('/api/admin/week', analystSession)).status, 403);
   assert.equal((await request('/api/admin/bookings/' + item.id, analystSession)).status, 403);
+  assert.equal((await request('/api/admin/bookings/' + item.id + '/notification-preview?eventType=REMINDER', staffSession)).status, 403);
   assert.equal((await request('/api/admin/bookings', { ...analystSession, method: 'POST', body: form })).status, 403);
   const list = await request('/api/admin/bookings?from=' + form.date, analystSession);
   assert.equal(list.status, 200);
@@ -165,6 +166,14 @@ test('LINE 雙語範本、預覽權限與提醒排程取消', async () => {
   });
   assert.equal(preview.status, 200);
   assert.match(preview.data.preview, /Reminder 2026-10-27/);
+  const contact = await booking.createManualBooking(form);
+  const manualPreview = await request('/api/admin/bookings/' + contact.id + '/notification-preview?eventType=BOOKING_CONFIRMED', administrator);
+  assert.equal(manualPreview.status, 200);
+  assert.equal(manualPreview.data.recipientKind, 'LINE_GROUP');
+  assert.equal(manualPreview.data.configured, false);
+  assert.equal((await request('/api/admin/bookings/' + contact.id + '/resend-notification', { ...administrator,
+    method: 'POST', body: { eventType: 'BOOKING_CONFIRMED', requestId: crypto.randomUUID() },
+  })).status, 409);
   const savedPolicy = await request('/api/admin/notification-settings/REMINDER', { ...administrator, method: 'PUT', body: {
     enabled: true, templateZh: '提醒 {{name}}', templateEn: 'Reminder {{date}}', reminderMinutes: 1440,
   } });

@@ -364,6 +364,15 @@
     <label for="fAdministrationReason">變更原因 / Change reason</label>
     <input id="fAdministrationReason" maxlength="300" type="text">
     <button id="saveAdministration" type="button">儲存內部資料 / Save internal details</button>
+    <div id="manualNotificationPanel" hidden>
+      <h3>重送工作群組通知 / Resend staff-group notification</h3>
+      <label for="manualNotificationType">通知事件 / Event</label>
+      <select id="manualNotificationType"><option value="BOOKING_CONFIRMED">預約確認 / Booking confirmed</option><option value="BOOKING_UPDATED">預約修改 / Booking updated</option><option value="BOOKING_CANCELLED">預約取消 / Booking cancelled</option><option value="REMINDER">行前提醒 / Reminder</option></select>
+      <button id="previewManualNotification" type="button">預覽對象與內容 / Preview recipient and message</button>
+      <p id="manualNotificationRecipient" class="report-note"></p>
+      <pre id="manualNotificationText" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+      <button id="sendManualNotification" type="button" disabled>送至工作群組 / Send to staff group</button>
+    </div>
     <h3>LINE 通知紀錄 / LINE notification history</h3>
     <div id="bookingNotifications" class="report-note"></div>
     <h3>異動歷程 / Change history</h3>

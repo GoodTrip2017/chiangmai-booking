@@ -8,6 +8,7 @@
   var discoverySources = [];
   var reportPage = 1;
   var reportTotal = 0;
+  var manualNotificationPreview = null;
 
 
   var $ = function (id) { return document.getElementById(id); };
@@ -200,6 +201,11 @@
     correctionTargets.forEach(function (target) { $('correctionStatus').appendChild(new Option(statusLabel(target), target)); });
     $('correctionReason').value = '';
     $('bookingDetailPanel').hidden = false;
+    $('manualNotificationPanel').hidden = role !== 'ADMIN';
+    $('manualNotificationRecipient').textContent = '';
+    $('manualNotificationText').textContent = '';
+    $('sendManualNotification').disabled = true;
+    manualNotificationPreview = null;
     $('bookingNotifications').textContent = '載入中 / Loading…';
     $('bookingHistory').textContent = '載入中 / Loading…';
     $('fAdministrationReason').value = '';
@@ -549,6 +555,38 @@
         actualPax: status === 'CHECKED_IN' ? Number($('fActualPax').value) : undefined, reason: reason }) })
       .then(function () { $('saveCorrection').disabled = false; closeModal(); load(); })
       .catch(function (err) { $('saveCorrection').disabled = false; showMMsg(err.message); });
+  });
+  $('manualNotificationType').addEventListener('change', function () {
+    manualNotificationPreview = null;
+    $('manualNotificationRecipient').textContent = '';
+    $('manualNotificationText').textContent = '';
+    $('sendManualNotification').disabled = true;
+  });
+  $('previewManualNotification').addEventListener('click', function () {
+    if (!editing || role !== 'ADMIN') return;
+    var eventType = $('manualNotificationType').value;
+    $('manualNotificationRecipient').textContent = '載入預覽 / Loading preview…';
+    api('/api/admin/bookings/' + encodeURIComponent(editing.id) + '/notification-preview?eventType=' + encodeURIComponent(eventType))
+      .then(function (data) {
+        manualNotificationPreview = { bookingId: editing.id, eventType: eventType,
+          requestId: crypto.randomUUID(), recipientId: data.recipientId };
+        $('manualNotificationRecipient').textContent = '發送至 / Recipient: ' + (data.recipientId || '未設定 / Not configured') +
+          (data.enabled ? '' : ' · 已停用 / Disabled') + (data.eligible ? '' : ' · 與目前狀態不符 / Not eligible');
+        $('manualNotificationText').textContent = data.message;
+        $('sendManualNotification').disabled = !data.enabled || !data.configured || !data.eligible;
+      }).catch(function (err) { $('manualNotificationRecipient').textContent = err.message; });
+  });
+  $('sendManualNotification').addEventListener('click', function () {
+    var preview = manualNotificationPreview;
+    if (!preview || !editing || preview.bookingId !== editing.id || preview.eventType !== $('manualNotificationType').value) return;
+    if (!confirm('確定要把上方預覽訊息送到工作群組 ' + preview.recipientId + '？\nSend this message to the staff group?')) return;
+    $('sendManualNotification').disabled = true;
+    api('/api/admin/bookings/' + encodeURIComponent(editing.id) + '/resend-notification', {
+      method: 'POST', body: JSON.stringify({ eventType: preview.eventType, requestId: preview.requestId })
+    }).then(function (result) {
+      $('manualNotificationRecipient').textContent = '已排程 / Queued · ' + result.status + '；API 接受不代表送達 / API acceptance does not prove delivery.';
+      manualNotificationPreview = null;
+    }).catch(function (err) { $('manualNotificationRecipient').textContent = err.message; $('sendManualNotification').disabled = false; });
   });
   $('exportBookings').addEventListener('click', async function () {
     var query = reportQuery(); query.set('search', $('reportSearch').value.trim());

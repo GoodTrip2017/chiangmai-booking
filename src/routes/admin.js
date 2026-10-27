@@ -13,6 +13,7 @@ const QRCode = require('qrcode');
 const customers = require('../services/customers');
 const notificationPolicy = require('../services/notificationPolicy');
 const audit = require('../services/audit');
+const lineNotify = require('../services/lineNotify');
 
 const router = express.Router();
 const actorFor = req => ({ type: req.adminSession.role, id: req.adminSession.account_id || 'environment-admin' });
@@ -195,6 +196,17 @@ router.patch('/bookings/:id/administration', auth.requireRole('ADMIN','STAFF'), 
 router.post('/bookings/:id/correct-status', auth.requireRole('ADMIN'), async (req, res, next) => {
   try { res.json(await lifecycle.correctStatus(req.params.id, req.body, actorFor(req))); }
   catch (err) { next(err); }
+});
+router.get('/bookings/:id/notification-preview', auth.requireRole('ADMIN'), async (req, res, next) => {
+  try { res.json(await lineNotify.previewManual(req.params.id, req.query.eventType)); }
+  catch (err) { next(err); }
+});
+router.post('/bookings/:id/resend-notification', auth.requireRole('ADMIN'), async (req, res, next) => {
+  try {
+    const result = await lineNotify.resendManual(req.params.id, req.body?.eventType, req.body?.requestId);
+    if (!result.replayed) await audit.record(actorFor(req), 'LINE_NOTIFICATION_QUEUED', req.params.id, { eventType: req.body.eventType });
+    res.json(result);
+  } catch (err) { next(err); }
 });
 
 router.post('/bookings/:id/resend-mail', auth.requireRole('ADMIN','STAFF'), async (req, res, next) => {

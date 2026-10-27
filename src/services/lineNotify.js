@@ -5,6 +5,8 @@
 const dt = require('../util/datetime');
 const { pool } = require('../db');
 const policy = require('./notificationPolicy');
+const { userError } = require('../util/errors');
+const { consumeLimit } = require('./rateLimits');
 
 function isConfigured() {
   return !!(process.env.LINE_CHANNEL_ACCESS_TOKEN && process.env.LINE_GROUP_ID);
@@ -107,6 +109,46 @@ async function scheduleReminder(client, booking) {
   );
 }
 
+async function previewManual(bookingId, eventType) {
+  if (!policy.EVENTS.includes(eventType)) throw userError('通知事件不正確 / Invalid notification event.');
+  const { rows } = await pool.query('SELECT * FROM bookings WHERE id=$1', [bookingId]);
+  const booking = rows[0];
+  if (!booking) throw userError('找不到這筆預約 / Booking not found.', 404);
+  const setting = await policy.getPolicy(pool, eventType);
+  const previous = booking.original_date ? { date: booking.original_date, slot: booking.original_slot || booking.slot } : null;
+  const eligible = eventType === 'BOOKING_CANCELLED' ? booking.status === 'CANCELLED'
+    : eventType === 'BOOKING_CONFIRMED' ? booking.status === 'CONFIRMED'
+      : ['PENDING','CONFIRMED'].includes(booking.status) &&
+        (eventType !== 'REMINDER' || dt.toUtcMs(booking.date, booking.slot.slice(0, 5)) > Date.now());
+  return { eventType, enabled: setting.enabled, eligible, recipientKind: 'LINE_GROUP',
+    recipientId: process.env.LINE_GROUP_ID || '', configured: isConfigured(),
+    message: policy.preview(setting, booking, previous) };
+}
+
+async function resendManual(bookingId, eventType, requestId) {
+  if (typeof requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
+    throw userError('請求編號不正確 / Invalid request ID.');
+  }
+  const key = `line-group-manual/${bookingId}/${eventType}/${requestId}`;
+  const existing = await pool.query('SELECT id,status FROM notification_events WHERE idempotency_key=$1', [key]);
+  if (existing.rows[0]) return { ok: true, eventId: existing.rows[0].id, status: existing.rows[0].status, replayed: true };
+  const preview = await previewManual(bookingId, eventType);
+  if (!preview.enabled) throw userError('這類通知目前已停用 / This notification type is disabled.', 409);
+  if (!preview.eligible) throw userError('目前預約狀態不適合這類通知 / This event does not match the booking state.', 409);
+  if (!preview.configured) throw userError('LINE 工作群組尚未設定 / Staff group is not configured.', 409);
+  if (preview.message.length > 5000) throw userError('訊息超過 LINE 長度限制 / Message is too long.', 409);
+  await consumeLimit(`line-manual:${bookingId}:${eventType}`, 1, 60000, '這筆通知剛剛已重送，請稍候一分鐘 / Wait one minute before resending.');
+  await consumeLimit('line-manual-hour', 30, 3600000, 'LINE 手動通知太頻繁，請稍後再試 / Too many manual notifications.');
+  const { rows } = await pool.query(
+    `INSERT INTO notification_events (booking_id,event_type,recipient_kind,recipient_id,idempotency_key,status,message_preview)
+     VALUES ($1,$2,'LINE_GROUP',$3,$4,'QUEUED',$5)
+     ON CONFLICT (idempotency_key) DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key RETURNING id,status`,
+    [bookingId, eventType, preview.recipientId, key, preview.message]
+  );
+  void processPending().catch(err => console.error('LINE 通知處理失敗：', err.code || err.name));
+  return { ok: true, eventId: rows[0].id, status: rows[0].status, replayed: false };
+}
+
 async function claimNext() {
   const { rows } = await pool.query(
     `WITH next AS (
@@ -150,5 +192,6 @@ async function processPending(limit = 10) {
 
 module.exports = {
   buildBookingMessage, buildUpdateMessage, buildCancelMessage,
-  enqueueGroup, cancelReminder, scheduleReminder, processPending, pushToGroup, isConfigured,
+  enqueueGroup, cancelReminder, scheduleReminder, previewManual, resendManual,
+  processPending, pushToGroup, isConfigured,
 };
