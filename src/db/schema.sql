@@ -231,11 +231,16 @@ CREATE TABLE IF NOT EXISTS notification_settings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 INSERT INTO notification_settings (event_type,template_zh,template_en) VALUES
-  ('BOOKING_CONFIRMED',E'新預約已確認\n預約編號：{{booking_id}}\n預約人：{{name}}\n到店：{{date}} {{time}}（清邁時間）\n人數：{{guests}}\nEmail：{{email}}',E'New booking confirmed\nBooking ID: {{booking_id}}\nContact: {{name}}\nVisit: {{date}} {{time}} (Bangkok time)\nGuests: {{guests}}'),
+  ('BOOKING_CONFIRMED',E'新預約已確認\n預約編號：{{booking_id}}\n預約人：{{name}}\n到店：{{date}} {{time}}（清邁時間）\n人數：{{guests}}\n初次體驗：{{first_time}}\nEmail：{{email}}',E'New booking confirmed\nBooking ID: {{booking_id}}\nContact: {{name}}\nVisit: {{date}} {{time}} (Bangkok time)\nGuests: {{guests}}\nFirst visit: {{first_time}}'),
   ('BOOKING_UPDATED',E'預約已修改\n預約編號：{{booking_id}}\n預約人：{{name}}\n原時段：{{previous_date}} {{previous_time}}\n新時段：{{date}} {{time}}\n人數：{{guests}}',E'Booking updated\nBooking ID: {{booking_id}}\nContact: {{name}}\nPrevious: {{previous_date}} {{previous_time}}\nNew: {{date}} {{time}}\nGuests: {{guests}}'),
   ('BOOKING_CANCELLED',E'預約已取消\n預約編號：{{booking_id}}\n預約人：{{name}}\n原訂到店：{{date}} {{time}}',E'Booking cancelled\nBooking ID: {{booking_id}}\nContact: {{name}}\nOriginal visit: {{date}} {{time}}'),
   ('REMINDER',E'行前提醒：即將有預約到店\n預約編號：{{booking_id}}\n預約人：{{name}}\n到店：{{date}} {{time}}（清邁時間）\n人數：{{guests}}',E'Upcoming booking reminder\nBooking ID: {{booking_id}}\nContact: {{name}}\nVisit: {{date}} {{time}} (Bangkok time)\nGuests: {{guests}}')
 ON CONFLICT (event_type) DO NOTHING;
+-- 既有的「新預約」範本補上是否初次體驗（已含變數者不動；店員自訂的範本只會在結尾加一行）。
+UPDATE notification_settings SET template_zh = template_zh || E'\n初次體驗：{{first_time}}'
+  WHERE event_type = 'BOOKING_CONFIRMED' AND template_zh NOT LIKE '%{{first_time}}%';
+UPDATE notification_settings SET template_en = template_en || E'\nFirst visit: {{first_time}}'
+  WHERE event_type = 'BOOKING_CONFIRMED' AND template_en NOT LIKE '%{{first_time}}%';
 
 CREATE TABLE IF NOT EXISTS availability_settings (
   id SMALLINT PRIMARY KEY CHECK (id = 1),

@@ -48,10 +48,53 @@
       .catch(function (err) { $('loading').textContent = err.message || '載入失敗 / Loading failed.'; });
   }
 
+  // 日檢視：一天的預約以逐時段卡片列出（手機預設）；沒有預約的舊時段與公休時段不佔版面。
+  function renderDayList(entry) {
+    var html = '';
+    if (!entry) {
+      html = '<div class="empty">此日期不在目前載入的週 / This date is outside the loaded week.</div>';
+    } else {
+      var d = entry.day, di = entry.index, shown = 0;
+      html += '<div class="day-head"><span class="wd">' + esc(d.weekday) + ' / ' + esc(d.weekdayEn || '') + '</span> ' + esc(d.dayLabel) +
+        (d.closed ? '<span class="closed-mark">（<span>公休 / Closed</span>）</span>' : '') + (d.isToday ? ' ●' : '') + '</div>';
+      week.slotDefs.forEach(function (sd, si) {
+        var cell = d.slots[si];
+        if ((d.closed || sd.legacy) && cell.bookings.length === 0) return;
+        shown++;
+        html += '<section class="day-slot' + (cell.full ? ' full' : '') + '"><div class="day-slot-title">' +
+          (sd.legacy ? '<span class="tag">舊時段 / Legacy slot</span> ' : '') + '<span>' + esc(sd.slot) + '</span></div>' + cellHtml(d, cell, di, si, sd.legacy) + '</section>';
+      });
+      if (!shown) html += '<div class="empty">' + (d.closed ? '公休，沒有預約 / Closed, no bookings' : '沒有開放的時段 / No open time slots') + '</div>';
+    }
+    $('dayList').innerHTML = html;
+  }
+  function updateNavLabels() {
+    var day = calendarView === 'day';
+    $('prev').textContent = day ? '← 前一天 / Prev day' : '← 上一週 / Prev';
+    $('this').textContent = day ? '今天 / Today' : '本週 / This week';
+    $('next').textContent = day ? '後一天 / Next day →' : '下一週 / Next →';
+    $('calendarControls').setAttribute('data-view', calendarView);
+    [['calendarDayView', 'day'], ['calendarWeekView', 'week'], ['calendarMonthView', 'month']].forEach(function (pair) {
+      $(pair[0]).classList.toggle('on', calendarView === pair[1]);
+      $(pair[0]).setAttribute('aria-pressed', calendarView === pair[1] ? 'true' : 'false');
+    });
+  }
+
   function render() {
     $('range').textContent = calendarView === 'day' ? calendarDay + ' · 日曆 / Day' : week.rangeLabel;
     var visibleDays = week.days.map(function (day, index) { return { day: day, index: index }; })
       .filter(function (entry) { return calendarView !== 'day' || entry.day.date === calendarDay; });
+    updateNavLabels();
+    if (calendarView === 'day') {
+      renderDayList(visibleDays[0]);
+      $('grid').innerHTML = '';
+      $('loading').style.display = 'none';
+      $('scroll').style.display = 'none';
+      $('dayList').hidden = reportMode !== 'calendar';
+      bindCalendarActions();
+      return;
+    }
+    $('dayList').hidden = true;
     var html = '<tr><th class="slotcol">時段 / Time slot</th>';
     visibleDays.forEach(function (entry) { var d = entry.day;
       // 星期用「週一 / Mon」並排，各自包在 span 裡，顯示語言切換時才能正確只留一半。
@@ -73,7 +116,9 @@
     $('grid').classList.toggle('day-view', calendarView === 'day');
     $('loading').style.display = 'none';
     $('scroll').style.display = reportMode === 'calendar' ? 'block' : 'none';
-
+    bindCalendarActions();
+  }
+  function bindCalendarActions() {
     Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (el) {
       el.addEventListener('click', function () {
         var d = week.days[Number(el.dataset.d)];
@@ -433,11 +478,13 @@
     $('linePanel').style.display = mode === 'line' ? 'block' : 'none';
     $('calendarControls').hidden = mode !== 'calendar' || role === 'ANALYST';
     $('monthGrid').hidden = mode !== 'calendar' || calendarView !== 'month';
+    $('dayList').hidden = mode !== 'calendar' || calendarView !== 'day';
+    updateNavLabels();
     // 標題列只保留日曆本身的操作；其他頁面不顯示週切換。
     ['prev','next','this'].forEach(function (id) { $(id).hidden = role === 'ANALYST' || mode !== 'calendar' || calendarView === 'month'; });
     $('reload').hidden = role === 'ANALYST' || mode !== 'calendar';
     $('range').hidden = mode !== 'calendar';
-    $('scroll').style.display = mode === 'calendar' ? 'block' : 'none';
+    $('scroll').style.display = mode === 'calendar' && calendarView === 'week' ? 'block' : 'none';
     $('loading').style.display = mode === 'calendar' ? 'block' : 'none';
     $('reportTitle').textContent = mode === 'analytics' ? '數據分析 / Analytics' : '營運總覽 / Overview';
     highlightMenu(mode);
@@ -446,7 +493,7 @@
   function loadMonth() {
     var month = $('calendarMonthInput').value;
     $('loading').style.display = 'block'; $('loading').textContent = '載入月份 / Loading month…';
-    $('scroll').style.display = 'none'; $('monthGrid').hidden = false;
+    $('scroll').style.display = 'none'; $('dayList').hidden = true; $('monthGrid').hidden = false;
     api('/api/admin/calendar?month=' + encodeURIComponent(month)).then(function (data) {
       $('loading').style.display = 'none'; $('range').textContent = month + ' · 月曆 / Month';
       var grid = $('monthGrid'); grid.replaceChildren();
@@ -1194,6 +1241,8 @@
     todayBangkok = session.today;
     $('logout').disabled = false;
     $('calendarDate').value = session.today; $('calendarMonthInput').value = session.today.slice(0, 7); calendarDay = session.today;
+    // 手機預設開今日的日檢視清單；桌面維持週檢視。
+    if (typeof matchMedia === 'function' && matchMedia('(max-width: 620px)').matches) calendarView = 'day';
     $('accountsTab').hidden = role !== 'ADMIN';
     $('notificationsTab').hidden = role !== 'ADMIN';
     $('exportBookings').hidden = role !== 'ADMIN';

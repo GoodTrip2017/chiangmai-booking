@@ -73,5 +73,7 @@ window.ADMIN_LANG_TH = {
   'Tracking links': 'ลิงก์ติดตาม', 'Trend group': 'จัดกลุ่มแนวโน้ม', 'Tue': 'อ.', 'Type': 'ประเภท', 'Unassigned': 'ยังไม่มอบหมาย', 'Unknown': 'ไม่ทราบ', 'Unknown contact': 'ระบุผู้ติดต่อไม่ได้',
   'Unknown source': 'ไม่ทราบช่องทาง', 'Unlimited': 'ไม่จำกัด', 'Unresolved': 'ยังไม่จัดการ', 'Upcoming in two hours': 'จะมาถึงภายใน 2 ชั่วโมง', 'URL': 'URL', 'Username': 'ชื่อผู้ใช้',
   'View today': 'ดูการจองวันนี้', 'Visit date': 'วันเข้าร้าน', 'Visit newest': 'วันเข้าร้าน ใหม่→เก่า', 'Visit oldest': 'วันเข้าร้าน เก่า→ใหม่', 'Walk-in': 'วอล์กอิน', 'Website': 'เว็บไซต์',
-  'Wed': 'พ.', 'Week': 'สัปดาห์', 'Weekday & Start time': 'วันในสัปดาห์และเวลาเริ่ม', 'Weekly': 'รายสัปดาห์', 'Yes': 'ใช่'
+  'Wed': 'พ.', 'Week': 'สัปดาห์', 'Weekday & Start time': 'วันในสัปดาห์และเวลาเริ่ม', 'Weekly': 'รายสัปดาห์', 'Yes': 'ใช่',
+  'Prev day': '← วันก่อนหน้า', 'Next day →': 'วันถัดไป →', 'Closed, no bookings': 'ปิดทำการ ไม่มีการจอง', 'No open time slots': 'ไม่มีช่วงเวลาที่เปิดจอง',
+  'This date is outside the loaded week.': 'วันที่นี้อยู่นอกสัปดาห์ที่โหลดไว้',
 };

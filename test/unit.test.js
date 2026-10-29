@@ -26,6 +26,9 @@ test('LINE 範本只接受受控變數，預覽替入預約資料', () => {
   const text = notificationPolicy.render('您好 {{name}}，{{date}} {{time}} 共 {{guests}} 人',
     { id: 'A', name: '陳先生', date: '2026-10-27', slot: '14:00-15:30', pax: 2 });
   assert.equal(text, '您好 陳先生，2026-10-27 14:00-15:30 共 2 人');
+  assert.ok(notificationPolicy.VARIABLES.includes('first_time'));
+  assert.equal(notificationPolicy.render('初次：{{first_time}}', { first_time: '是' }), '初次：是 / Yes');
+  assert.equal(notificationPolicy.render('初次：{{first_time}}', { first_time: '否' }), '初次：否 / No');
 });
 test('日期、清邁時區與保留時間', () => {
   assert.equal(dt.isClosedDay('2026-09-15'), true);
