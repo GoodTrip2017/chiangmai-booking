@@ -98,11 +98,8 @@
     document.title = lang === 'en' ? 'GoodTrip x Herb Uncle Chiang Mai — Booking admin'
       : lang === 'th' ? 'GoodTrip x Herb Uncle เชียงใหม่ — ระบบจองหลังบ้าน' : titleOriginal;
     localize(document.body);
-    Array.prototype.forEach.call(document.querySelectorAll('#adminLang [data-lang]'), function (button) {
-      var on = button.getAttribute('data-lang') === lang;
-      button.className = 'lang-btn' + (on ? ' on' : '');
-      button.setAttribute('aria-pressed', on ? 'true' : 'false');
-    });
+    var select = document.getElementById('adminLang');
+    if (select && select.value !== lang) select.value = lang;
   }
 
   var observer = new MutationObserver(function (records) {
@@ -115,10 +112,7 @@
   observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS });
 
   var switcher = document.getElementById('adminLang');
-  if (switcher) switcher.addEventListener('click', function (event) {
-    var button = event.target.closest ? event.target.closest('[data-lang]') : null;
-    if (button) applyLanguage(button.getAttribute('data-lang'));
-  });
+  if (switcher) switcher.addEventListener('change', function () { applyLanguage(switcher.value); });
   applyLanguage(lang);
   root.adminLanguage = { apply: applyLanguage, pickHalf: pickHalf, current: function () { return lang; } };
 })(typeof window !== 'undefined' ? window : globalThis);
