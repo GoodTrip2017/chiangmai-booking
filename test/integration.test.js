@@ -765,3 +765,16 @@ test('後台 API 與稽核紀錄不含取消 token 與重放鍵；排序與編�
   assert.equal((await request('/api/admin/bookings/not-a-uuid/resend-notification', { ...administrator, method: 'POST', body: { eventType: 'REMINDER', requestId: crypto.randomUUID() } })).status, 400);
   assert.equal((await request('/api/admin/accounts/' + '-'.repeat(36), { ...administrator, method: 'PATCH', body: { active: false } })).status, 400);
 });
+
+test('新預約的 LINE 群組訊息包含客人是否初次體驗；既有範本遷移後也有這一行', async () => {
+  const first = await booking.createManualBooking({ ...form, firstTime: '是' });
+  const repeat = await booking.createManualBooking({ ...form, slot: '15:30-17:00', firstTime: '否' });
+  const rows = await pool.query("SELECT booking_id,message_preview FROM notification_events WHERE recipient_kind='LINE_GROUP' AND event_type='BOOKING_CONFIRMED' AND booking_id = ANY($1::uuid[])", [[first.id, repeat.id]]);
+  const byId = Object.fromEntries(rows.rows.map(row => [row.booking_id, row.message_preview]));
+  assert.match(byId[first.id], /初次體驗：是 \/ Yes/);
+  assert.match(byId[first.id], /First visit: 是 \/ Yes/);
+  assert.match(byId[repeat.id], /初次體驗：否 \/ No/);
+  const template = (await pool.query("SELECT template_zh,template_en FROM notification_settings WHERE event_type='BOOKING_CONFIRMED'")).rows[0];
+  assert.equal((template.template_zh.match(/\{\{first_time\}\}/g) || []).length, 1, 'migration must not duplicate the line');
+  assert.equal((template.template_en.match(/\{\{first_time\}\}/g) || []).length, 1);
+});

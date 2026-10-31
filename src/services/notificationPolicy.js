@@ -3,7 +3,7 @@ const { userError } = require('../util/errors');
 const dt = require('../util/datetime');
 
 const EVENTS = Object.freeze(['BOOKING_CONFIRMED', 'BOOKING_UPDATED', 'BOOKING_CANCELLED', 'REMINDER']);
-const VARIABLES = Object.freeze(['booking_id', 'name', 'date', 'time', 'guests', 'email', 'line', 'note', 'previous_date', 'previous_time']);
+const VARIABLES = Object.freeze(['booking_id', 'name', 'date', 'time', 'guests', 'first_time', 'email', 'line', 'note', 'previous_date', 'previous_time']);
 
 function validateTemplate(value) {
   if (typeof value !== 'string' || !value.trim() || value.length > 2000 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)) {
@@ -21,7 +21,8 @@ function validateTemplate(value) {
 function render(template, booking, previous) {
   const values = {
     booking_id: booking.id, name: booking.name, date: booking.date, time: booking.slot,
-    guests: booking.pax, email: booking.email || '', line: booking.line || '', note: booking.note || '',
+    guests: booking.pax, first_time: booking.first_time === '是' ? '是 / Yes' : '否 / No',
+    email: booking.email || '', line: booking.line || '', note: booking.note || '',
     previous_date: previous?.date || booking.date, previous_time: previous?.slot || booking.slot,
   };
   return template.replace(/\{\{([a-z_]+)\}\}/g, (_, key) => String(values[key] ?? ''));
