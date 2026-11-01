@@ -55,11 +55,15 @@
   .info-row dt { color: var(--muted); }
   .info-row dd { margin: 0; text-align: right; color: var(--text); }
   .local-time { margin: 20px 0 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
+  .info-row dd.address { display: grid; gap: 4px; justify-items: end; }
+  .info-row .addr-text { overflow-wrap: anywhere; }
+  .info-row .map-link { font-size: 14px; color: #c6aa78; text-decoration-color: #857153; text-underline-offset: 3px; }
   .change-note { margin: 10px 0 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
   .change-note a { color: #c6aa78; text-decoration-color: #857153; text-underline-offset: 3px; }
   @media (max-width: 480px) {
     .info-row { grid-template-columns: 1fr; gap: 2px; }
     .info-row dd { text-align: left; }
+    .info-row dd.address { justify-items: start; }
   }
   .card {
     background: var(--card);
@@ -162,6 +166,7 @@
     <section class="intro-section" aria-labelledby="visit-title">
       <h2 id="visit-title"><span class="zh-only">到店與預約資訊</span><span class="en-only">Visit &amp; Booking</span></h2>
       <dl class="details">
+        <div class="info-row"><dt><span class="zh-only">店址</span><span class="en-only">Address</span></dt><dd class="address"><span class="addr-text">162/11 Tambon Chang Phueak, Mueang Chiang Mai, Chiang Mai 50300</span><a class="map-link" href="https://share.google/MHqdVMzNESaMzl5CD" target="_blank" rel="noopener noreferrer"><span class="zh-only">在 Google 地圖開啟 ↗</span><span class="en-only">Open in Google Maps ↗</span></a></dd></div>
         <div class="info-row"><dt><span class="zh-only">營業時間</span><span class="en-only">Hours</span></dt><dd id="publicHours">14:00–23:00</dd></div>
         <div class="info-row"><dt><span class="zh-only">固定公休</span><span class="en-only">Closed weekly</span></dt><dd id="publicClosedDays"><span class="zh-only">每週二</span><span class="en-only">Tuesdays</span></dd></div>
         <div class="info-row"><dt><span class="zh-only">每段預約</span><span class="en-only">Service length</span></dt><dd id="publicServiceMinutes"><span class="zh-only">90 分鐘</span><span class="en-only">90 minutes</span></dd></div>
@@ -170,7 +175,7 @@
         <div class="info-row"><dt><span class="zh-only">每人基本消費</span><span class="en-only">Minimum spend</span></dt><dd><span class="zh-only">每人 300 泰銖</span><span class="en-only">THB 300 per person</span></dd></div>
       </dl>
       <p class="local-time"><span class="zh-only">所有預約時段均以清邁當地時間為準（GMT+7）。</span><span class="en-only">All booking times follow Chiang Mai local time (GMT+7).</span></p>
-      <p class="change-note"><span class="zh-only">其他公休及臨時異動，請見 <a href="https://www.google.com/maps/search/?api=1&amp;query=GoodTrip+x+Herb+Uncle+Cannabis+CNX+Chiang+Mai" target="_blank" rel="noopener noreferrer">Google Maps</a> 或 Instagram 公告。</span><span class="en-only">For additional closures or temporary changes, check <a href="https://www.google.com/maps/search/?api=1&amp;query=GoodTrip+x+Herb+Uncle+Cannabis+CNX+Chiang+Mai" target="_blank" rel="noopener noreferrer">Google Maps</a> or Instagram announcements.</span></p>
+      <p class="change-note"><span class="zh-only">其他公休及臨時異動，請見 <a href="https://share.google/MHqdVMzNESaMzl5CD" target="_blank" rel="noopener noreferrer">Google Maps</a> 或 Instagram 公告。</span><span class="en-only">For additional closures or temporary changes, check <a href="https://share.google/MHqdVMzNESaMzl5CD" target="_blank" rel="noopener noreferrer">Google Maps</a> or Instagram announcements.</span></p>
     </section>
   </div>
 

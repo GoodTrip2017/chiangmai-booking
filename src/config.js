@@ -10,8 +10,8 @@ const CONFIG = {
   GRACE_MINUTES: 10,                  // 座位保留分鐘數
   EVENT_NAME: '頂級飛行體驗 (GoodTrip x Herb Uncle 清邁尼曼店)',
   VENUE_NAME: 'GoodTrip x Herb Uncle 清邁尼曼店',
-  VENUE_ADDRESS: '162 11, Tambon Chang Phueak, Mueang Chiang Mai District, Chiang Mai 50300, Thailand',
-  MAP_URL: 'https://www.google.com/maps/search/?api=1&query=GoodTrip+x+Herb+Uncle+Cannabis+CNX+Chiang+Mai',
+  VENUE_ADDRESS: '162/11 Tambon Chang Phueak, Mueang Chiang Mai, Chiang Mai 50300, Thailand',
+  MAP_URL: 'https://share.google/MHqdVMzNESaMzl5CD', // 店家的 Google 地標分享連結
   LINE_URL: 'https://lin.ee/DcpM9f7',
   SENDER_NAME: 'GoodTrip x Herb Uncle 清邁尼曼店',
   BUSINESS_HOURS: '14:00 - 23:00',
