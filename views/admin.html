@@ -17,15 +17,29 @@
     font-size: 14px;
   }
   header {
-    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-    padding: 14px 18px; border-bottom: 1px solid var(--line); background: var(--card);
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 12px 18px; border-bottom: 1px solid var(--line); background: var(--card);
     position: sticky; top: 0; z-index: 5;
   }
+  /* 第一排：選單、品牌與頁名、語言；第二排：日曆操作。 */
+  .bar { display: flex; align-items: center; gap: 10px; min-width: 0; }
   header h1 { font-size: 16px; margin: 0; margin-right: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
   /* 顯示語言切換：只影響畫面文字，不影響資料。 */
-  .lang-switch { display: inline-flex; gap: 4px; align-items: center; }
-  .lang-switch .lang-btn { padding: 5px 10px; font-size: 12.5px; border-radius: 999px; color: var(--muted); background: transparent; border: 1px solid var(--line); }
-  .lang-switch .lang-btn.on { color: #10240a; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+  .lang-select { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12.5px; flex: 0 0 auto; }
+  .lang-select select { font: inherit; font-size: 13px; color: var(--text); background: var(--card2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 28px 6px 10px; min-height: 34px;
+    appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' fill='none' stroke='%23a49c8e' stroke-width='1.8'/></svg>"); background-repeat: no-repeat; background-position: right 10px center; }
+  .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .toolbar[hidden] { display: none; }
+  /* 日期導覽：← 今天 → 連成一組。 */
+  .nav-group { display: inline-flex; flex: 0 0 auto; }
+  .nav-group[hidden] { display: none; }
+  .nav-group button { border-radius: 0; margin-left: -1px; min-width: 42px; }
+  .nav-group button:first-child { border-radius: 8px 0 0 8px; margin-left: 0; }
+  .nav-group button:last-child { border-radius: 0 8px 8px 0; }
+  .nav-group button:hover { position: relative; z-index: 1; }
+  .toolbar .range { width: auto; flex: 1 1 auto; margin-right: auto; font-size: 14px; color: var(--text); }
+  .toolbar .range .range-muted { color: var(--muted); }
+  #reload .ico { font-size: 16px; line-height: 1; margin-right: 6px; }
   header h1 img { height: 30px; }
   .section-title { color: var(--muted); font-weight: 400; font-size: 14px; }
   .section-title::before { content: '·'; margin-right: 10px; color: var(--line); }
@@ -54,6 +68,7 @@
   button.primary { background: var(--accent); color: #10240a; border-color: var(--accent); font-weight: 700; }
   button.danger { color: #ffd9d1; border-color: var(--err); }
   .range { color: var(--muted); font-size: 13px; width: 100%; }
+  .range[hidden] { display: none; }
 
   .scroll { overflow-x: auto; padding: 14px; }
   table { border-collapse: collapse; width: 100%; min-width: 1050px; }
@@ -88,8 +103,6 @@
   .calendar-controls button.on { background: var(--accent); color: #14120f; border-color: var(--accent); font-weight: 700; }
   .day-list { display: grid; gap: 10px; padding: 12px 14px 24px; max-width: 760px; }
   .day-list[hidden] { display: none; }
-  .day-head { font-size: 15px; font-weight: 600; padding: 2px 2px 0; }
-  .day-head .closed-mark { color: var(--muted); font-weight: 400; margin-left: 6px; }
   .day-slot { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
   .day-slot.full { border-color: var(--err); }
   .day-slot-title { font-weight: 700; font-size: 15px; margin-bottom: 6px; }
@@ -158,11 +171,22 @@
   .trend-track { background: var(--card2); border-radius: 3px; overflow: hidden; }
   @media (max-width: 560px) { .trend-row { grid-template-columns: 85px minmax(45px,1fr) 60px; font-size: 12px; } }
   @media (max-width: 620px) {
-    header { position: static; padding: 10px 12px; gap: 6px; }
-    header h1 { flex: 1 1 60%; }
+    header { position: static; padding: 10px 12px; gap: 8px; }
+    .bar { flex-wrap: wrap; }
+    header h1 { flex: 1 1 0; font-size: 15px; gap: 6px; }
+    header h1 img { display: none; }
     .section-title { flex-basis: 100%; }
     .section-title::before { content: none; margin: 0; }
-    header button { padding: 6px 9px; font-size: 12.5px; }
+    .lang-select span { display: none; }
+    .toolbar { gap: 8px; }
+    .toolbar .nav-group { flex: 1 1 100%; }
+    .toolbar .nav-group button { min-height: 42px; font-size: 14px; }
+    .toolbar .nav-group #this { flex: 1 1 auto; }
+    .toolbar .range { flex: 1 1 100%; text-align: center; margin: 0; }
+    .toolbar #reload { min-height: 42px; padding: 6px 12px; }
+    .toolbar #reload .lbl { display: none; }
+    .toolbar #reload .ico { margin: 0; }
+    .toolbar #addNew { flex: 1 1 auto; min-height: 42px; }
     .report { padding: 20px 16px; }
     .report-filters { gap: 10px; }
     .report-filters label:not(.chk) { flex: 1 1 100%; }
@@ -186,20 +210,28 @@
 </head>
 <body>
 <header>
-  <button id="menuToggle" class="icon-btn" type="button" aria-label="開啟選單 / Open menu" aria-expanded="false" aria-controls="sideMenu">⋯</button>
-  <h1><img src="/logo.png" alt="">預約後台 / Booking admin<span id="sectionTitle" class="section-title">預約日曆 / Calendar</span></h1>
-  <div class="lang-switch" id="adminLang" role="group" aria-label="顯示語言 / Display language" data-no-i18n>
-    <button type="button" class="lang-btn" data-lang="both">中／EN</button>
-    <button type="button" class="lang-btn" data-lang="zh">中文</button>
-    <button type="button" class="lang-btn" data-lang="en">English</button>
-    <button type="button" class="lang-btn" data-lang="th">ไทย</button>
+  <div class="bar">
+    <button id="menuToggle" class="icon-btn" type="button" aria-label="開啟選單 / Open menu" aria-expanded="false" aria-controls="sideMenu">⋯</button>
+    <h1><img src="/logo.png" alt="">預約後台 / Booking admin<span id="sectionTitle" class="section-title">預約日曆 / Calendar</span></h1>
+    <label class="lang-select" data-no-i18n><span>Language</span>
+      <select id="adminLang" aria-label="Language">
+        <option value="both">中／EN</option>
+        <option value="zh">中文</option>
+        <option value="en">English</option>
+        <option value="th">ไทย</option>
+      </select>
+    </label>
   </div>
-  <button id="prev" disabled>← 上一週 / Prev</button>
-  <button id="this" disabled>本週 / This week</button>
-  <button id="next" disabled>下一週 / Next →</button>
-  <button id="reload">重新整理 / Refresh</button>
-  <button class="primary" id="addNew" disabled>＋ 手動新增 / New booking</button>
-  <div class="range" id="range"></div>
+  <div class="toolbar" id="calendarToolbar">
+    <div class="nav-group" id="navGroup">
+      <button id="prev" disabled aria-label="上一週 / Prev" title="上一週 / Prev">←</button>
+      <button id="this" disabled>本週 / This week</button>
+      <button id="next" disabled aria-label="下一週 / Next" title="下一週 / Next">→</button>
+    </div>
+    <div class="range" id="range"></div>
+    <button id="reload" aria-label="重新整理 / Refresh" title="重新整理 / Refresh"><span class="ico" aria-hidden="true">↻</span><span class="lbl">重新整理 / Refresh</span></button>
+    <button class="primary" id="addNew" disabled>＋ 手動新增 / New booking</button>
+  </div>
 </header>
 <div id="menuBackdrop" class="menu-backdrop" hidden></div>
 <nav id="sideMenu" class="side-menu" aria-label="主選單 / Main menu">

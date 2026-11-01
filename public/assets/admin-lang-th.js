@@ -52,7 +52,7 @@ window.ADMIN_LANG_TH = {
   'Occupied by overlapping legacy booking': 'ถูกใช้โดยการจองเก่าที่เวลาทับซ้อน', 'Online search': 'ค้นหาออนไลน์', 'Open': 'เวลาเปิด', 'Open menu': 'เปิดเมนู', 'Order': 'ลำดับ', 'orders': 'รายการ',
   'Overdue unresolved': 'เลยเวลาแล้วยังไม่จัดการ', 'Overview': 'ภาพรวม', 'page': 'หน้า', 'Partner': 'พาร์ทเนอร์', 'Party size': 'ขนาดกลุ่ม', 'Password': 'รหัสผ่าน',
   'Password must have at least 16 characters.': 'รหัสผ่านต้องมีอย่างน้อย 16 ตัวอักษร', 'Pending': 'รอยืนยัน', 'Phone': 'โทรศัพท์', 'Places left': 'ที่ว่าง',
-  'Please select and copy the URL.': 'กรุณาเลือกและคัดลอก URL เอง', 'Preparing analytics export…': 'กำลังเตรียมไฟล์การวิเคราะห์…', 'Preparing export…': 'กำลังเตรียมไฟล์…', 'Prev': '← สัปดาห์ก่อน',
+  'Please select and copy the URL.': 'กรุณาเลือกและคัดลอก URL เอง', 'Preparing analytics export…': 'กำลังเตรียมไฟล์การวิเคราะห์…', 'Preparing export…': 'กำลังเตรียมไฟล์…', 'Prev': 'สัปดาห์ก่อน',
   'Preview': 'ดูตัวอย่าง', 'Preview recipient and message': 'ดูตัวอย่างผู้รับและข้อความ', 'Previous': 'ก่อนหน้า', 'Previous equal period:': 'ช่วงก่อนหน้า (ยาวเท่ากัน):',
   'Prior recorded visit': 'ประวัติเข้าร้านก่อนหน้า', 'Queued ·': 'อยู่ในคิว ·',
   'Rates include due, decided bookings only; no-show rate excludes cancellations.': 'อัตราคำนวณจากการจองที่ถึงกำหนดและมีผลชัดเจนแล้ว; อัตราไม่มาตามนัดไม่รวมการยกเลิก',
@@ -74,6 +74,6 @@ window.ADMIN_LANG_TH = {
   'Unknown source': 'ไม่ทราบช่องทาง', 'Unlimited': 'ไม่จำกัด', 'Unresolved': 'ยังไม่จัดการ', 'Upcoming in two hours': 'จะมาถึงภายใน 2 ชั่วโมง', 'URL': 'URL', 'Username': 'ชื่อผู้ใช้',
   'View today': 'ดูการจองวันนี้', 'Visit date': 'วันเข้าร้าน', 'Visit newest': 'วันเข้าร้าน ใหม่→เก่า', 'Visit oldest': 'วันเข้าร้าน เก่า→ใหม่', 'Walk-in': 'วอล์กอิน', 'Website': 'เว็บไซต์',
   'Wed': 'พ.', 'Week': 'สัปดาห์', 'Weekday & Start time': 'วันในสัปดาห์และเวลาเริ่ม', 'Weekly': 'รายสัปดาห์', 'Yes': 'ใช่',
-  'Prev day': '← วันก่อนหน้า', 'Next day →': 'วันถัดไป →', 'Closed, no bookings': 'ปิดทำการ ไม่มีการจอง', 'No open time slots': 'ไม่มีช่วงเวลาที่เปิดจอง',
+  'Prev day': 'วันก่อนหน้า', 'Next day': 'วันถัดไป', 'Next day →': 'วันถัดไป →', 'Closed, no bookings': 'ปิดทำการ ไม่มีการจอง', 'No open time slots': 'ไม่มีช่วงเวลาที่เปิดจอง',
   'This date is outside the loaded week.': 'วันที่นี้อยู่นอกสัปดาห์ที่โหลดไว้',
 };
